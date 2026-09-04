@@ -1,0 +1,172 @@
+[
+  {
+    "folio": "40472368",
+    "fund": "SBI CONTRA FUND - DIRECT PLAN",
+    "tradingsymbol": "INF200K01RA0",
+    "average_price": 424.758156,
+    "last_price": 414.7433,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 77.688
+  },
+  {
+    "folio": "488437690627",
+    "fund": "NIPPON INDIA GOLD SAVINGS FUND - DIRECT PLAN",
+    "tradingsymbol": "INF204K01YC4",
+    "average_price": 45.4704,
+    "last_price": 60.4041,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 1979.211
+  },
+  {
+    "folio": "18735340",
+    "fund": "KOTAK SHORT TERM FUND - DIRECT PLAN",
+    "tradingsymbol": "INF174K01JI7",
+    "average_price": 60.281547,
+    "last_price": 61.2349,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 796.225
+  },
+  {
+    "folio": "43564505/17",
+    "fund": "ICICI PRUDENTIAL VALUE FUND - DIRECT PLAN",
+    "tradingsymbol": "INF109K012K1",
+    "average_price": 505.815647,
+    "last_price": 508.24,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 177.922
+  },
+  {
+    "folio": "40472368",
+    "fund": "SBI INNOVATIVE OPPORTUNITIES FUND - DIRECT PLAN",
+    "tradingsymbol": "INF200KB1324",
+    "average_price": 9.579942,
+    "last_price": 11.0324,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 11220.801
+  },
+  {
+    "folio": "91034425664",
+    "fund": "EDELWEISS BALANCED ADVANTAGE FUND - DIRECT PLAN",
+    "tradingsymbol": "INF754K01BS2",
+    "average_price": 58.23,
+    "last_price": 61.86,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 68.69
+  },
+  {
+    "folio": "36013581/88",
+    "fund": "HDFC SILVER ETF FUND OF FUND - DIRECT PLAN",
+    "tradingsymbol": "INF179KC1DU7",
+    "average_price": 29.9332,
+    "last_price": 37.5387,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 1529.822
+  },
+  {
+    "folio": "13936505/07",
+    "fund": "TATA SILVER ETF FUND OF FUND - DIRECT PLAN",
+    "tradingsymbol": "INF277KA1943",
+    "average_price": 18.7065,
+    "last_price": 29.8172,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 801.82
+  },
+  {
+    "folio": "31043333212",
+    "fund": "INVESCO INDIA SMALLCAP FUND - DIRECT PLAN",
+    "tradingsymbol": "INF205K013T3",
+    "average_price": 47.602139,
+    "last_price": 54.47,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 1512.46
+  },
+  {
+    "folio": "36013581/88",
+    "fund": "HDFC MID CAP FUND - DIRECT PLAN",
+    "tradingsymbol": "INF179K01XQ0",
+    "average_price": 219.128748,
+    "last_price": 236.391,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 533.904
+  },
+  {
+    "folio": "588383017596",
+    "fund": "UTI SILVER ETF FUND OF FUND - DIRECT PLAN",
+    "tradingsymbol": "INF789F1AYL4",
+    "average_price": 19.2969,
+    "last_price": 29.0625,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 274.642
+  },
+  {
+    "folio": "51097862902",
+    "fund": "QUANT SMALL CAP FUND - DIRECT PLAN",
+    "tradingsymbol": "INF966L01689",
+    "average_price": 284.8196,
+    "last_price": 318.2655,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 17.554
+  },
+  {
+    "folio": "91034425664",
+    "fund": "EDELWEISS US TECHNOLOGY EQUITY FUND OF FUND - DIRECT PLAN",
+    "tradingsymbol": "INF754K01LB7",
+    "average_price": 32.534523,
+    "last_price": 39.3102,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 491.761
+  },
+  {
+    "folio": "6516288/31",
+    "fund": "BANDHAN SMALL CAP FUND - DIRECT PLAN",
+    "tradingsymbol": "INF194KB1AL4",
+    "average_price": 50.469519,
+    "last_price": 57.163,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 891.582
+  },
+  {
+    "folio": "17513547",
+    "fund": "PARAG PARIKH FLEXI CAP FUND - DIRECT PLAN",
+    "tradingsymbol": "INF879O01027",
+    "average_price": 90.16763,
+    "last_price": 90.7896,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 1397.328
+  },
+  {
+    "folio": "910128114303",
+    "fund": "MOTILAL OSWAL FLEXI CAP FUND - DIRECT PLAN",
+    "tradingsymbol": "INF247L01502",
+    "average_price": 68.676266,
+    "last_price": 71.6104,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 611.536
+  },
+  {
+    "folio": "6516288/31",
+    "fund": "BANDHAN LARGE & MID CAP FUND - DIRECT PLAN",
+    "tradingsymbol": "INF194K01V89",
+    "average_price": 158.911871,
+    "last_price": 167.421,
+    "last_price_date": "",
+    "pnl": 0,
+    "quantity": 755.098
+  }
+]

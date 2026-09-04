@@ -1,0 +1,250 @@
+{
+  "total_invested": 2672385.96,
+  "total_current_value": 2780949.68,
+  "total_networth": 1988034.68,
+  "investments": [
+    {
+      "asset_type": "VEHICLE",
+      "invested_value": 587345.0,
+      "current_value": 587345.0,
+      "return": 0.0,
+      "return_percentage": 0.0,
+      "progress_value_percentage": 21.120303051971252
+    },
+    {
+      "asset_type": "EPF",
+      "invested_value": 531869.0,
+      "current_value": 531869.0,
+      "return": 0.0,
+      "return_percentage": 0.0,
+      "progress_value_percentage": 19.125444949644415
+    },
+    {
+      "asset_type": "SA",
+      "invested_value": 379472.97,
+      "current_value": 379472.97,
+      "return": 0.0,
+      "return_percentage": 0.0,
+      "progress_value_percentage": 13.645445396541378
+    },
+    {
+      "asset_type": "PPF",
+      "invested_value": 327076.0,
+      "current_value": 327076.0,
+      "return": 0.0,
+      "return_percentage": 0.0,
+      "progress_value_percentage": 11.761305946294852
+    },
+    {
+      "asset_type": "STOCK",
+      "invested_value": 299199.1,
+      "current_value": 299364.77,
+      "return": 165.67,
+      "return_percentage": 0.06,
+      "progress_value_percentage": 10.764839515929603
+    },
+    {
+      "asset_type": "NPS",
+      "invested_value": 237500.0,
+      "current_value": 257003.77,
+      "return": 19503.77,
+      "return_percentage": 8.21,
+      "progress_value_percentage": 9.241582899146358
+    },
+    {
+      "asset_type": "US_STOCK",
+      "invested_value": 224626.49,
+      "current_value": 220758.57,
+      "return": -3867.92,
+      "return_percentage": -1.72,
+      "progress_value_percentage": 7.93824393812381
+    },
+    {
+      "asset_type": "BOND",
+      "invested_value": 59260.0,
+      "current_value": 152022.2,
+      "return": 92762.2,
+      "return_percentage": 156.53,
+      "progress_value_percentage": 5.466557022920743
+    },
+    {
+      "asset_type": "STOCK_WALLET",
+      "invested_value": 26037.4,
+      "current_value": 26037.4,
+      "return": 0.0,
+      "return_percentage": 0.0,
+      "progress_value_percentage": 0.9362772794275874
+    },
+    {
+      "asset_type": "CRYPTO",
+      "invested_value": 0.0,
+      "current_value": 0.0,
+      "return": 0.0,
+      "return_percentage": 0,
+      "progress_value_percentage": 0
+    }
+  ],
+  "assets": [
+    {
+      "assetclass_l2": "Retirement",
+      "invested_value": 1096445.0,
+      "current_value": 1115948.77,
+      "return": 19503.77,
+      "return_percentage": 1.78,
+      "progress_value_percentage": 40.128256822020106
+    },
+    {
+      "assetclass_l2": "Vehicle",
+      "invested_value": 587345.0,
+      "current_value": 587345.0,
+      "return": 0.0,
+      "return_percentage": 0.0,
+      "progress_value_percentage": 21.12026253958719
+    },
+    {
+      "assetclass_l2": "Liquid",
+      "invested_value": 405510.37,
+      "current_value": 405510.37,
+      "return": 0.0,
+      "return_percentage": 0.0,
+      "progress_value_percentage": 14.58169470570983
+    },
+    {
+      "assetclass_l2": "Equity",
+      "invested_value": 299199.1,
+      "current_value": 299364.77,
+      "return": 165.67,
+      "return_percentage": 0.06,
+      "progress_value_percentage": 10.764818867110701
+    },
+    {
+      "assetclass_l2": "Global Equity",
+      "invested_value": 224626.49,
+      "current_value": 220763.9,
+      "return": -3862.59,
+      "return_percentage": -1.72,
+      "progress_value_percentage": 7.938420528450651
+    },
+    {
+      "assetclass_l2": "Debt",
+      "invested_value": 59260.0,
+      "current_value": 152022.2,
+      "return": 92762.2,
+      "return_percentage": 156.53,
+      "progress_value_percentage": 5.4665465371215065
+    },
+    {
+      "assetclass_l2": "Alternate",
+      "invested_value": 0.0,
+      "current_value": 0.0,
+      "return": 0.0,
+      "return_percentage": 0,
+      "progress_value_percentage": 0
+    }
+  ],
+  "sector": [],
+  "market_cap": [
+    {
+      "market_cap": "Small Cap",
+      "invested_value": 238340.65,
+      "current_value": 233019.56,
+      "return": -5321.09,
+      "return_percentage": -2.23,
+      "progress_value_percentage": 44.8
+    },
+    {
+      "market_cap": "Large Cap",
+      "invested_value": 222633.69,
+      "current_value": 224849.62,
+      "return": 2215.93,
+      "return_percentage": 1.0,
+      "progress_value_percentage": 43.23
+    },
+    {
+      "market_cap": "Mid Cap",
+      "invested_value": 55439.35,
+      "current_value": 55617.2,
+      "return": 177.85,
+      "return_percentage": 0.32,
+      "progress_value_percentage": 10.69
+    },
+    {
+      "market_cap": "Others",
+      "invested_value": 7411.9,
+      "current_value": 6636.96,
+      "return": -774.94,
+      "return_percentage": -10.46,
+      "progress_value_percentage": 1.28
+    }
+  ],
+  "liabilities": {
+    "total_loan_balance": 626928.0,
+    "total_credit_card_due": 165987.0,
+    "total": 792915.0,
+    "loans": [
+      {
+        "lender": "HDFC Bank Ltd",
+        "loan_type": "HOUSING LOAN",
+        "current_balance": 626928
+      }
+    ],
+    "credit_cards": [
+      {
+        "name": "HDFC Regalia \u2022\u2022 9222",
+        "card_variant": "HDFC Regalia",
+        "total_due": 154638
+      },
+      {
+        "name": "HDFC Tata Neu Plus \u2022\u2022 8807",
+        "card_variant": "HDFC Tata Neu Plus",
+        "total_due": 11349,
+        "due_date": "2026-09-21"
+      },
+      {
+        "name": "CASHBACK SBI Card \u2022\u2022 8670",
+        "card_variant": "CASHBACK SBI Card",
+        "total_due": 1.8189894035458565e-12
+      },
+      {
+        "name": "Swiggy HDFC Bank \u2022\u2022 6503",
+        "card_variant": "Swiggy HDFC Bank",
+        "total_due": 0
+      },
+      {
+        "name": "Axis Bank \u2022\u2022 0474",
+        "card_variant": "Axis Bank",
+        "total_due": 0
+      },
+      {
+        "name": "AU \u2022\u2022 9654",
+        "card_variant": "AU",
+        "total_due": 0
+      },
+      {
+        "name": "Axis Bank \u2022\u2022 4137",
+        "card_variant": "Axis Bank",
+        "total_due": 0
+      },
+      {
+        "name": "SBI \u2022\u2022 3779",
+        "card_variant": "SBI",
+        "total_due": 0
+      },
+      {
+        "name": "RBL Bank Blockbuster \u2022\u2022 8077",
+        "card_variant": "RBL Bank Blockbuster",
+        "total_due": 0
+      },
+      {
+        "name": "AU \u2022\u2022 5597",
+        "card_variant": "AU",
+        "total_due": 0
+      }
+    ]
+  },
+  "data_notes": {
+    "sector": "Sector allocation is not available: the portfolio tracking service has no sector analytics. Sector rows are always empty.",
+    "market_cap": "market_cap covers directly held Indian and US stocks only; mutual fund underlying exposure is not included.",
+    "STOCK": "Indian equity rows (asset_type STOCK in API data): Current value is accurate for Indian stocks, but invested value is only available for INDmoney holdings, so returns may mismatch for stocks. as we have invested value only for INDmoney holdings."
+  }
+}

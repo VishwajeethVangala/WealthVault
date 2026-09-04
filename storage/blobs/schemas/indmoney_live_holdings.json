@@ -1,0 +1,2800 @@
+{
+  "overall": {
+    "asset": "overall",
+    "family_asset_holdings": [
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "vehicle",
+        "total_value": 587345,
+        "invested": 587345,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "TATA MOTORS NEXON",
+            "invested_amount": 587345,
+            "current_value": 587345,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "vehicle",
+            "holding_percentage": 100,
+            "investment_type": "vehicle"
+          }
+        ]
+      },
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "epf",
+        "total_value": 531869,
+        "invested": 531869,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "Object Technology Solutions India (P) Ltd",
+            "invested_amount": 512608,
+            "current_value": 512608,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "retirement",
+            "holding_percentage": 96.37861954729455,
+            "investment_type": "epf"
+          },
+          {
+            "name": "Liquidhub India Private Limited",
+            "invested_amount": 19261,
+            "current_value": 19261,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "retirement",
+            "holding_percentage": 3.6213804527054596,
+            "investment_type": "epf"
+          }
+        ]
+      },
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "savings_account",
+        "total_value": 379472.97,
+        "invested": 379472.97,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "HDFC Bank",
+            "invested_amount": 282880.1,
+            "current_value": 282880.1,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "liquid",
+            "holding_percentage": 74.54552033047308,
+            "investment_type": "savings_account"
+          },
+          {
+            "name": "IDFC First Bank",
+            "invested_amount": 60754.65,
+            "current_value": 60754.65,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "liquid",
+            "holding_percentage": 16.01027077106441,
+            "investment_type": "savings_account"
+          },
+          {
+            "name": "Axis Bank",
+            "invested_amount": 35838.22,
+            "current_value": 35838.22,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "liquid",
+            "holding_percentage": 9.444208898462518,
+            "investment_type": "savings_account"
+          }
+        ]
+      },
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "ppf",
+        "total_value": 327076,
+        "invested": 327076,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "PPF",
+            "invested_amount": 327076,
+            "current_value": 327076,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "retirement",
+            "holding_percentage": 100,
+            "investment_type": "ppf"
+          }
+        ]
+      },
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "indian_stock",
+        "total_value": 297297.05,
+        "invested": 298842.69999999995,
+        "one_day_change": -1720.1999999999998,
+        "one_day_change_percentage": -0.5799870091271586,
+        "holdings_omitted": 6,
+        "holdings": [
+          {
+            "name": "Ather Energy Ltd",
+            "invested_amount": 27291.600000000002,
+            "current_value": 28512,
+            "one_day_change": -988.2,
+            "one_day_change_percentage": -3.35,
+            "absolute_change": 1220.3999999999978,
+            "absolute_change_percentage": 4.4717055797388126,
+            "quantity": 18,
+            "unit_price": 1516.2,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "mid",
+            "asset_class": "equity",
+            "holding_percentage": 9.590407977475728,
+            "investment_type": "ind_stocks",
+            "id": "INDS36409"
+          },
+          {
+            "name": "Ind-Swift Laboratories Ltd",
+            "invested_amount": 9247.5,
+            "current_value": 17797.5,
+            "one_day_change": -837.5,
+            "one_day_change_percentage": -4.49,
+            "absolute_change": 8550,
+            "absolute_change_percentage": 92.45742092457421,
+            "quantity": 50,
+            "unit_price": 184.95,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 5.986436797808791,
+            "investment_type": "ind_stocks",
+            "id": "INDS02882"
+          },
+          {
+            "name": "Azad Engineering Ltd",
+            "invested_amount": 16269.900000000001,
+            "current_value": 16663.8,
+            "one_day_change": 62.4,
+            "one_day_change_percentage": 0.38,
+            "absolute_change": 393.8999999999978,
+            "absolute_change_percentage": 2.4210351630925686,
+            "quantity": 6,
+            "unit_price": 2711.65,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 5.605101026061308,
+            "investment_type": "ind_stocks",
+            "id": "INDS28550"
+          },
+          {
+            "name": "Indo-MIM Ltd",
+            "invested_amount": 14067.75,
+            "current_value": 14572.5,
+            "one_day_change": 736.5,
+            "one_day_change_percentage": 5.32,
+            "absolute_change": 504.75,
+            "absolute_change_percentage": 3.5879938156421605,
+            "quantity": 15,
+            "unit_price": 937.85,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "mid",
+            "asset_class": "equity",
+            "holding_percentage": 4.901663168201636,
+            "investment_type": "ind_stocks",
+            "id": "INDS43790"
+          },
+          {
+            "name": "Paras Defence and Space Technologies Ltd",
+            "invested_amount": 10146.2,
+            "current_value": 14149,
+            "one_day_change": 34,
+            "one_day_change_percentage": 0.24,
+            "absolute_change": 4002.7999999999993,
+            "absolute_change_percentage": 39.45122311801462,
+            "quantity": 10,
+            "unit_price": 1014.6200000000001,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 4.759213049709037,
+            "investment_type": "ind_stocks",
+            "id": "INDS03339"
+          },
+          {
+            "name": "Sedemac Mechatronics Ltd",
+            "invested_amount": 13824,
+            "current_value": 14072,
+            "one_day_change": -457.5,
+            "one_day_change_percentage": -3.15,
+            "absolute_change": 248,
+            "absolute_change_percentage": 1.7939814814814814,
+            "quantity": 5,
+            "unit_price": 2764.8,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 4.733313028164928,
+            "investment_type": "ind_stocks",
+            "id": "INDS41627"
+          },
+          {
+            "name": "Garden Reach Shipbuilders & Engineers Ltd",
+            "invested_amount": 14508,
+            "current_value": 12666,
+            "one_day_change": 117,
+            "one_day_change_percentage": 0.93,
+            "absolute_change": -1842,
+            "absolute_change_percentage": -12.696443341604633,
+            "quantity": 5,
+            "unit_price": 2901.6,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 4.260385362047824,
+            "investment_type": "ind_stocks",
+            "id": "INDS02993"
+          },
+          {
+            "name": "Adani Total Gas Ltd",
+            "invested_amount": 14080,
+            "current_value": 12247,
+            "one_day_change": -34,
+            "one_day_change_percentage": -0.28,
+            "absolute_change": -1833,
+            "absolute_change_percentage": -13.01846590909091,
+            "quantity": 20,
+            "unit_price": 704,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "mid",
+            "asset_class": "equity",
+            "holding_percentage": 4.1194488811779335,
+            "investment_type": "ind_stocks",
+            "id": "INDS03761"
+          },
+          {
+            "name": "Ideaforge Technology Ltd",
+            "invested_amount": 13348.949999999999,
+            "current_value": 11655.75,
+            "one_day_change": 7.5,
+            "one_day_change_percentage": 0.06,
+            "absolute_change": -1693.199999999999,
+            "absolute_change_percentage": -12.684143696695237,
+            "quantity": 15,
+            "unit_price": 889.93,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.9205737157499545,
+            "investment_type": "ind_stocks",
+            "id": "INDS26287"
+          },
+          {
+            "name": "Zydus Wellness Ltd",
+            "invested_amount": 11992.05,
+            "current_value": 11165.7,
+            "one_day_change": -136.5,
+            "one_day_change_percentage": -1.21,
+            "absolute_change": -826.3499999999985,
+            "absolute_change_percentage": -6.890815165046832,
+            "quantity": 21,
+            "unit_price": 571.05,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.7557385786370903,
+            "investment_type": "ind_stocks",
+            "id": "INDS02100"
+          },
+          {
+            "name": "Ashapura Minechem Ltd",
+            "invested_amount": 14297,
+            "current_value": 11020,
+            "one_day_change": 61,
+            "one_day_change_percentage": 0.56,
+            "absolute_change": -3277,
+            "absolute_change_percentage": -22.920892494929006,
+            "quantity": 20,
+            "unit_price": 714.85,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.7067303560529776,
+            "investment_type": "ind_stocks",
+            "id": "INDS00710"
+          },
+          {
+            "name": "Wockhardt Ltd",
+            "invested_amount": 9499,
+            "current_value": 10443.5,
+            "one_day_change": 690.5,
+            "one_day_change_percentage": 7.08,
+            "absolute_change": 944.5,
+            "absolute_change_percentage": 9.943151910727446,
+            "quantity": 5,
+            "unit_price": 1899.8,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.5128165583883195,
+            "investment_type": "ind_stocks",
+            "id": "INDS03107"
+          },
+          {
+            "name": "Netweb Technologies India Ltd",
+            "invested_amount": 8741.8,
+            "current_value": 10386,
+            "one_day_change": -154,
+            "one_day_change_percentage": -1.46,
+            "absolute_change": 1644.2000000000007,
+            "absolute_change_percentage": 18.8084833787092,
+            "quantity": 2,
+            "unit_price": 4370.9,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.4934756332092767,
+            "investment_type": "ind_stocks",
+            "id": "INDS26499"
+          },
+          {
+            "name": "Adani Power Ltd",
+            "invested_amount": 11270,
+            "current_value": 10360,
+            "one_day_change": -54.5,
+            "one_day_change_percentage": -0.52,
+            "absolute_change": -910,
+            "absolute_change_percentage": -8.074534161490684,
+            "quantity": 50,
+            "unit_price": 225.4,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "large",
+            "asset_class": "equity",
+            "holding_percentage": 3.484730171389188,
+            "investment_type": "ind_stocks",
+            "id": "INDS03116"
+          },
+          {
+            "name": "Hindustan Construction Company Ltd",
+            "invested_amount": 11047.5,
+            "current_value": 10341,
+            "one_day_change": -67.5,
+            "one_day_change_percentage": -0.65,
+            "absolute_change": -706.5,
+            "absolute_change_percentage": -6.395112016293279,
+            "quantity": 450,
+            "unit_price": 24.55,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.4783392569822005,
+            "investment_type": "ind_stocks",
+            "id": "INDS01786"
+          },
+          {
+            "name": "Va Tech Wabag Ltd",
+            "invested_amount": 9730,
+            "current_value": 10026.5,
+            "one_day_change": -29,
+            "one_day_change_percentage": -0.29,
+            "absolute_change": 296.5,
+            "absolute_change_percentage": 3.0472764645426516,
+            "quantity": 5,
+            "unit_price": 1946,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.3725528053507423,
+            "investment_type": "ind_stocks",
+            "id": "INDS02298"
+          },
+          {
+            "name": "Premier Explosives Ltd",
+            "invested_amount": 11714.25,
+            "current_value": 9960,
+            "one_day_change": -35.25,
+            "one_day_change_percentage": -0.35,
+            "absolute_change": -1754.25,
+            "absolute_change_percentage": -14.975350534605289,
+            "quantity": 15,
+            "unit_price": 780.95,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.350184604926285,
+            "investment_type": "ind_stocks",
+            "id": "INDS00582"
+          },
+          {
+            "name": "Ugar Sugar Works Ltd",
+            "invested_amount": 7875,
+            "current_value": 9603,
+            "one_day_change": -937.8,
+            "one_day_change_percentage": -8.9,
+            "absolute_change": 1728,
+            "absolute_change_percentage": 21.942857142857143,
+            "quantity": 180,
+            "unit_price": 43.75,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.230102686858144,
+            "investment_type": "ind_stocks",
+            "id": "INDS00330"
+          },
+          {
+            "name": "Transformers & Rectifiers India Ltd",
+            "invested_amount": 9966,
+            "current_value": 9028.5,
+            "one_day_change": 10.5,
+            "one_day_change_percentage": 0.12,
+            "absolute_change": -937.5,
+            "absolute_change_percentage": -9.40698374473209,
+            "quantity": 30,
+            "unit_price": 332.2,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 3.0368616170258,
+            "investment_type": "ind_stocks",
+            "id": "INDS02714"
+          },
+          {
+            "name": "NACL Industries Ltd",
+            "invested_amount": 9783,
+            "current_value": 7507.8,
+            "one_day_change": 17.55,
+            "one_day_change_percentage": 0.23,
+            "absolute_change": -2275.2,
+            "absolute_change_percentage": -23.256669733210668,
+            "quantity": 45,
+            "unit_price": 217.4,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 2.525353009725458,
+            "investment_type": "ind_stocks",
+            "id": "INDS02364"
+          },
+          {
+            "name": "Shakti Pumps (India) Ltd",
+            "invested_amount": 8771.4,
+            "current_value": 7095,
+            "one_day_change": 12,
+            "one_day_change_percentage": 0.17,
+            "absolute_change": -1676.3999999999996,
+            "absolute_change_percentage": -19.112114371708046,
+            "quantity": 15,
+            "unit_price": 584.76,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 2.3865019851357423,
+            "investment_type": "ind_stocks",
+            "id": "INDS02405"
+          },
+          {
+            "name": "Shipping Corporation of India Ltd",
+            "invested_amount": 6399,
+            "current_value": 5907,
+            "one_day_change": 8,
+            "one_day_change_percentage": 0.14,
+            "absolute_change": -492,
+            "absolute_change_percentage": -7.688701359587435,
+            "quantity": 20,
+            "unit_price": 319.95,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 1.9869016527409202,
+            "investment_type": "ind_stocks",
+            "id": "INDS02425"
+          },
+          {
+            "name": "Ola Electric Mobility Ltd",
+            "invested_amount": 6451.5,
+            "current_value": 5730,
+            "one_day_change": 109.5,
+            "one_day_change_percentage": 1.95,
+            "absolute_change": -721.5,
+            "absolute_change_percentage": -11.18344571029993,
+            "quantity": 150,
+            "unit_price": 43.01,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 1.9273652395810859,
+            "investment_type": "ind_stocks",
+            "id": "INDS32068"
+          },
+          {
+            "name": "Exicom Tele-Systems Ltd",
+            "invested_amount": 5052,
+            "current_value": 5335.5,
+            "one_day_change": 351.6,
+            "one_day_change_percentage": 7.05,
+            "absolute_change": 283.5,
+            "absolute_change_percentage": 5.611638954869359,
+            "quantity": 30,
+            "unit_price": 168.4,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 1.7946696746570476,
+            "investment_type": "ind_stocks",
+            "id": "INDS29629"
+          },
+          {
+            "name": "Greaves Cotton Ltd",
+            "invested_amount": 4983,
+            "current_value": 4889,
+            "one_day_change": 19.5,
+            "one_day_change_percentage": 0.4,
+            "absolute_change": -94,
+            "absolute_change_percentage": -1.8864138069436085,
+            "quantity": 25,
+            "unit_price": 199.32,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 1.6444831860928322,
+            "investment_type": "ind_stocks",
+            "id": "INDS01192"
+          }
+        ]
+      },
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "nps",
+        "total_value": 257003.77,
+        "invested": 237500,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "NPS",
+            "invested_amount": 237500,
+            "current_value": 257003.77,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 19503.76999999999,
+            "absolute_change_percentage": 8.212113684210522,
+            "asset_class": "retirement",
+            "holding_percentage": 100,
+            "investment_type": "nps"
+          }
+        ]
+      },
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "us_stock",
+        "total_value": 220797.8237146425,
+        "invested": 224626.491328,
+        "one_day_change": 4498.937119945001,
+        "one_day_change_percentage": 2.0799631430258554,
+        "holdings": [
+          {
+            "name": "Amazon.com Inc.",
+            "invested_amount": 23632.143,
+            "current_value": 24459.577499999996,
+            "one_day_change": 370.34199055249996,
+            "one_day_change_percentage": 1.537375440608136,
+            "absolute_change": 827.4344999999958,
+            "absolute_change_percentage": 3.501309635778675,
+            "quantity": 1,
+            "unit_price": 23632.143,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 11.077816388086948,
+            "investment_type": "us_stocks",
+            "id": "AMZN",
+            "invested_value_usd": 248.7594,
+            "current_value_usd": 258.9,
+            "one_day_change_usd": 3.9199998999999996
+          },
+          {
+            "name": "Sandisk Corporation",
+            "invested_amount": 19988.949506,
+            "current_value": 22494.05872031,
+            "one_day_change": 23.0004961525,
+            "one_day_change_percentage": 0.10235608809812671,
+            "absolute_change": 2505.1092143099995,
+            "absolute_change_percentage": 12.53247057109255,
+            "quantity": 0.1531169,
+            "unit_price": 130546.9840755658,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 10.187627007311974,
+            "investment_type": "us_stocks",
+            "id": "SNDK",
+            "invested_value_usd": 210.40999480000002,
+            "current_value_usd": 238.0953556,
+            "one_day_change_usd": 0.2434559
+          },
+          {
+            "name": "SpaceX",
+            "invested_amount": 20254.0000095,
+            "current_value": 19969.138784205,
+            "one_day_change": 1204.22947987,
+            "one_day_change_percentage": 6.41745430441171,
+            "absolute_change": -284.8612252950006,
+            "absolute_change_percentage": -1.4064442834076647,
+            "quantity": 1.4115771,
+            "unit_price": 14348.490075037347,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 9.044083156368863,
+            "investment_type": "us_stocks",
+            "id": "SPCX",
+            "invested_value_usd": 213.20000009999998,
+            "current_value_usd": 211.3695558,
+            "one_day_change_usd": 12.746541200000001
+          },
+          {
+            "name": "Dell Technologies Inc.",
+            "invested_amount": 14208.199971499998,
+            "current_value": 16250.319500917498,
+            "one_day_change": 761.2371023825,
+            "one_day_change_percentage": 4.914668815077774,
+            "absolute_change": 2042.1195294174995,
+            "absolute_change_percentage": 14.372823675861508,
+            "quantity": 0.3330942,
+            "unit_price": 42655.20075552201,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 7.359818691836064,
+            "investment_type": "us_stocks",
+            "id": "DELL",
+            "invested_value_usd": 149.5599997,
+            "current_value_usd": 172.0065573,
+            "one_day_change_usd": 8.0575507
+          },
+          {
+            "name": "Lumentum Holdings Inc.",
+            "invested_amount": 18942.999905,
+            "current_value": 16127.2955352525,
+            "one_day_change": -441.73681418499996,
+            "one_day_change_percentage": -2.6660386971843675,
+            "absolute_change": -2815.7043697475,
+            "absolute_change_percentage": -14.864089024274849,
+            "quantity": 0.2014519,
+            "unit_price": 94032.37152392209,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 7.304100766905791,
+            "investment_type": "us_stocks",
+            "id": "LITE",
+            "invested_value_usd": 199.399999,
+            "current_value_usd": 170.7043719,
+            "one_day_change_usd": -4.6757006
+          },
+          {
+            "name": "CrowdStrike Holdings Inc. Class A",
+            "invested_amount": 14207.249980999999,
+            "current_value": 14208.048031394997,
+            "one_day_change": 763.3760730674999,
+            "one_day_change_percentage": 5.677907764753399,
+            "absolute_change": 0.7980503949984268,
+            "absolute_change_percentage": 0.00561720527241863,
+            "quantity": 0.6995836,
+            "unit_price": 20308.151850615137,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 6.434867786449461,
+            "investment_type": "us_stocks",
+            "id": "CRWD",
+            "invested_value_usd": 149.5499998,
+            "current_value_usd": 150.3895002,
+            "one_day_change_usd": 8.0801913
+          },
+          {
+            "name": "Micron Technology Inc.",
+            "invested_amount": 14208.199885999999,
+            "current_value": 14156.896054245,
+            "one_day_change": 30.732169544999994,
+            "one_day_change_percentage": 0.21755495544183728,
+            "absolute_change": -51.3038317549981,
+            "absolute_change_percentage": -0.3610860782269129,
+            "quantity": 0.1563914,
+            "unit_price": 90850.26341601902,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 6.41170090179026,
+            "investment_type": "us_stocks",
+            "id": "MU",
+            "invested_value_usd": 149.5599988,
+            "current_value_usd": 149.8480662,
+            "one_day_change_usd": 0.3252942
+          },
+          {
+            "name": "Advanced Micro Devices Inc.",
+            "invested_amount": 10187.799829,
+            "current_value": 13054.41344739,
+            "one_day_change": -25.756246875,
+            "one_day_change_percentage": -0.19691064777464487,
+            "absolute_change": 2866.61361839,
+            "absolute_change_percentage": 28.13771046256782,
+            "quantity": 0.3029167,
+            "unit_price": 33632.347866591714,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 5.912383205489121,
+            "investment_type": "us_stocks",
+            "id": "AMD",
+            "invested_value_usd": 107.2399982,
+            "current_value_usd": 138.1784964,
+            "one_day_change_usd": -0.272625
+          },
+          {
+            "name": "Vertex Pharmaceuticals Inc.",
+            "invested_amount": 11588.099981,
+            "current_value": 12498.182182307499,
+            "one_day_change": 27.103734352499995,
+            "one_day_change_percentage": 0.21733272279226543,
+            "absolute_change": 910.0822013074994,
+            "absolute_change_percentage": 7.853592934127959,
+            "quantity": 0.2370974,
+            "unit_price": 48874.8505086939,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 5.660464388661755,
+            "investment_type": "us_stocks",
+            "id": "VRTX",
+            "invested_value_usd": 121.97999979999999,
+            "current_value_usd": 132.2908937,
+            "one_day_change_usd": 0.2868879
+          },
+          {
+            "name": "Palantir Technologies Inc. Class A",
+            "invested_amount": 9500.949962,
+            "current_value": 11609.703665232499,
+            "one_day_change": 831.3089642475,
+            "one_day_change_percentage": 7.712734477718927,
+            "absolute_change": 2108.753703232498,
+            "absolute_change_percentage": 22.195187972430855,
+            "quantity": 0.6732401,
+            "unit_price": 14112.275786899798,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 5.258069789780535,
+            "investment_type": "us_stocks",
+            "id": "PLTR",
+            "invested_value_usd": 100.0099996,
+            "current_value_usd": 122.88651669999999,
+            "one_day_change_usd": 8.7992481
+          },
+          {
+            "name": "Nebius Group N.V. Class A",
+            "invested_amount": 14455.199990500001,
+            "current_value": 10947.3932720875,
+            "one_day_change": 339.913359735,
+            "one_day_change_percentage": 3.2044685688178207,
+            "absolute_change": -3507.806718412501,
+            "absolute_change_percentage": -24.266746366137042,
+            "quantity": 0.5501404,
+            "unit_price": 26275.474388901453,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 4.958107416056705,
+            "investment_type": "us_stocks",
+            "id": "NBIS",
+            "invested_value_usd": 152.1599999,
+            "current_value_usd": 115.87608650000001,
+            "one_day_change_usd": 3.5979186
+          },
+          {
+            "name": "Palo Alto Networks Inc.",
+            "invested_amount": 9471.499971500001,
+            "current_value": 8752.6738154425,
+            "one_day_change": 91.23411070499999,
+            "one_day_change_percentage": 1.0533365562205343,
+            "absolute_change": -718.8261560575011,
+            "absolute_change_percentage": -7.589359216813264,
+            "quantity": 0.2791028,
+            "unit_price": 33935.52472959784,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 3.964112357717073,
+            "investment_type": "us_stocks",
+            "id": "PANW",
+            "invested_value_usd": 99.6999997,
+            "current_value_usd": 92.6453963,
+            "one_day_change_usd": 0.9656958
+          },
+          {
+            "name": "NVIDIA Corporation",
+            "invested_amount": 7578.149905,
+            "current_value": 8522.7438859625,
+            "one_day_change": 150.71956699749998,
+            "one_day_change_percentage": 1.8002762683820401,
+            "absolute_change": 944.5939809624997,
+            "absolute_change_percentage": 12.464704351378222,
+            "quantity": 0.3948856,
+            "unit_price": 19190.747662107708,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 3.8599763994853644,
+            "investment_type": "us_stocks",
+            "id": "NVDA",
+            "invested_value_usd": 79.769999,
+            "current_value_usd": 90.21163150000001,
+            "one_day_change_usd": 1.5953381
+          },
+          {
+            "name": "Taiwan Semiconductor Manufacturing Company Ltd.",
+            "invested_amount": 9472.4499715,
+            "current_value": 8401.940404012501,
+            "one_day_change": 30.423557510000002,
+            "one_day_change_percentage": 0.3634175032773245,
+            "absolute_change": -1070.5095674874992,
+            "absolute_change_percentage": -11.301295554036901,
+            "quantity": 0.2132633,
+            "unit_price": 44416.69040805427,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 3.8052641383237127,
+            "investment_type": "us_stocks",
+            "id": "TSM",
+            "invested_value_usd": 99.7099997,
+            "current_value_usd": 88.93294950000002,
+            "one_day_change_usd": 0.3220276
+          },
+          {
+            "name": "Sprott Uranium Miners ETF",
+            "invested_amount": 7411.899667500001,
+            "current_value": 6662.582908262499,
+            "one_day_change": 262.0771172325,
+            "one_day_change_percentage": 4.09463135866213,
+            "absolute_change": -749.3167592375021,
+            "absolute_change_percentage": -10.10964520368694,
+            "quantity": 1.2329052,
+            "unit_price": 6011.735263587176,
+            "brokers": [
+              "Alpaca"
+            ],
+            "asset_class": "global_equity",
+            "holding_percentage": 3.017503884854034,
+            "investment_type": "us_stocks",
+            "id": "URNM",
+            "invested_value_usd": 78.0199965,
+            "current_value_usd": 70.5221795,
+            "one_day_change_usd": 2.7740367
+          },
+          {
+            "name": "Seagate Technology Holdings PLC",
+            "invested_amount": 7105.049829,
+            "current_value": 6478.90057918,
+            "one_day_change": -80.55932377,
+            "one_day_change_percentage": -1.2281395871292677,
+            "absolute_change": -626.1492498199996,
+            "absolute_change_percentage": -8.812735517551282,
+            "quantity": 0.0858716,
+            "unit_price": 82740.39180590556,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 2.9343136042650872,
+            "investment_type": "us_stocks",
+            "id": "STX",
+            "invested_value_usd": 74.7899982,
+            "current_value_usd": 68.5779368,
+            "one_day_change_usd": -0.8527052000000002
+          },
+          {
+            "name": "Microsoft Corporation",
+            "invested_amount": 6206.349961999999,
+            "current_value": 6171.83392844,
+            "one_day_change": 160.913882425,
+            "one_day_change_percentage": 2.6770258328702856,
+            "absolute_change": -34.516033559999414,
+            "absolute_change_percentage": -0.5561406264766385,
+            "quantity": 0.1280633,
+            "unit_price": 48463.142539665925,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 2.7952421924304987,
+            "investment_type": "us_stocks",
+            "id": "MSFT",
+            "invested_value_usd": 65.3299996,
+            "current_value_usd": 65.3276944,
+            "one_day_change_usd": 1.703243
+          },
+          {
+            "name": "TryHard Holdings Limited",
+            "invested_amount": 6207.3,
+            "current_value": 32.1215,
+            "one_day_change": 0.37789999999999996,
+            "one_day_change_percentage": 1.1904761904761905,
+            "absolute_change": -6175.1785,
+            "absolute_change_percentage": -99.4825205806067,
+            "quantity": 0.2,
+            "unit_price": 31036.5,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "small",
+            "asset_class": "global_equity",
+            "holding_percentage": 0.014547924186749953,
+            "investment_type": "us_stocks",
+            "id": "THH",
+            "invested_value_usd": 65.34,
+            "current_value_usd": 0.33999999999999997,
+            "one_day_change_usd": 0.004
+          }
+        ]
+      },
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "bond",
+        "total_value": 152022.19999999998,
+        "invested": 59260,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "Sovereign Gold Bond Scheme 2023-24 - Series I",
+            "invested_amount": 59260,
+            "current_value": 152022.19999999998,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 92762.19999999998,
+            "absolute_change_percentage": 156.5342558218022,
+            "quantity": 10,
+            "unit_price": 5926,
+            "asset_class": "debt",
+            "holding_percentage": 100,
+            "investment_type": "bonds",
+            "id": "IN0020230069"
+          }
+        ]
+      },
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "stock_wallet",
+        "total_value": 26369.11,
+        "invested": 26369.11,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "Stock Wallet",
+            "invested_amount": 26369.11,
+            "current_value": 26369.11,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "liquid",
+            "holding_percentage": 100,
+            "investment_type": "ind_wallet"
+          }
+        ]
+      },
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "digital_assets",
+        "total_value": 0,
+        "invested": 0,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "Digital Assets",
+            "invested_amount": 0,
+            "current_value": 0,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "alternate",
+            "holding_percentage": 0,
+            "investment_type": "digital_assets"
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "indian_stock",
+        "total_value": 806354.02,
+        "invested": 805080.67,
+        "one_day_change": 3867.4300000000003,
+        "one_day_change_percentage": 0.48193079463172095,
+        "holdings_omitted": 6,
+        "holdings": [
+          {
+            "name": "Silver Basket - ICICI Prudential",
+            "invested_amount": 165060.8,
+            "current_value": 165060.8,
+            "one_day_change": 1803.4,
+            "one_day_change_percentage": 1.1046359919979127,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 710,
+            "unit_price": 232.48,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 20.470016383126605,
+            "investment_type": "ind_stocks",
+            "id": "INDS17323"
+          },
+          {
+            "name": "Silver Basket - Nippon",
+            "invested_amount": 76413.54,
+            "current_value": 76413.54,
+            "one_day_change": 994.6999999999999,
+            "one_day_change_percentage": 1.3189012188466436,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 343,
+            "unit_price": 222.78,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 9.476425751557608,
+            "investment_type": "ind_stocks",
+            "id": "INDS19683"
+          },
+          {
+            "name": "ABB India Ltd",
+            "invested_amount": 74100,
+            "current_value": 74100,
+            "one_day_change": -220,
+            "one_day_change_percentage": -0.2960172228202368,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 10,
+            "unit_price": 7410,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "large",
+            "asset_class": "equity",
+            "holding_percentage": 9.18951207064113,
+            "investment_type": "ind_stocks",
+            "id": "INDS00970"
+          },
+          {
+            "name": "Tata Motors Passenger Vehicles Ltd",
+            "invested_amount": 50774.5,
+            "current_value": 50774.5,
+            "one_day_change": -81.5,
+            "one_day_change_percentage": -0.16025641025641024,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 163,
+            "unit_price": 311.5,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "large",
+            "asset_class": "equity",
+            "holding_percentage": 6.29680000851239,
+            "investment_type": "ind_stocks",
+            "id": "INDS00954"
+          },
+          {
+            "name": "Oil & Natural Gas Corpn Ltd",
+            "invested_amount": 46930,
+            "current_value": 46930,
+            "one_day_change": -270,
+            "one_day_change_percentage": -0.5720338983050848,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 200,
+            "unit_price": 234.65,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "large",
+            "asset_class": "equity",
+            "holding_percentage": 5.8200243114060495,
+            "investment_type": "ind_stocks",
+            "id": "INDS01834"
+          },
+          {
+            "name": "Dixon Technologies (India) Ltd",
+            "invested_amount": 42720,
+            "current_value": 42720,
+            "one_day_change": -615,
+            "one_day_change_percentage": -1.4191761855313256,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 3,
+            "unit_price": 14240,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "mid",
+            "asset_class": "equity",
+            "holding_percentage": 5.297921128985008,
+            "investment_type": "ind_stocks",
+            "id": "INDS03982"
+          },
+          {
+            "name": "Cupid Ltd",
+            "invested_amount": 39641,
+            "current_value": 39641,
+            "one_day_change": 448,
+            "one_day_change_percentage": 1.1430612609394535,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 140,
+            "unit_price": 283.15,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "mid",
+            "asset_class": "equity",
+            "holding_percentage": 4.916078920273752,
+            "investment_type": "ind_stocks",
+            "id": "INDS00876"
+          },
+          {
+            "name": "National Aluminium Company Ltd",
+            "invested_amount": 37410,
+            "current_value": 37410,
+            "one_day_change": 10,
+            "one_day_change_percentage": 0.026737967914438502,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 100,
+            "unit_price": 374.1,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "mid",
+            "asset_class": "equity",
+            "holding_percentage": 4.639401438092912,
+            "investment_type": "ind_stocks",
+            "id": "INDS00020"
+          },
+          {
+            "name": "Gold Basket - Nippon",
+            "invested_amount": 36370.62,
+            "current_value": 36370.62,
+            "one_day_change": 268.84,
+            "one_day_change_percentage": 0.7446724233541946,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 286,
+            "unit_price": 127.17,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "gold",
+            "holding_percentage": 4.510502719388688,
+            "investment_type": "ind_stocks",
+            "id": "INDS19240"
+          },
+          {
+            "name": "Kirloskar Oil Engines Ltd",
+            "invested_amount": 33028.5,
+            "current_value": 33028.5,
+            "one_day_change": -985.5,
+            "one_day_change_percentage": -2.8973363908978653,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 15,
+            "unit_price": 2201.9,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 4.096029681851155,
+            "investment_type": "ind_stocks",
+            "id": "INDS02587"
+          },
+          {
+            "name": "Shriram Finance Ltd",
+            "invested_amount": 24984,
+            "current_value": 24984,
+            "one_day_change": -76.80000000000001,
+            "one_day_change_percentage": -0.30645470216433635,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 24,
+            "unit_price": 1041,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "large",
+            "asset_class": "equity",
+            "holding_percentage": 3.098390952400783,
+            "investment_type": "ind_stocks",
+            "id": "INDS00182"
+          },
+          {
+            "name": "HFCL Ltd",
+            "invested_amount": 22218.239999999998,
+            "current_value": 22218.239999999998,
+            "one_day_change": 1057.92,
+            "one_day_change_percentage": 4.999546320660557,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 96,
+            "unit_price": 231.44,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 2.7553952047017756,
+            "investment_type": "ind_stocks",
+            "id": "INDS00962"
+          },
+          {
+            "name": "Kaynes Technology India Ltd",
+            "invested_amount": 17990,
+            "current_value": 17990,
+            "one_day_change": 565,
+            "one_day_change_percentage": 3.242467718794835,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 5,
+            "unit_price": 3598,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 2.231029988540269,
+            "investment_type": "ind_stocks",
+            "id": "INDS23195"
+          },
+          {
+            "name": "ICICI Prudential Asset Management Co Ltd",
+            "invested_amount": 17825.4,
+            "current_value": 17825.4,
+            "one_day_change": -54.599999999999994,
+            "one_day_change_percentage": -0.3053691275167785,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 6,
+            "unit_price": 2970.9,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "large",
+            "asset_class": "equity",
+            "holding_percentage": 2.2106171182726913,
+            "investment_type": "ind_stocks",
+            "id": "INDS40257"
+          },
+          {
+            "name": "Bank of Maharashtra",
+            "invested_amount": 17190,
+            "current_value": 17190,
+            "one_day_change": -74,
+            "one_day_change_percentage": -0.42863762743280814,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 200,
+            "unit_price": 85.95,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "mid",
+            "asset_class": "equity",
+            "holding_percentage": 2.131817982379501,
+            "investment_type": "ind_stocks",
+            "id": "INDS02198"
+          },
+          {
+            "name": "Jindal Drilling & Industries Ltd",
+            "invested_amount": 16576.25,
+            "current_value": 16576.25,
+            "one_day_change": 328.75,
+            "one_day_change_percentage": 2.0233882135713186,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 25,
+            "unit_price": 663.05,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 2.055703771403037,
+            "investment_type": "ind_stocks",
+            "id": "INDS00117"
+          },
+          {
+            "name": "TD Power Systems Ltd",
+            "invested_amount": 14802,
+            "current_value": 14802,
+            "one_day_change": 351,
+            "one_day_change_percentage": 2.428897654141582,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 20,
+            "unit_price": 740.1,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 1.8356701439896088,
+            "investment_type": "ind_stocks",
+            "id": "INDS02248"
+          },
+          {
+            "name": "Walchandnagar Industries Ltd",
+            "invested_amount": 10430.5,
+            "current_value": 10430.5,
+            "one_day_change": 124,
+            "one_day_change_percentage": 1.2031242419832144,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 50,
+            "unit_price": 208.61,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 1.2935385378248625,
+            "investment_type": "ind_stocks",
+            "id": "INDS00175"
+          },
+          {
+            "name": "JK Tyre & Industries Ltd",
+            "invested_amount": 9183.75,
+            "current_value": 9183.75,
+            "one_day_change": -52.5,
+            "one_day_change_percentage": -0.5684125050751117,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 25,
+            "unit_price": 367.35,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 1.1389228269736908,
+            "investment_type": "ind_stocks",
+            "id": "INDS01173"
+          },
+          {
+            "name": "Diamond Power Infrastructure Ltd",
+            "invested_amount": 6608.750000000001,
+            "current_value": 8295,
+            "one_day_change": 222.5,
+            "one_day_change_percentage": 2.76,
+            "absolute_change": 1686.249999999999,
+            "absolute_change_percentage": 25.51541516928313,
+            "quantity": 25,
+            "unit_price": 264.35,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 1.0287044888794628,
+            "investment_type": "ind_stocks",
+            "id": "INDS04293"
+          },
+          {
+            "name": "Dhanlaxmi Bank Ltd",
+            "invested_amount": 7965,
+            "current_value": 7965,
+            "one_day_change": 35,
+            "one_day_change_percentage": 0.4413619167717529,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 250,
+            "unit_price": 31.86,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 0.9877795363381459,
+            "investment_type": "ind_stocks",
+            "id": "INDS02812"
+          },
+          {
+            "name": "Ola Electric Mobility Ltd",
+            "invested_amount": 7640.000000000001,
+            "current_value": 7640.000000000001,
+            "one_day_change": 146,
+            "one_day_change_percentage": 1.9482252468641579,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 200,
+            "unit_price": 38.2,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 0.9474746588353339,
+            "investment_type": "ind_stocks",
+            "id": "INDS32068"
+          },
+          {
+            "name": "South Indian Bank Ltd",
+            "invested_amount": 7093.5,
+            "current_value": 7093.5,
+            "one_day_change": -61.49999999999999,
+            "one_day_change_percentage": -0.8595387840670858,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 150,
+            "unit_price": 47.29,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 0.8797004571267593,
+            "investment_type": "ind_stocks",
+            "id": "INDS02386"
+          },
+          {
+            "name": "Vedanta Ltd",
+            "invested_amount": 5442,
+            "current_value": 5442,
+            "one_day_change": 32,
+            "one_day_change_percentage": 0.5914972273567467,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "quantity": 20,
+            "unit_price": 272.1,
+            "brokers": [
+              "Zerodha"
+            ],
+            "market_cap": "mid",
+            "asset_class": "equity",
+            "holding_percentage": 0.6748896719086239,
+            "investment_type": "ind_stocks",
+            "id": "INDS00312"
+          },
+          {
+            "name": "Milky Mist Dairy Food Ltd",
+            "invested_amount": 5092,
+            "current_value": 5048.6,
+            "one_day_change": -9.2,
+            "one_day_change_percentage": -0.18,
+            "absolute_change": -43.399999999999636,
+            "absolute_change_percentage": -0.8523173605655859,
+            "quantity": 20,
+            "unit_price": 254.6,
+            "brokers": [
+              "INDmoney"
+            ],
+            "market_cap": "small",
+            "asset_class": "equity",
+            "holding_percentage": 0.6261021678790664,
+            "investment_type": "ind_stocks",
+            "id": "INDS44060"
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "mutual_fund",
+        "total_value": 712050.3400000002,
+        "invested": 611564.1799999999,
+        "one_day_change": 5410.81,
+        "one_day_change_percentage": 0.765710064366198,
+        "holdings": [
+          {
+            "name": "Nippon India Gold Savings Fund - Direct Plan - Growth",
+            "invested_amount": 89995.5,
+            "current_value": 120400.75,
+            "one_day_change": 2584.26,
+            "one_day_change_percentage": 2.19,
+            "absolute_change": 30405.25,
+            "absolute_change_percentage": 33.78530037612992,
+            "quantity": 1979.21,
+            "asset_class": "gold",
+            "holding_percentage": 16.909022190762517,
+            "investment_type": "mutual_funds",
+            "id": "5424"
+          },
+          {
+            "name": "SBI Innovative Opportunities Fund Direct Growth",
+            "invested_amount": 97495.13,
+            "current_value": 111938.2,
+            "one_day_change": -163.24,
+            "one_day_change_percentage": -0.15,
+            "absolute_change": 14443.069999999992,
+            "absolute_change_percentage": 14.81414507575916,
+            "quantity": 10202.73,
+            "asset_class": "equity",
+            "holding_percentage": 15.720545825453852,
+            "investment_type": "mutual_funds",
+            "id": "1046956"
+          },
+          {
+            "name": "HDFC Mid Cap Fund -Direct Plan - Growth Option",
+            "invested_amount": 56997.15,
+            "current_value": 63534.63,
+            "one_day_change": 83.37,
+            "one_day_change_percentage": 0.13,
+            "absolute_change": 6537.479999999996,
+            "absolute_change_percentage": 11.469836649727217,
+            "quantity": 269.79,
+            "asset_class": "equity",
+            "holding_percentage": 8.922772229839815,
+            "investment_type": "mutual_funds",
+            "id": "3097"
+          },
+          {
+            "name": "HDFC Silver ETF Fund of Fund Direct Growth",
+            "invested_amount": 45792.46,
+            "current_value": 58129.26,
+            "one_day_change": 1243.44,
+            "one_day_change_percentage": 2.19,
+            "absolute_change": 12336.800000000003,
+            "absolute_change_percentage": 26.940679753828476,
+            "quantity": 1529.82,
+            "asset_class": "gold",
+            "holding_percentage": 8.163644722085236,
+            "investment_type": "mutual_funds",
+            "id": "1042162"
+          },
+          {
+            "name": "Bandhan Small Cap Fund Direct Growth",
+            "invested_amount": 44997.75,
+            "current_value": 51136.69,
+            "one_day_change": 328.1,
+            "one_day_change_percentage": 0.65,
+            "absolute_change": 6138.940000000002,
+            "absolute_change_percentage": 13.642771027440265,
+            "quantity": 891.58,
+            "asset_class": "equity",
+            "holding_percentage": 7.181611625942064,
+            "investment_type": "mutual_funds",
+            "id": "1005544"
+          },
+          {
+            "name": "Parag Parikh Flexi Cap Direct Growth",
+            "invested_amount": 45997.7,
+            "current_value": 47013.77,
+            "one_day_change": 68.78,
+            "one_day_change_percentage": 0.15,
+            "absolute_change": 1016.0699999999997,
+            "absolute_change_percentage": 2.208958274000656,
+            "quantity": 518.72,
+            "asset_class": "equity",
+            "holding_percentage": 6.602590766265203,
+            "investment_type": "mutual_funds",
+            "id": "3229"
+          },
+          {
+            "name": "Bandhan Large & Mid Cap Fund Direct Plan Growth",
+            "invested_amount": 39998,
+            "current_value": 44580.65,
+            "one_day_change": 74.32,
+            "one_day_change_percentage": 0.17,
+            "absolute_change": 4582.6500000000015,
+            "absolute_change_percentage": 11.457197859892998,
+            "quantity": 267.35,
+            "asset_class": "equity",
+            "holding_percentage": 6.2608845885811935,
+            "investment_type": "mutual_funds",
+            "id": "2882"
+          },
+          {
+            "name": "Motilal Oswal Flexicap Fund Direct Plan Growth",
+            "invested_amount": 41997.9,
+            "current_value": 43503.26,
+            "one_day_change": -51.19,
+            "one_day_change_percentage": -0.12,
+            "absolute_change": 1505.3600000000006,
+            "absolute_change_percentage": 3.5843696946752117,
+            "quantity": 611.54,
+            "asset_class": "equity",
+            "holding_percentage": 6.109576466180747,
+            "investment_type": "mutual_funds",
+            "id": "3226"
+          },
+          {
+            "name": "SBI Contra Fund Direct Growth",
+            "invested_amount": 32998.35,
+            "current_value": 32254.34,
+            "one_day_change": 99.01,
+            "one_day_change_percentage": 0.31,
+            "absolute_change": -744.0099999999984,
+            "absolute_change_percentage": -2.2546884920003527,
+            "quantity": 77.69,
+            "asset_class": "equity",
+            "holding_percentage": 4.5297836666997435,
+            "investment_type": "mutual_funds",
+            "id": "2612"
+          },
+          {
+            "name": "Invesco India Small Cap Fund Direct Growth",
+            "invested_amount": 23998.8,
+            "current_value": 31055.96,
+            "one_day_change": 164.83,
+            "one_day_change_percentage": 0.53,
+            "absolute_change": 7057.16,
+            "absolute_change_percentage": 29.40630364851576,
+            "quantity": 568.37,
+            "asset_class": "equity",
+            "holding_percentage": 4.3614837681279655,
+            "investment_type": "mutual_funds",
+            "id": "1002070"
+          },
+          {
+            "name": "ICICI Prudential Value Fund Direct Plan Growth",
+            "invested_amount": 29998.5,
+            "current_value": 30522.93,
+            "one_day_change": 18.72,
+            "one_day_change_percentage": 0.06,
+            "absolute_change": 524.4300000000003,
+            "absolute_change_percentage": 1.7481874093704695,
+            "quantity": 60.4,
+            "asset_class": "equity",
+            "holding_percentage": 4.286625296745171,
+            "investment_type": "mutual_funds",
+            "id": "3625"
+          },
+          {
+            "name": "Tata Silver ETF Fund of Fund Direct Growth",
+            "invested_amount": 14999.25,
+            "current_value": 24185.94,
+            "one_day_change": 494.08,
+            "one_day_change_percentage": 2.09,
+            "absolute_change": 9186.689999999999,
+            "absolute_change_percentage": 61.24766238311915,
+            "quantity": 801.82,
+            "asset_class": "gold",
+            "holding_percentage": 3.396661533789871,
+            "investment_type": "mutual_funds",
+            "id": "1044711"
+          },
+          {
+            "name": "Edelweiss US Technology Equity Fund of Fund Direct Growth",
+            "invested_amount": 15999.2,
+            "current_value": 19371.79,
+            "one_day_change": 227.69,
+            "one_day_change_percentage": 1.19,
+            "absolute_change": 3372.59,
+            "absolute_change_percentage": 21.079741487074354,
+            "quantity": 491.76,
+            "asset_class": "global_equity",
+            "holding_percentage": 2.72056467243594,
+            "investment_type": "mutual_funds",
+            "id": "1005498"
+          },
+          {
+            "name": "Kotak Bond Short Term Plan Direct Growth",
+            "invested_amount": 15999.2,
+            "current_value": 16472.29,
+            "one_day_change": 22.23,
+            "one_day_change_percentage": 0.14,
+            "absolute_change": 473.09000000000015,
+            "absolute_change_percentage": 2.9569603480174016,
+            "quantity": 268.52,
+            "asset_class": "debt",
+            "holding_percentage": 2.3133603166315453,
+            "investment_type": "mutual_funds",
+            "id": "5037"
+          },
+          {
+            "name": "UTI Silver ETF Fund of Fund Direct Growth",
+            "invested_amount": 5299.74,
+            "current_value": 8072.31,
+            "one_day_change": 162.92,
+            "one_day_change_percentage": 2.06,
+            "absolute_change": 2772.5700000000006,
+            "absolute_change_percentage": 52.31520791586004,
+            "quantity": 274.64,
+            "asset_class": "gold",
+            "holding_percentage": 1.1336712513893328,
+            "investment_type": "mutual_funds",
+            "id": "1043797"
+          },
+          {
+            "name": "Quant Small Cap Fund Growth Option Direct Plan",
+            "invested_amount": 4999.75,
+            "current_value": 5642.14,
+            "one_day_change": 51.43,
+            "one_day_change_percentage": 0.92,
+            "absolute_change": 642.3900000000003,
+            "absolute_change_percentage": 12.848442422121112,
+            "quantity": 17.55,
+            "asset_class": "equity",
+            "holding_percentage": 0.7923793702563218,
+            "investment_type": "mutual_funds",
+            "id": "611"
+          },
+          {
+            "name": "Edelweiss Balanced Advantage Fund Direct Plan Growth",
+            "invested_amount": 3999.8,
+            "current_value": 4235.43,
+            "one_day_change": 2.06,
+            "one_day_change_percentage": 0.05,
+            "absolute_change": 235.6300000000001,
+            "absolute_change_percentage": 5.891044552227614,
+            "quantity": 68.69,
+            "asset_class": "others",
+            "holding_percentage": 0.5948217088134526,
+            "investment_type": "mutual_funds",
+            "id": "4490"
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "savings_account",
+        "total_value": 476030.75,
+        "invested": 476030.75,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "HDFC Bank",
+            "invested_amount": 360733.25,
+            "current_value": 360733.25,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "liquid",
+            "holding_percentage": 75.77940080551518,
+            "investment_type": "savings_account"
+          },
+          {
+            "name": "State Bank Of India",
+            "invested_amount": 66231.5,
+            "current_value": 66231.5,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "liquid",
+            "holding_percentage": 13.913281862568752,
+            "investment_type": "savings_account"
+          },
+          {
+            "name": "HDFC Bank",
+            "invested_amount": 49066,
+            "current_value": 49066,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "liquid",
+            "holding_percentage": 10.307317331916058,
+            "investment_type": "savings_account"
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "bond",
+        "total_value": 152022.19999999998,
+        "invested": 59260,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "Sovereign Gold Bond Scheme 2023-24 - Series I",
+            "invested_amount": 59260,
+            "current_value": 152022.19999999998,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 92762.19999999998,
+            "absolute_change_percentage": 156.5342558218022,
+            "quantity": 10,
+            "unit_price": 5926,
+            "asset_class": "debt",
+            "holding_percentage": 100,
+            "investment_type": "bonds",
+            "id": "IN0020230069"
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "us_stock",
+        "total_value": 10030.586250765738,
+        "invested": 10972.8,
+        "one_day_change": 341.9994999999999,
+        "one_day_change_percentage": 3.5299214302124087,
+        "holdings": [
+          {
+            "name": "Newmont Corporation",
+            "invested_amount": 4500,
+            "current_value": 6098.810403980303,
+            "one_day_change": 246.57974999999996,
+            "one_day_change_percentage": 4.213431844698271,
+            "absolute_change": 1598.810403980303,
+            "absolute_change_percentage": 35.52912008845118,
+            "quantity": 0.49493793,
+            "unit_price": 9092.04917877278,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 60.80213311076127,
+            "investment_type": "us_stocks",
+            "id": "NEM",
+            "invested_value_usd": 50,
+            "current_value_usd": 64.55475420990001,
+            "one_day_change_usd": 2.61
+          },
+          {
+            "name": "abrdn Physical Platinum Shares ETF",
+            "invested_amount": 1819.8,
+            "current_value": 1630.7014908283497,
+            "one_day_change": 50.07175,
+            "one_day_change_percentage": 3.1678354966141056,
+            "absolute_change": -189.09850917165022,
+            "absolute_change_percentage": -10.391169863262459,
+            "quantity": 1.0467354,
+            "unit_price": 1738.5482520224307,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "asset_class": "global_equity",
+            "holding_percentage": 16.257289953554423,
+            "investment_type": "us_stocks",
+            "id": "PPLT",
+            "invested_value_usd": 20.22,
+            "current_value_usd": 17.260666746,
+            "one_day_change_usd": 0.53
+          },
+          {
+            "name": "Pharming Group N.V. ADS, each representing 10",
+            "invested_amount": 1800,
+            "current_value": 1244.97331764765,
+            "one_day_change": 28.342499999999998,
+            "one_day_change_percentage": 2.329589189167515,
+            "absolute_change": -555.02668235235,
+            "absolute_change_percentage": -30.83481568624167,
+            "quantity": 1.1498959,
+            "unit_price": 1565.3590903315683,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "market_cap": "small",
+            "asset_class": "global_equity",
+            "holding_percentage": 12.411770224822186,
+            "investment_type": "us_stocks",
+            "id": "PHAR",
+            "invested_value_usd": 20,
+            "current_value_usd": 13.177807014,
+            "one_day_change_usd": 0.3
+          },
+          {
+            "name": "NVIDIA Corporation",
+            "invested_amount": 541.8,
+            "current_value": 691.4656545316124,
+            "one_day_change": 12.281749999999999,
+            "one_day_change_percentage": 1.808309931677474,
+            "absolute_change": 149.6656545316124,
+            "absolute_change_percentage": 27.623782674716207,
+            "quantity": 0.03203779,
+            "unit_price": 16911.278836648846,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 6.893571694065495,
+            "investment_type": "us_stocks",
+            "id": "NVDA",
+            "invested_value_usd": 6.02,
+            "current_value_usd": 7.319033125499999,
+            "one_day_change_usd": 0.13
+          },
+          {
+            "name": "TryHard Holdings Limited",
+            "invested_amount": 2311.2,
+            "current_value": 364.635383777825,
+            "one_day_change": 4.72375,
+            "one_day_change_percentage": 1.312474940144889,
+            "absolute_change": -1946.564616222175,
+            "absolute_change_percentage": -84.22311423598889,
+            "quantity": 2.27035091,
+            "unit_price": 1017.9924124592704,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "market_cap": "small",
+            "asset_class": "global_equity",
+            "holding_percentage": 3.6352350167966363,
+            "investment_type": "us_stocks",
+            "id": "THH",
+            "invested_value_usd": 25.68,
+            "current_value_usd": 3.859596547,
+            "one_day_change_usd": 0.05
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "stock_wallet",
+        "total_value": 479.52,
+        "invested": 479.52,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "Stock Wallet",
+            "invested_amount": 479.52,
+            "current_value": 479.52,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "liquid",
+            "holding_percentage": 100,
+            "investment_type": "ind_wallet"
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "digital_assets",
+        "total_value": 0,
+        "invested": 0,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "Digital Assets",
+            "invested_amount": 0,
+            "current_value": 0,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 0,
+            "absolute_change_percentage": 0,
+            "asset_class": "alternate",
+            "holding_percentage": 0,
+            "investment_type": "digital_assets"
+          }
+        ]
+      }
+    ],
+    "data_note": "Holdings lists are capped at the top 25 by current value in the whole-family view (holdings_omitted shows how many more). Pass family_member for a member's complete list."
+  },
+  "us_stock": {
+    "asset": "us_stock",
+    "family_asset_holdings": [
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "us_stock",
+        "total_value": 220797.8237146425,
+        "invested": 224626.491328,
+        "one_day_change": 4498.937119945001,
+        "one_day_change_percentage": 2.0799631430258554,
+        "holdings": [
+          {
+            "name": "Amazon.com Inc.",
+            "invested_amount": 23632.143,
+            "current_value": 24459.577499999996,
+            "one_day_change": 370.34199055249996,
+            "one_day_change_percentage": 1.537375440608136,
+            "absolute_change": 827.4344999999958,
+            "absolute_change_percentage": 3.501309635778675,
+            "quantity": 1,
+            "unit_price": 23632.143,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 11.077816388086948,
+            "investment_type": "us_stocks",
+            "id": "AMZN",
+            "invested_value_usd": 248.7594,
+            "current_value_usd": 258.9,
+            "one_day_change_usd": 3.9199998999999996
+          },
+          {
+            "name": "Sandisk Corporation",
+            "invested_amount": 19988.949506,
+            "current_value": 22494.05872031,
+            "one_day_change": 23.0004961525,
+            "one_day_change_percentage": 0.10235608809812671,
+            "absolute_change": 2505.1092143099995,
+            "absolute_change_percentage": 12.53247057109255,
+            "quantity": 0.1531169,
+            "unit_price": 130546.9840755658,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 10.187627007311974,
+            "investment_type": "us_stocks",
+            "id": "SNDK",
+            "invested_value_usd": 210.40999480000002,
+            "current_value_usd": 238.0953556,
+            "one_day_change_usd": 0.2434559
+          },
+          {
+            "name": "SpaceX",
+            "invested_amount": 20254.0000095,
+            "current_value": 19969.138784205,
+            "one_day_change": 1204.22947987,
+            "one_day_change_percentage": 6.41745430441171,
+            "absolute_change": -284.8612252950006,
+            "absolute_change_percentage": -1.4064442834076647,
+            "quantity": 1.4115771,
+            "unit_price": 14348.490075037347,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 9.044083156368863,
+            "investment_type": "us_stocks",
+            "id": "SPCX",
+            "invested_value_usd": 213.20000009999998,
+            "current_value_usd": 211.3695558,
+            "one_day_change_usd": 12.746541200000001
+          },
+          {
+            "name": "Dell Technologies Inc.",
+            "invested_amount": 14208.199971499998,
+            "current_value": 16250.319500917498,
+            "one_day_change": 761.2371023825,
+            "one_day_change_percentage": 4.914668815077774,
+            "absolute_change": 2042.1195294174995,
+            "absolute_change_percentage": 14.372823675861508,
+            "quantity": 0.3330942,
+            "unit_price": 42655.20075552201,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 7.359818691836064,
+            "investment_type": "us_stocks",
+            "id": "DELL",
+            "invested_value_usd": 149.5599997,
+            "current_value_usd": 172.0065573,
+            "one_day_change_usd": 8.0575507
+          },
+          {
+            "name": "Lumentum Holdings Inc.",
+            "invested_amount": 18942.999905,
+            "current_value": 16127.2955352525,
+            "one_day_change": -441.73681418499996,
+            "one_day_change_percentage": -2.6660386971843675,
+            "absolute_change": -2815.7043697475,
+            "absolute_change_percentage": -14.864089024274849,
+            "quantity": 0.2014519,
+            "unit_price": 94032.37152392209,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 7.304100766905791,
+            "investment_type": "us_stocks",
+            "id": "LITE",
+            "invested_value_usd": 199.399999,
+            "current_value_usd": 170.7043719,
+            "one_day_change_usd": -4.6757006
+          },
+          {
+            "name": "CrowdStrike Holdings Inc. Class A",
+            "invested_amount": 14207.249980999999,
+            "current_value": 14208.048031394997,
+            "one_day_change": 763.3760730674999,
+            "one_day_change_percentage": 5.677907764753399,
+            "absolute_change": 0.7980503949984268,
+            "absolute_change_percentage": 0.00561720527241863,
+            "quantity": 0.6995836,
+            "unit_price": 20308.151850615137,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 6.434867786449461,
+            "investment_type": "us_stocks",
+            "id": "CRWD",
+            "invested_value_usd": 149.5499998,
+            "current_value_usd": 150.3895002,
+            "one_day_change_usd": 8.0801913
+          },
+          {
+            "name": "Micron Technology Inc.",
+            "invested_amount": 14208.199885999999,
+            "current_value": 14156.896054245,
+            "one_day_change": 30.732169544999994,
+            "one_day_change_percentage": 0.21755495544183728,
+            "absolute_change": -51.3038317549981,
+            "absolute_change_percentage": -0.3610860782269129,
+            "quantity": 0.1563914,
+            "unit_price": 90850.26341601902,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 6.41170090179026,
+            "investment_type": "us_stocks",
+            "id": "MU",
+            "invested_value_usd": 149.5599988,
+            "current_value_usd": 149.8480662,
+            "one_day_change_usd": 0.3252942
+          },
+          {
+            "name": "Advanced Micro Devices Inc.",
+            "invested_amount": 10187.799829,
+            "current_value": 13054.41344739,
+            "one_day_change": -25.756246875,
+            "one_day_change_percentage": -0.19691064777464487,
+            "absolute_change": 2866.61361839,
+            "absolute_change_percentage": 28.13771046256782,
+            "quantity": 0.3029167,
+            "unit_price": 33632.347866591714,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 5.912383205489121,
+            "investment_type": "us_stocks",
+            "id": "AMD",
+            "invested_value_usd": 107.2399982,
+            "current_value_usd": 138.1784964,
+            "one_day_change_usd": -0.272625
+          },
+          {
+            "name": "Vertex Pharmaceuticals Inc.",
+            "invested_amount": 11588.099981,
+            "current_value": 12498.182182307499,
+            "one_day_change": 27.103734352499995,
+            "one_day_change_percentage": 0.21733272279226543,
+            "absolute_change": 910.0822013074994,
+            "absolute_change_percentage": 7.853592934127959,
+            "quantity": 0.2370974,
+            "unit_price": 48874.8505086939,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 5.660464388661755,
+            "investment_type": "us_stocks",
+            "id": "VRTX",
+            "invested_value_usd": 121.97999979999999,
+            "current_value_usd": 132.2908937,
+            "one_day_change_usd": 0.2868879
+          },
+          {
+            "name": "Palantir Technologies Inc. Class A",
+            "invested_amount": 9500.949962,
+            "current_value": 11609.703665232499,
+            "one_day_change": 831.3089642475,
+            "one_day_change_percentage": 7.712734477718927,
+            "absolute_change": 2108.753703232498,
+            "absolute_change_percentage": 22.195187972430855,
+            "quantity": 0.6732401,
+            "unit_price": 14112.275786899798,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 5.258069789780535,
+            "investment_type": "us_stocks",
+            "id": "PLTR",
+            "invested_value_usd": 100.0099996,
+            "current_value_usd": 122.88651669999999,
+            "one_day_change_usd": 8.7992481
+          },
+          {
+            "name": "Nebius Group N.V. Class A",
+            "invested_amount": 14455.199990500001,
+            "current_value": 10947.3932720875,
+            "one_day_change": 339.913359735,
+            "one_day_change_percentage": 3.2044685688178207,
+            "absolute_change": -3507.806718412501,
+            "absolute_change_percentage": -24.266746366137042,
+            "quantity": 0.5501404,
+            "unit_price": 26275.474388901453,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 4.958107416056705,
+            "investment_type": "us_stocks",
+            "id": "NBIS",
+            "invested_value_usd": 152.1599999,
+            "current_value_usd": 115.87608650000001,
+            "one_day_change_usd": 3.5979186
+          },
+          {
+            "name": "Palo Alto Networks Inc.",
+            "invested_amount": 9471.499971500001,
+            "current_value": 8752.6738154425,
+            "one_day_change": 91.23411070499999,
+            "one_day_change_percentage": 1.0533365562205343,
+            "absolute_change": -718.8261560575011,
+            "absolute_change_percentage": -7.589359216813264,
+            "quantity": 0.2791028,
+            "unit_price": 33935.52472959784,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 3.964112357717073,
+            "investment_type": "us_stocks",
+            "id": "PANW",
+            "invested_value_usd": 99.6999997,
+            "current_value_usd": 92.6453963,
+            "one_day_change_usd": 0.9656958
+          },
+          {
+            "name": "NVIDIA Corporation",
+            "invested_amount": 7578.149905,
+            "current_value": 8522.7438859625,
+            "one_day_change": 150.71956699749998,
+            "one_day_change_percentage": 1.8002762683820401,
+            "absolute_change": 944.5939809624997,
+            "absolute_change_percentage": 12.464704351378222,
+            "quantity": 0.3948856,
+            "unit_price": 19190.747662107708,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 3.8599763994853644,
+            "investment_type": "us_stocks",
+            "id": "NVDA",
+            "invested_value_usd": 79.769999,
+            "current_value_usd": 90.21163150000001,
+            "one_day_change_usd": 1.5953381
+          },
+          {
+            "name": "Taiwan Semiconductor Manufacturing Company Ltd.",
+            "invested_amount": 9472.4499715,
+            "current_value": 8401.940404012501,
+            "one_day_change": 30.423557510000002,
+            "one_day_change_percentage": 0.3634175032773245,
+            "absolute_change": -1070.5095674874992,
+            "absolute_change_percentage": -11.301295554036901,
+            "quantity": 0.2132633,
+            "unit_price": 44416.69040805427,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 3.8052641383237127,
+            "investment_type": "us_stocks",
+            "id": "TSM",
+            "invested_value_usd": 99.7099997,
+            "current_value_usd": 88.93294950000002,
+            "one_day_change_usd": 0.3220276
+          },
+          {
+            "name": "Sprott Uranium Miners ETF",
+            "invested_amount": 7411.899667500001,
+            "current_value": 6662.582908262499,
+            "one_day_change": 262.0771172325,
+            "one_day_change_percentage": 4.09463135866213,
+            "absolute_change": -749.3167592375021,
+            "absolute_change_percentage": -10.10964520368694,
+            "quantity": 1.2329052,
+            "unit_price": 6011.735263587176,
+            "brokers": [
+              "Alpaca"
+            ],
+            "asset_class": "global_equity",
+            "holding_percentage": 3.017503884854034,
+            "investment_type": "us_stocks",
+            "id": "URNM",
+            "invested_value_usd": 78.0199965,
+            "current_value_usd": 70.5221795,
+            "one_day_change_usd": 2.7740367
+          },
+          {
+            "name": "Seagate Technology Holdings PLC",
+            "invested_amount": 7105.049829,
+            "current_value": 6478.90057918,
+            "one_day_change": -80.55932377,
+            "one_day_change_percentage": -1.2281395871292677,
+            "absolute_change": -626.1492498199996,
+            "absolute_change_percentage": -8.812735517551282,
+            "quantity": 0.0858716,
+            "unit_price": 82740.39180590556,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 2.9343136042650872,
+            "investment_type": "us_stocks",
+            "id": "STX",
+            "invested_value_usd": 74.7899982,
+            "current_value_usd": 68.5779368,
+            "one_day_change_usd": -0.8527052000000002
+          },
+          {
+            "name": "Microsoft Corporation",
+            "invested_amount": 6206.349961999999,
+            "current_value": 6171.83392844,
+            "one_day_change": 160.913882425,
+            "one_day_change_percentage": 2.6770258328702856,
+            "absolute_change": -34.516033559999414,
+            "absolute_change_percentage": -0.5561406264766385,
+            "quantity": 0.1280633,
+            "unit_price": 48463.142539665925,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 2.7952421924304987,
+            "investment_type": "us_stocks",
+            "id": "MSFT",
+            "invested_value_usd": 65.3299996,
+            "current_value_usd": 65.3276944,
+            "one_day_change_usd": 1.703243
+          },
+          {
+            "name": "TryHard Holdings Limited",
+            "invested_amount": 6207.3,
+            "current_value": 32.1215,
+            "one_day_change": 0.37789999999999996,
+            "one_day_change_percentage": 1.1904761904761905,
+            "absolute_change": -6175.1785,
+            "absolute_change_percentage": -99.4825205806067,
+            "quantity": 0.2,
+            "unit_price": 31036.5,
+            "brokers": [
+              "Alpaca"
+            ],
+            "market_cap": "small",
+            "asset_class": "global_equity",
+            "holding_percentage": 0.014547924186749953,
+            "investment_type": "us_stocks",
+            "id": "THH",
+            "invested_value_usd": 65.34,
+            "current_value_usd": 0.33999999999999997,
+            "one_day_change_usd": 0.004
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "us_stock",
+        "total_value": 10030.586250765738,
+        "invested": 10972.8,
+        "one_day_change": 341.9994999999999,
+        "one_day_change_percentage": 3.5299214302124087,
+        "holdings": [
+          {
+            "name": "Newmont Corporation",
+            "invested_amount": 4500,
+            "current_value": 6098.810403980303,
+            "one_day_change": 246.57974999999996,
+            "one_day_change_percentage": 4.213431844698271,
+            "absolute_change": 1598.810403980303,
+            "absolute_change_percentage": 35.52912008845118,
+            "quantity": 0.49493793,
+            "unit_price": 9092.04917877278,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 60.80213311076127,
+            "investment_type": "us_stocks",
+            "id": "NEM",
+            "invested_value_usd": 50,
+            "current_value_usd": 64.55475420990001,
+            "one_day_change_usd": 2.61
+          },
+          {
+            "name": "abrdn Physical Platinum Shares ETF",
+            "invested_amount": 1819.8,
+            "current_value": 1630.7014908283497,
+            "one_day_change": 50.07175,
+            "one_day_change_percentage": 3.1678354966141056,
+            "absolute_change": -189.09850917165022,
+            "absolute_change_percentage": -10.391169863262459,
+            "quantity": 1.0467354,
+            "unit_price": 1738.5482520224307,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "asset_class": "global_equity",
+            "holding_percentage": 16.257289953554423,
+            "investment_type": "us_stocks",
+            "id": "PPLT",
+            "invested_value_usd": 20.22,
+            "current_value_usd": 17.260666746,
+            "one_day_change_usd": 0.53
+          },
+          {
+            "name": "Pharming Group N.V. ADS, each representing 10",
+            "invested_amount": 1800,
+            "current_value": 1244.97331764765,
+            "one_day_change": 28.342499999999998,
+            "one_day_change_percentage": 2.329589189167515,
+            "absolute_change": -555.02668235235,
+            "absolute_change_percentage": -30.83481568624167,
+            "quantity": 1.1498959,
+            "unit_price": 1565.3590903315683,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "market_cap": "small",
+            "asset_class": "global_equity",
+            "holding_percentage": 12.411770224822186,
+            "investment_type": "us_stocks",
+            "id": "PHAR",
+            "invested_value_usd": 20,
+            "current_value_usd": 13.177807014,
+            "one_day_change_usd": 0.3
+          },
+          {
+            "name": "NVIDIA Corporation",
+            "invested_amount": 541.8,
+            "current_value": 691.4656545316124,
+            "one_day_change": 12.281749999999999,
+            "one_day_change_percentage": 1.808309931677474,
+            "absolute_change": 149.6656545316124,
+            "absolute_change_percentage": 27.623782674716207,
+            "quantity": 0.03203779,
+            "unit_price": 16911.278836648846,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "market_cap": "large",
+            "asset_class": "global_equity",
+            "holding_percentage": 6.893571694065495,
+            "investment_type": "us_stocks",
+            "id": "NVDA",
+            "invested_value_usd": 6.02,
+            "current_value_usd": 7.319033125499999,
+            "one_day_change_usd": 0.13
+          },
+          {
+            "name": "TryHard Holdings Limited",
+            "invested_amount": 2311.2,
+            "current_value": 364.635383777825,
+            "one_day_change": 4.72375,
+            "one_day_change_percentage": 1.312474940144889,
+            "absolute_change": -1946.564616222175,
+            "absolute_change_percentage": -84.22311423598889,
+            "quantity": 2.27035091,
+            "unit_price": 1017.9924124592704,
+            "brokers": [
+              "Drivewealth"
+            ],
+            "market_cap": "small",
+            "asset_class": "global_equity",
+            "holding_percentage": 3.6352350167966363,
+            "investment_type": "us_stocks",
+            "id": "THH",
+            "invested_value_usd": 25.68,
+            "current_value_usd": 3.859596547,
+            "one_day_change_usd": 0.05
+          }
+        ]
+      }
+    ]
+  },
+  "nps": {
+    "asset": "nps",
+    "family_asset_holdings": [
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "nps",
+        "total_value": 257003.77,
+        "invested": 237500,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "NPS",
+            "invested_amount": 237500,
+            "current_value": 257003.77,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 19503.76999999999,
+            "absolute_change_percentage": 8.212113684210522,
+            "asset_class": "retirement",
+            "holding_percentage": 100,
+            "investment_type": "nps"
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "nps",
+        "total_value": 0,
+        "invested": 0,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": []
+      }
+    ]
+  },
+  "gold": {
+    "asset": "gold",
+    "family_asset_holdings": [
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "gold",
+        "total_value": 0,
+        "invested": 0,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": []
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "gold",
+        "total_value": 0,
+        "invested": 0,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": []
+      }
+    ]
+  },
+  "bond": {
+    "asset": "bond",
+    "family_asset_holdings": [
+      {
+        "name": "Vangala Vishwajeeth",
+        "relation": null,
+        "is_family_head": true,
+        "is_you": true,
+        "asset": "bond",
+        "total_value": 152022.19999999998,
+        "invested": 59260,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "Sovereign Gold Bond Scheme 2023-24 - Series I",
+            "invested_amount": 59260,
+            "current_value": 152022.19999999998,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 92762.19999999998,
+            "absolute_change_percentage": 156.5342558218022,
+            "quantity": 10,
+            "unit_price": 5926,
+            "asset_class": "debt",
+            "holding_percentage": 100,
+            "investment_type": "bonds",
+            "id": "IN0020230069"
+          }
+        ]
+      },
+      {
+        "name": "Nagishetti Mounika",
+        "relation": "Wife",
+        "is_family_head": false,
+        "is_you": false,
+        "asset": "bond",
+        "total_value": 152022.19999999998,
+        "invested": 59260,
+        "one_day_change": 0,
+        "one_day_change_percentage": 0,
+        "holdings": [
+          {
+            "name": "Sovereign Gold Bond Scheme 2023-24 - Series I",
+            "invested_amount": 59260,
+            "current_value": 152022.19999999998,
+            "one_day_change": 0,
+            "one_day_change_percentage": 0,
+            "absolute_change": 92762.19999999998,
+            "absolute_change_percentage": 156.5342558218022,
+            "quantity": 10,
+            "unit_price": 5926,
+            "asset_class": "debt",
+            "holding_percentage": 100,
+            "investment_type": "bonds",
+            "id": "IN0020230069"
+          }
+        ]
+      }
+    ]
+  }
+}

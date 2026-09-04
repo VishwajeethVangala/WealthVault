@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..900;1,300..900&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"outline":"#75777d","tertiary-fixed-dim":"#68dba9","tertiary-container":"#00301f","surface":"#f8f9ff","inverse-primary":"#bcc7de","tertiary":"#00190e","on-error-container":"#93000a","tertiary-fixed":"#85f8c4","surface-bright":"#f8f9ff","surface-container-highest":"#d3e4fe","primary-fixed-dim":"#bcc7de","on-secondary":"#ffffff","on-secondary-fixed-variant":"#3a485b","surface-container-high":"#dce9ff","error-container":"#ffdad6","on-background":"#0b1c30","inverse-on-surface":"#eaf1ff","secondary-container":"#d5e3fc","on-surface":"#0b1c30","on-surface-variant":"#45474c","inverse-surface":"#213145","on-secondary-fixed":"#0d1c2e","on-tertiary-fixed-variant":"#005137","secondary-fixed-dim":"#b9c7df","surface-container-low":"#eff4ff","error":"#ba1a1a","on-tertiary-fixed":"#002114","on-primary-fixed":"#111c2d","primary":"#091426","on-secondary-container":"#57657a","on-primary-fixed-variant":"#3c475a","surface-container":"#e5eeff","background":"#f8f9ff","primary-fixed":"#d8e3fb","surface-container-lowest":"#ffffff","secondary":"#515f74","secondary-fixed":"#d5e3fc","on-primary":"#ffffff","primary-container":"#1e293b","outline-variant":"#c5c6cd","on-error":"#ffffff","surface-dim":"#cbdbf5","on-tertiary":"#ffffff","surface-tint":"#545f73","on-primary-container":"#8590a6","on-tertiary-container":"#24a375","surface-variant":"#d3e4fe"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"space-2xl":"3rem","space-lg":"1.5rem","container-max-width":"1440px","gutter-desktop":"1.5rem","gutter-mobile":"1rem","space-sm":"0.75rem","space-xs":"0.5rem","space-3xl":"4rem","space-md":"1rem","space-xl":"2rem","space-2xs":"0.25rem"},"fontFamily":{"display-hero":["\"Source Serif 4\""],"display-hero-mobile":["\"Source Serif 4\""],"body-sm":["Hanken Grotesk"],"headline-lg":["\"Source Serif 4\""],"financial-metric-lg":["Hanken Grotesk"],"financial-metric-md":["Hanken Grotesk"],"headline-sm":["\"Source Serif 4\""],"label-caps":["Hanken Grotesk"],"body-md":["Hanken Grotesk"],"body-lg":["Hanken Grotesk"],"label-regular":["Hanken Grotesk"],"headline-md":["\"Source Serif 4\""]},"fontSize":{"display-hero":["44px",{"lineHeight":"52px","letterSpacing":"-0.02em","fontWeight":"400"}],"display-hero-mobile":["32px",{"lineHeight":"40px","letterSpacing":"-0.01em","fontWeight":"400"}],"body-sm":["13px",{"lineHeight":"18px","letterSpacing":"0.005em","fontWeight":"400"}],"headline-lg":["28px",{"lineHeight":"36px","letterSpacing":"-0.015em","fontWeight":"400"}],"financial-metric-lg":["32px",{"lineHeight":"36px","letterSpacing":"-0.02em","fontWeight":"600"}],"financial-metric-md":["20px",{"lineHeight":"26px","letterSpacing":"-0.01em","fontWeight":"600"}],"headline-sm":["18px",{"lineHeight":"24px","letterSpacing":"-0.005em","fontWeight":"500"}],"label-caps":["11px",{"lineHeight":"16px","letterSpacing":"0.06em","fontWeight":"600"}],"body-md":["14px",{"lineHeight":"20px","letterSpacing":"0em","fontWeight":"400"}],"body-lg":["16px",{"lineHeight":"24px","letterSpacing":"-0.005em","fontWeight":"400"}],"label-regular":["12px",{"lineHeight":"16px","letterSpacing":"0.01em","fontWeight":"500"}],"headline-md":["22px",{"lineHeight":"28px","letterSpacing":"-0.01em","fontWeight":"500"}]}}}};</script></head><body class="bg-surface font-body-md text-body-md text-on-surface antialiased"><header class="fixed top-0 left-0 w-full z-50 bg-surface-container-lowest/95 backdrop-blur-md shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-28 w-full"><div class="h-16 w-full max-w-[1440px] mx-auto px-gutter-desktop flex items-center justify-between"><div class="flex items-center gap-space-xl"><div class="flex items-center gap-space-sm"><img alt="Brand logo. - Primary color: #1e293b
+- Font: sourceSerif4
+- Mode: light
+- Roundness: rounded-sm
+" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1VUMGr9DhO0IDG1KhS0JEF1rx4qD9J_la5Zr11nBuAtq1Ou6DWx2B5kMS1bQmIWLXDu4VhG874bxHYXH-Y9ONPCDP43JWRsxgcwre9fe4fR5D19Gw_i_v9qkSGuill4UsvP9FW17GvcViMGqfnJPnPJYDnVuQXVo8RxZke83kQf0hE-mMyHEqxRzzltgZUYMD3v2L9mseXyESw3Pyd0MdVJApxJO1omlSB1XqxtBEK2Fwd-CMQrzYoOy54"/><span class="font-headline-sm text-headline-sm text-primary tracking-tight font-medium">WealthVault</span></div><nav class="hidden md:flex items-center gap-space-xs" data-active-classes="bg-primary-container text-on-primary font-medium rounded-lg"><a class="px-space-sm py-space-2xs text-on-surface-variant font-body-md text-body-md hover:text-on-surface transition-colors" data-path="overview" href="#">Overview</a><a aria-current="page" class="px-space-sm py-space-2xs transition-colors bg-primary-container text-on-primary font-medium rounded-lg" data-path="holdings" href="#">Holdings</a><a class="px-space-sm py-space-2xs text-on-surface-variant font-body-md text-body-md hover:text-on-surface transition-colors" data-path="allocations" href="#">Allocations</a><a class="px-space-sm py-space-2xs text-on-surface-variant font-body-md text-body-md hover:text-on-surface transition-colors" data-path="yields" href="#">Yields</a><a class="px-space-sm py-space-2xs text-on-surface-variant font-body-md text-body-md hover:text-on-surface transition-colors" data-path="advisory" href="#">Advisory</a></nav></div><div class="flex items-center gap-space-md"><div class="relative hidden lg:flex items-center"><span class="material-symbols-outlined absolute left-space-xs text-outline text-[18px]">search</span><input class="w-56 h-8 pl-8 pr-space-xs bg-surface-container-low text-on-surface placeholder:text-outline font-body-sm text-body-sm rounded-lg focus:outline-none focus:bg-surface-container-lowest transition-colors" placeholder="Search telemetry or asset..." type="text"/></div><button aria-label="Notifications" class="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors" type="button"><span class="material-symbols-outlined text-[20px]">notifications</span></button><div class="flex items-center gap-space-xs pl-space-xs"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1VLVv9rXRqyb0-rEmYD2K3UVjjhySGO3F5nGHTGFSgwUtB01do1IeXOwYD0vKpUREPdh6j4Cl690kuGYcp23-JOcUJrj0Lz7JC0BX1_K3vwH5SM6RW2GPz4hBobU_d-WQGStU58tLNYryIMH8CGniGGfBR-6LiiW1O62eIkmopz8-Xl336lzlDi_FAs7Rg1s8uQZpydy12qlF4zNR3gROMFASjaWElLK7YZmy2M7AUIX5_hfybfeOkT5PI"/><div class="hidden sm:flex flex-col text-left leading-none"><span class="font-label-regular text-label-regular text-on-surface font-semibold">V. Sterling</span><span class="font-label-caps text-label-caps text-outline uppercase">Private Alpha</span></div></div></div></div><div class="h-12 w-full bg-surface-container-low/70"><div class="h-full max-w-[1440px] mx-auto px-gutter-desktop flex items-center gap-space-sm overflow-x-auto"><div class="flex items-center gap-space-2xs"><span class="font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider mr-space-2xs">Filters:</span><button class="h-7 px-space-sm bg-surface-container-lowest rounded-full shadow-[0_1px_3px_rgba(15,23,42,0.03)] flex items-center gap-space-xs text-on-surface hover:bg-surface transition-colors" type="button"><span class="font-label-regular text-label-regular text-outline">Account:</span><span class="font-label-regular text-label-regular font-medium">All Accounts (3)</span><span class="material-symbols-outlined text-[14px] text-outline">expand_more</span></button><button class="h-7 px-space-sm bg-surface-container-lowest rounded-full shadow-[0_1px_3px_rgba(15,23,42,0.03)] flex items-center gap-space-xs text-on-surface hover:bg-surface transition-colors" type="button"><span class="font-label-regular text-label-regular text-outline">Broker:</span><span class="font-label-regular text-label-regular font-medium">Zerodha, Groww, Alpaca</span><span class="material-symbols-outlined text-[14px] text-outline">expand_more</span></button><button class="h-7 px-space-sm bg-surface-container-lowest rounded-full shadow-[0_1px_3px_rgba(15,23,42,0.03)] flex items-center gap-space-xs text-on-surface hover:bg-surface transition-colors" type="button"><span class="font-label-regular text-label-regular text-outline">Asset Class:</span><span class="font-label-regular text-label-regular font-medium">All Classes</span><span class="material-symbols-outlined text-[14px] text-outline">expand_more</span></button><button class="h-7 px-space-sm bg-surface-container-lowest rounded-full shadow-[0_1px_3px_rgba(15,23,42,0.03)] flex items-center gap-space-xs text-on-surface hover:bg-surface transition-colors" type="button"><span class="font-label-regular text-label-regular text-outline">Date Range:</span><span class="font-label-regular text-label-regular font-medium">All-Time / 1Y</span><span class="material-symbols-outlined text-[14px] text-outline">expand_more</span></button></div><div class="ml-auto flex items-center gap-space-xs"><button class="h-7 px-space-xs flex items-center gap-space-2xs text-on-surface-variant hover:text-on-surface font-label-regular text-label-regular transition-colors" type="button"><span class="material-symbols-outlined text-[16px]">restart_alt</span><span>Reset</span></button></div></div></div></div></header><main class="w-full pt-28 bg-surface min-h-[calc(100vh-140px)]"><div class="w-full max-w-[1440px] mx-auto px-gutter-desktop py-space-lg"><div class="flex flex-col w-full">
+<!-- Dynamic Spatial Atmospheric Backdrop & KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-space-md mb-space-lg">
+<!-- Metric Card 1: Aggregate Current Value -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-sm relative overflow-hidden flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-secondary uppercase tracking-wider">Total Valuation</span>
+<span class="inline-flex items-center px-space-xs py-space-2xs rounded text-tertiary-container bg-tertiary-fixed font-label-regular text-label-regular font-semibold">
+          Real-time
+        </span>
+</div>
+<div class="mt-space-sm">
+<div class="font-financial-metric-lg text-financial-metric-lg text-on-surface tracking-tight">₹2,930,655</div>
+<div class="flex items-center gap-space-2xs mt-space-2xs">
+<span class="material-symbols-outlined text-[16px] text-tertiary-container font-semibold">arrow_upward</span>
+<span class="font-body-sm text-body-sm font-semibold text-tertiary-container">+₹337,836 (+13.03%)</span>
+<span class="font-label-regular text-label-regular text-outline ml-space-2xs">All-time</span>
+</div>
+</div>
+<div class="absolute -right-3 -bottom-3 opacity-5 pointer-events-none">
+<span class="material-symbols-outlined text-[96px] text-primary">account_balance_wallet</span>
+</div>
+</div>
+<!-- Metric Card 2: Invested Baseline -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-secondary uppercase tracking-wider">Book Capital</span>
+<span class="font-label-regular text-label-regular text-outline">Across 3 Custodies</span>
+</div>
+<div class="mt-space-sm">
+<div class="font-financial-metric-lg text-financial-metric-lg text-on-surface tracking-tight">₹2,592,819</div>
+<div class="flex items-center gap-space-xs mt-space-2xs">
+<span class="font-label-regular text-label-regular text-secondary">28 Open Long Positions</span>
+</div>
+</div>
+</div>
+<!-- Metric Card 3: Multi-Broker Telemetry Mini Strip -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-secondary uppercase tracking-wider">Broker Split</span>
+<span class="font-label-caps text-label-caps text-outline">3 Connected</span>
+</div>
+<div class="mt-space-sm flex flex-col gap-space-2xs">
+<div class="flex justify-between items-center text-body-sm font-body-sm">
+<span class="flex items-center gap-space-2xs"><span class="w-2 h-2 rounded-full bg-primary"></span> Zerodha</span>
+<span class="font-semibold text-on-surface">₹1,166,950 <span class="text-outline font-normal">(39.8%)</span></span>
+</div>
+<div class="flex justify-between items-center text-body-sm font-body-sm">
+<span class="flex items-center gap-space-2xs"><span class="w-2 h-2 rounded-full bg-secondary"></span> Groww</span>
+<span class="font-semibold text-on-surface">₹1,067,455 <span class="text-outline font-normal">(36.4%)</span></span>
+</div>
+<div class="flex justify-between items-center text-body-sm font-body-sm">
+<span class="flex items-center gap-space-2xs"><span class="w-2 h-2 rounded-full bg-surface-tint"></span> Alpaca (US)</span>
+<span class="font-semibold text-on-surface">₹696,250 <span class="text-outline font-normal">(23.8%)</span></span>
+</div>
+</div>
+</div>
+<!-- Metric Card 4: Currency & Benchmark Overlay -->
+<div class="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-caps text-label-caps text-secondary uppercase tracking-wider">USD/INR Reference</span>
+<span class="font-label-regular text-label-regular text-tertiary-container bg-tertiary-fixed/60 px-space-2xs py-0.5 rounded font-medium">Spot 83.02</span>
+</div>
+<div class="mt-space-sm">
+<div class="font-financial-metric-md text-financial-metric-md text-on-surface tracking-tight">$8,386.50 <span class="text-label-regular text-outline font-normal">Offshore</span></div>
+<p class="font-label-regular text-label-regular text-secondary mt-space-2xs leading-relaxed">
+          US Equities converted via T+1 reserve forex benchmark rate.
+        </p>
+</div>
+</div>
+</div>
+<!-- Header Action Bar Above Table -->
+<div class="flex flex-col xl:flex-row xl:items-end justify-between gap-space-md mb-space-md">
+<!-- Left: Title, Subtitle, Value Badge & Filters -->
+<div class="flex flex-col gap-space-sm">
+<div class="flex flex-wrap items-center gap-space-sm">
+<h1 class="font-headline-lg text-headline-lg text-primary font-normal tracking-tight">Portfolio Holdings</h1>
+<span class="inline-flex items-center gap-1.5 px-space-sm py-space-2xs rounded-full bg-surface-container-high text-primary font-financial-metric-md text-label-regular font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-tertiary-container"></span>
+          Net ₹2,930,655
+        </span>
+</div>
+<p class="font-body-md text-body-md text-secondary">
+        28 active positions consolidated across 3 brokers • Synced 4 minutes ago
+      </p>
+<!-- Category Filter Pills -->
+<div class="flex items-center gap-space-2xs overflow-x-auto pt-space-xs" id="categoryFilterContainer">
+<button class="filter-tab active-tab px-space-sm py-1.5 rounded-lg text-label-regular font-medium transition-all bg-primary-container text-on-primary shadow-sm" data-category="ALL" type="button">
+          All (28)
+        </button>
+<button class="filter-tab px-space-sm py-1.5 rounded-lg text-label-regular font-medium transition-all bg-surface-container-lowest text-secondary hover:text-on-surface hover:bg-surface-container shadow-sm" data-category="EQUITY" type="button">
+          Equity &amp; ETFs (14)
+        </button>
+<button class="filter-tab px-space-sm py-1.5 rounded-lg text-label-regular font-medium transition-all bg-surface-container-lowest text-secondary hover:text-on-surface hover:bg-surface-container shadow-sm" data-category="MF" type="button">
+          Mutual Funds (8)
+        </button>
+<button class="filter-tab px-space-sm py-1.5 rounded-lg text-label-regular font-medium transition-all bg-surface-container-lowest text-secondary hover:text-on-surface hover:bg-surface-container shadow-sm" data-category="US" type="button">
+          US Equities (4)
+        </button>
+<button class="filter-tab px-space-sm py-1.5 rounded-lg text-label-regular font-medium transition-all bg-surface-container-lowest text-secondary hover:text-on-surface hover:bg-surface-container shadow-sm" data-category="DEBT" type="button">
+          Fixed Income (2)
+        </button>
+</div>
+</div>
+<!-- Right: Search, Columns, Export -->
+<div class="flex flex-wrap items-center gap-space-xs self-start xl:self-end">
+<!-- Search Input -->
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-space-xs text-outline text-[18px]">search</span>
+<input class="w-72 h-9 pl-9 pr-space-sm bg-surface-container-lowest text-on-surface placeholder:text-outline font-body-sm text-body-sm rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-primary transition-all" id="holdingsSearch" placeholder="Search asset, ISIN, or ticker..." type="text"/>
+<button class="hidden absolute right-2 text-outline hover:text-on-surface text-[16px] flex items-center" id="clearSearch">
+<span class="material-symbols-outlined text-[16px]">close</span>
+</button>
+</div>
+<!-- Columns Selector Toggle Button -->
+<div class="relative">
+<button class="h-9 px-space-sm bg-surface-container-lowest text-secondary hover:text-on-surface rounded-lg shadow-sm font-label-regular text-label-regular flex items-center gap-1.5 transition-colors" id="columnsToggleBtn" type="button">
+<span class="material-symbols-outlined text-[16px]">view_column</span>
+<span>Columns</span>
+</button>
+<!-- Columns Dropdown -->
+<div class="hidden absolute right-0 mt-1 w-48 bg-surface-container-lowest rounded-xl shadow-xl p-space-xs z-30 flex flex-col gap-1" id="columnsDropdown">
+<label class="flex items-center gap-2 px-2 py-1 text-label-regular text-on-surface rounded hover:bg-surface-container cursor-pointer">
+<input checked="" class="accent-primary rounded" type="checkbox"/> <span>Asset &amp; Identifier</span>
+</label>
+<label class="flex items-center gap-2 px-2 py-1 text-label-regular text-on-surface rounded hover:bg-surface-container cursor-pointer">
+<input checked="" class="accent-primary rounded" type="checkbox"/> <span>Broker Custody</span>
+</label>
+<label class="flex items-center gap-2 px-2 py-1 text-label-regular text-on-surface rounded hover:bg-surface-container cursor-pointer">
+<input checked="" class="accent-primary rounded" type="checkbox"/> <span>Asset Class</span>
+</label>
+<label class="flex items-center gap-2 px-2 py-1 text-label-regular text-on-surface rounded hover:bg-surface-container cursor-pointer">
+<input checked="" class="accent-primary rounded" type="checkbox"/> <span>Units / Qty</span>
+</label>
+<label class="flex items-center gap-2 px-2 py-1 text-label-regular text-on-surface rounded hover:bg-surface-container cursor-pointer">
+<input checked="" class="accent-primary rounded" type="checkbox"/> <span>Average Acquisition</span>
+</label>
+<label class="flex items-center gap-2 px-2 py-1 text-label-regular text-on-surface rounded hover:bg-surface-container cursor-pointer">
+<input checked="" class="accent-primary rounded" type="checkbox"/> <span>Market Valuation</span>
+</label>
+<label class="flex items-center gap-2 px-2 py-1 text-label-regular text-on-surface rounded hover:bg-surface-container cursor-pointer">
+<input checked="" class="accent-primary rounded" type="checkbox"/> <span>Unrealized Gain</span>
+</label>
+</div>
+</div>
+<!-- Export CSV / PDF Menu -->
+<div class="relative">
+<button class="h-9 px-space-sm bg-surface-container-lowest text-secondary hover:text-on-surface rounded-lg shadow-sm font-label-regular text-label-regular flex items-center gap-1.5 transition-colors" id="exportToggleBtn" type="button">
+<span class="material-symbols-outlined text-[16px]">ios_share</span>
+<span>Export</span>
+<span class="material-symbols-outlined text-[14px]">expand_more</span>
+</button>
+<div class="hidden absolute right-0 mt-1 w-44 bg-surface-container-lowest rounded-xl shadow-xl p-space-xs z-30 flex flex-col gap-1" id="exportDropdown">
+<button class="w-full text-left px-space-sm py-1.5 text-label-regular text-on-surface rounded hover:bg-surface-container flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-outline">description</span>
+<span>Formatted PDF Report</span>
+</button>
+<button class="w-full text-left px-space-sm py-1.5 text-label-regular text-on-surface rounded hover:bg-surface-container flex items-center gap-2">
+<span class="material-symbols-outlined text-[16px] text-outline">table_view</span>
+<span>Raw CSV Ledger</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Primary Holdings Ledger Card -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden flex flex-col">
+<!-- Interactive Scrollable Container -->
+<div class="overflow-x-auto w-full">
+<table class="w-full text-left border-collapse" id="holdingsTable">
+<thead>
+<tr class="bg-surface-container-low text-secondary uppercase font-label-caps text-label-caps h-10 select-none">
+<th class="py-space-xs px-space-md text-left cursor-pointer hover:text-on-surface" data-sort="name" scope="col">
+<div class="flex items-center gap-1">
+<span>Asset / Identifier</span>
+<span class="material-symbols-outlined text-[14px] text-outline">unfold_more</span>
+</div>
+</th>
+<th class="py-space-xs px-space-md text-left cursor-pointer hover:text-on-surface" data-sort="broker" scope="col">
+<div class="flex items-center gap-1">
+<span>Broker</span>
+<span class="material-symbols-outlined text-[14px] text-outline">unfold_more</span>
+</div>
+</th>
+<th class="py-space-xs px-space-md text-left cursor-pointer hover:text-on-surface" data-sort="class" scope="col">
+<div class="flex items-center gap-1">
+<span>Asset Class</span>
+<span class="material-symbols-outlined text-[14px] text-outline">unfold_more</span>
+</div>
+</th>
+<th class="py-space-xs px-space-md text-right cursor-pointer hover:text-on-surface" data-sort="qty" scope="col">
+<div class="flex items-center justify-end gap-1">
+<span>Quantity</span>
+<span class="material-symbols-outlined text-[14px] text-outline">unfold_more</span>
+</div>
+</th>
+<th class="py-space-xs px-space-md text-right cursor-pointer hover:text-on-surface" data-sort="avg" scope="col">
+<div class="flex items-center justify-end gap-1">
+<span>Avg Price</span>
+<span class="material-symbols-outlined text-[14px] text-outline">unfold_more</span>
+</div>
+</th>
+<th class="py-space-xs px-space-md text-right cursor-pointer hover:text-on-surface" data-sort="value" scope="col">
+<div class="flex items-center justify-end gap-1">
+<span>Current Value</span>
+<span class="material-symbols-outlined text-[14px] text-outline">expand_more</span>
+</div>
+</th>
+<th class="py-space-xs px-space-md text-right cursor-pointer hover:text-on-surface" data-sort="pnl" scope="col">
+<div class="flex items-center justify-end gap-1">
+<span>Total P&amp;L</span>
+<span class="material-symbols-outlined text-[14px] text-outline">unfold_more</span>
+</div>
+</th>
+<th class="py-space-xs px-space-sm text-center w-10" scope="col">
+<span class="sr-only">Actions</span>
+</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container-high/40 text-body-md font-body-md" id="tableBody">
+<!-- Row 1: Reliance -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Zerodha" data-category="EQUITY">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary font-bold">
+                  R
+                </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">Reliance Industries</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container text-secondary font-mono">RELIANCE</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">Energy &amp; Petrochemicals • INE002A01018</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/5 text-primary font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                Zerodha
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">Indian Equities</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              120 <span class="text-label-caps text-outline font-normal">SHR</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-secondary">
+              ₹2,450.00
+            </td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹358,800
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹64,800</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+22.04%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 2: TCS -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Zerodha" data-category="EQUITY">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary font-bold">
+                  T
+                </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">Tata Consultancy Services</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container text-secondary font-mono">TCS</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">Technology Services • INE467B01029</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/5 text-primary font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                Zerodha
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">Indian Equities</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              65 <span class="text-label-caps text-outline font-normal">SHR</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-secondary">
+              ₹3,520.00
+            </td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹254,150
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹25,350</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+11.08%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 3: HDFC Bank -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Groww" data-category="EQUITY">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary font-bold">
+                  H
+                </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">HDFC Bank Ltd</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container text-secondary font-mono">HDFCBANK</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">Banking • INE040A01034</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                Groww
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">Indian Equities</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              180 <span class="text-label-caps text-outline font-normal">SHR</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-secondary">
+              ₹1,480.00
+            </td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹291,600
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹25,200</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+9.46%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 4: Parag Parikh Flexi Cap -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Groww" data-category="MF">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center font-headline-sm text-headline-sm text-primary font-bold">
+                  P
+                </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">Parag Parikh Flexi Cap Fund</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container-high text-secondary">DIRECT • GROWTH</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">Multi-Cap • INF879O01019</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                Groww
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">Direct Mutual Funds</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              4,120.45 <span class="text-label-caps text-outline font-normal">UNITS</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-secondary">
+              NAV ₹52.40
+            </td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹298,732
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹82,820</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+38.36%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 5: Mirae Asset Large Cap -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Groww" data-category="MF">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center font-headline-sm text-headline-sm text-primary font-bold">
+                  M
+                </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">Mirae Asset Large Cap Fund</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container-high text-secondary">DIRECT • GROWTH</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">Large Cap • INF769K01010</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                Groww
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">Direct Mutual Funds</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              2,850.10 <span class="text-label-caps text-outline font-normal">UNITS</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-secondary">
+              NAV ₹88.10
+            </td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹286,435
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹35,340</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+14.07%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 6: Apple Inc. (AAPL) -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Alpaca" data-category="US">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary font-bold">
+<span class="text-sm font-semibold"></span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">Apple Inc.</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container text-secondary font-mono">NASDAQ:AAPL</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">Consumer Electronics • US0378331005</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-surface-tint"></span>
+                Alpaca (US)
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">US Equities</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              14 <span class="text-label-caps text-outline font-normal">SHR</span>
+</td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md text-secondary">$178.50</div>
+<div class="font-label-regular text-[11px] text-outline">(₹14,815)</div>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹251,800
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹44,390</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+21.40%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 7: Microsoft Corp -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Alpaca" data-category="US">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary font-bold">
+                  M
+                </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">Microsoft Corp</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container text-secondary font-mono">NASDAQ:MSFT</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">Software &amp; Cloud • US5949181045</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-surface-tint"></span>
+                Alpaca (US)
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">US Equities</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              6 <span class="text-label-caps text-outline font-normal">SHR</span>
+</td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md text-secondary">$392.00</div>
+<div class="font-label-regular text-[11px] text-outline">(₹32,536)</div>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹226,450
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹31,234</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+15.99%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 8: Vanguard S&P 500 ETF (VOO) -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Alpaca" data-category="US">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary font-bold">
+                  V
+                </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">Vanguard S&amp;P 500 ETF</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container text-secondary font-mono">NYSE:VOO</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">Index ETF • US9229083632</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-surface-tint"></span>
+                Alpaca (US)
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">US Equities</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              5 <span class="text-label-caps text-outline font-normal">SHR</span>
+</td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md text-secondary">$460.00</div>
+<div class="font-label-regular text-[11px] text-outline">(₹38,180)</div>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹214,800
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹23,900</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+12.52%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 9: Sovereign Gold Bond -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Zerodha" data-category="DEBT">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container-high flex items-center justify-center font-headline-sm text-headline-sm text-on-secondary-fixed font-bold">
+                  G
+                </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">Sovereign Gold Bond 2029</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container text-secondary font-mono">SGBMAY29</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">RBI Sovereign • 2.50% Coupon p.a. • IN0020210052</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/5 text-primary font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                Zerodha
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">Fixed Income / Gold</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              35 <span class="text-label-caps text-outline font-normal">GRAMS</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-secondary">
+              ₹5,850.00
+            </td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹262,500
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹57,750</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+28.21%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+<!-- Row 10: HDFC Corporate Bond Fund -->
+<tr class="hover:bg-surface-container-low/60 transition-colors group" data-broker="Groww" data-category="DEBT">
+<td class="py-3.5 px-space-md">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-headline-sm text-headline-sm text-primary font-bold">
+                  B
+                </div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-label-regular font-semibold text-on-surface">HDFC Corporate Bond Fund</span>
+<span class="font-label-caps text-[10px] px-1 py-0.5 rounded bg-surface-container-high text-secondary">DIRECT • GROWTH</span>
+</div>
+<span class="font-label-regular text-[11px] text-outline">AAA Rated Corporate Debt • INF179K01048</span>
+</div>
+</div>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-secondary/10 text-secondary font-label-regular text-label-regular font-medium">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                Groww
+              </span>
+</td>
+<td class="py-3.5 px-space-md whitespace-nowrap">
+<span class="font-body-sm text-body-sm text-on-surface">Fixed Income</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-on-surface">
+              8,400.00 <span class="text-label-caps text-outline font-normal">UNITS</span>
+</td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md tabular-nums text-secondary">
+              NAV ₹24.10
+            </td>
+<td class="py-3.5 px-space-md text-right font-financial-metric-md text-body-md font-semibold tabular-nums text-on-surface">
+              ₹221,760
+            </td>
+<td class="py-3.5 px-space-md text-right tabular-nums">
+<div class="font-body-md text-body-md font-semibold text-tertiary-container">+₹19,320</div>
+<div class="font-label-regular text-[11px] text-tertiary-container/80">+9.54%</div>
+</td>
+<td class="py-3.5 px-space-sm text-center">
+<button class="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-outline hover:text-on-surface rounded">
+<span class="material-symbols-outlined text-[18px]">more_horiz</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pinned Summary Total Row -->
+<div class="bg-surface-container-low px-space-md py-space-sm flex flex-col md:flex-row items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-md">
+<span class="font-headline-sm text-label-regular font-semibold text-primary uppercase tracking-wide">Aggregated Ledger Portfolio</span>
+<span class="text-outline text-[12px] hidden sm:inline">•</span>
+<span class="font-label-regular text-label-regular text-secondary">10 rows displayed</span>
+</div>
+<div class="flex flex-wrap items-center gap-space-lg">
+<div class="flex items-baseline gap-2">
+<span class="font-label-caps text-label-caps text-secondary uppercase">Invested:</span>
+<span class="font-financial-metric-md text-financial-metric-md text-on-surface font-semibold">₹2,592,819</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-label-caps text-label-caps text-secondary uppercase">Current:</span>
+<span class="font-financial-metric-md text-financial-metric-md text-primary font-bold">₹2,930,655</span>
+</div>
+<div class="flex items-baseline gap-2">
+<span class="font-label-caps text-label-caps text-secondary uppercase">Net Return:</span>
+<span class="font-financial-metric-md text-financial-metric-md text-tertiary-container font-semibold">+₹337,836 (+13.03%)</span>
+</div>
+</div>
+</div>
+<!-- Table Footer / Pagination -->
+<div class="px-space-md py-space-sm bg-surface-container-lowest flex flex-col sm:flex-row items-center justify-between gap-space-sm">
+<div class="flex items-center gap-space-xs text-body-sm font-body-sm text-secondary">
+<span>Showing</span>
+<span class="font-medium text-on-surface font-financial-metric-md">1–10</span>
+<span>of</span>
+<span class="font-medium text-on-surface font-financial-metric-md">28</span>
+<span>holdings</span>
+</div>
+<!-- Pagination Navigation -->
+<div class="flex items-center gap-space-2xs">
+<button class="h-8 px-2.5 rounded text-outline bg-surface-container-low cursor-not-allowed flex items-center gap-1 font-label-regular text-label-regular" disabled="" type="button">
+<span class="material-symbols-outlined text-[16px]">chevron_left</span>
+<span>Previous</span>
+</button>
+<button class="h-8 w-8 rounded bg-primary text-on-primary font-label-regular text-label-regular font-medium flex items-center justify-center" type="button">
+          1
+        </button>
+<button class="h-8 w-8 rounded hover:bg-surface-container text-secondary hover:text-on-surface font-label-regular text-label-regular font-medium flex items-center justify-center transition-colors" type="button">
+          2
+        </button>
+<button class="h-8 w-8 rounded hover:bg-surface-container text-secondary hover:text-on-surface font-label-regular text-label-regular font-medium flex items-center justify-center transition-colors" type="button">
+          3
+        </button>
+<button class="h-8 px-2.5 rounded text-on-surface bg-surface-container-low hover:bg-surface-container flex items-center gap-1 font-label-regular text-label-regular transition-colors" type="button">
+<span>Next</span>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Reassurance & Compliance Statement Footer Note -->
+<div class="mt-space-md mb-space-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-space-xs text-outline text-[12px] font-label-regular">
+<div class="flex items-center gap-space-xs">
+<span class="material-symbols-outlined text-[16px] text-outline">verified_user</span>
+<span>Custodian data aggregated via CAMS/KFintech &amp; Open Banking APIs. Unadjusted for local capital gains withholding.</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span>Auto-sync every 15 min</span>
+<span>•</span>
+<button class="hover:text-on-surface underline transition-colors">Refresh Feed</button>
+</div>
+</div>
+</div>
+<script>
+  (function initHoldingsInteractivity() {
+    // 1. Column and Export Dropdown Toggles
+    const colBtn = document.getElementById('columnsToggleBtn');
+    const colMenu = document.getElementById('columnsDropdown');
+    const expBtn = document.getElementById('exportToggleBtn');
+    const expMenu = document.getElementById('exportDropdown');
+
+    if (colBtn && colMenu) {
+      colBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        colMenu.classList.toggle('hidden');
+        if (expMenu) expMenu.classList.add('hidden');
+      });
+    }
+
+    if (expBtn && expMenu) {
+      expBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        expMenu.classList.toggle('hidden');
+        if (colMenu) colMenu.classList.add('hidden');
+      });
+    }
+
+    document.addEventListener('click', () => {
+      if (colMenu) colMenu.classList.add('hidden');
+      if (expMenu) expMenu.classList.add('hidden');
+    });
+
+    // 2. Client-Side Search Filtering
+    const searchInput = document.getElementById('holdingsSearch');
+    const clearBtn = document.getElementById('clearSearch');
+    const tableBody = document.getElementById('tableBody');
+    const rows = tableBody ? tableBody.querySelectorAll('tr') : [];
+
+    function runFilter() {
+      const q = searchInput ? searchInput.value.toLowerCase().trim() : '';
+      if (clearBtn) {
+        if (q.length > 0) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+      }
+
+      rows.forEach((row) => {
+        const text = row.innerText.toLowerCase();
+        const matchesQuery = q === '' || text.includes(q);
+        const currentTabCategory = window.selectedCategory || 'ALL';
+        const rowCategory = row.getAttribute('data-category');
+        const matchesCategory = (currentTabCategory === 'ALL') || (rowCategory === currentTabCategory);
+
+        if (matchesQuery && matchesCategory) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener('input', runFilter);
+    }
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        if (searchInput) searchInput.value = '';
+        runFilter();
+      });
+    }
+
+    // 3. Tab Filtering
+    const tabs = document.querySelectorAll('.filter-tab');
+    window.selectedCategory = 'ALL';
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        tabs.forEach((t) => {
+          t.classList.remove('bg-primary-container', 'text-on-primary', 'active-tab');
+          t.classList.add('bg-surface-container-lowest', 'text-secondary');
+        });
+        tab.classList.add('bg-primary-container', 'text-on-primary', 'active-tab');
+        tab.classList.remove('bg-surface-container-lowest', 'text-secondary');
+
+        window.selectedCategory = tab.getAttribute('data-category');
+        runFilter();
+      });
+    });
+  })();
+</script></div></main><footer class="w-full bg-surface-container-low"><div class="max-w-[1440px] mx-auto px-gutter-desktop py-space-xl flex flex-col sm:flex-row items-center justify-between gap-space-md"><div class="flex items-center gap-space-sm"><span class="font-headline-sm text-headline-sm text-primary">WealthVault</span><span class="font-label-regular text-label-regular text-outline">© 2024 Institutional Wealth Intelligence Ltd.</span></div><div class="flex items-center gap-space-lg"><a class="font-label-regular text-label-regular text-on-surface-variant hover:text-on-surface transition-colors" href="#">Security &amp; Attestation</a><a class="font-label-regular text-label-regular text-on-surface-variant hover:text-on-surface transition-colors" href="#">Custody Protocols</a><a class="font-label-regular text-label-regular text-on-surface-variant hover:text-on-surface transition-colors" href="#">Privacy Policy</a></div></div></footer></body></html>
