@@ -1,4 +1,4 @@
-export type AssetClass = 'EQUITY' | 'MUTUAL_FUND' | 'GOLD' | 'NPS'
+export type AssetClass = 'EQUITY' | 'MUTUAL_FUND' | 'GOLD' | 'NPS' | 'DEBT' | 'US_STOCKS'
 
 export interface Holding {
   holding_id: string
@@ -11,6 +11,9 @@ export interface Holding {
   current_value: number
   current_price?: number
   pnl?: number
+  day_change?: number
+  day_change_percentage?: number
+  day_pnl?: number
   currency: string
 }
 

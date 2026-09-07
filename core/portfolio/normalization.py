@@ -84,13 +84,23 @@ class NormalizationService:
             quantity = float(item.get("quantity", 0.0))
             average_price = float(item.get("average_price", 0.0))
             last_price = float(item.get("last_price", average_price))
-            current_value = round(quantity * last_price, 2)
-            pnl = round((last_price - average_price) * quantity, 2)
 
-            if "GOLD" in symbol.upper():
+            if "SGB" in symbol.upper():
                 asset_class = AssetClass.GOLD
+                broker_pnl = item.get("pnl")
+                if broker_pnl is not None and float(broker_pnl) != 0:
+                    pnl = round(float(broker_pnl), 2)
+                    invested_cost = round(quantity * average_price, 2)
+                    current_value = round(invested_cost + pnl, 2)
+                else:
+                    current_value = round(quantity * last_price, 2)
+                    pnl = round((last_price - average_price) * quantity, 2)
             else:
                 asset_class = AssetClass.MUTUAL_FUND
+                # For Mutual Funds: quantity * average_price = invested, quantity * last_price = current_value
+                # Zerodha Coin sends pnl: 0 in raw JSON for MFs, so we MUST calculate current_value from last_price (NAV)
+                current_value = round(quantity * last_price, 2)
+                pnl = round(current_value - (quantity * average_price), 2)
 
             isin = str(item.get("tradingsymbol") or symbol)
             holding_id = self._generate_id("hld_mf", owner_id, connection_id, isin)
@@ -103,8 +113,8 @@ class NormalizationService:
             current_value = round(quantity * last_price, 2)
             pnl = float(item.get("pnl", round(current_value - (quantity * average_price), 2)))
 
-            # Asset classification (Equities vs Gold / Sovereign Gold Bonds)
-            if "GOLD" in symbol or symbol.startswith("SGB") or symbol.endswith("GOLDBEES"):
+            # Asset classification (Equities vs Sovereign Gold Bonds SGB)
+            if "SGB" in symbol:
                 asset_class = AssetClass.GOLD
             else:
                 asset_class = AssetClass.EQUITY
@@ -133,33 +143,58 @@ class NormalizationService:
         owner_id: str,
         connection_id: str,
     ) -> Holding:
-        # Support live INDmoney schema: investment, investment_code, total_units, unit_price, market_value, total_pnl, invested_amount
         name = str(item.get("investment") or item.get("security_name") or item.get("scheme_name") or "Unknown Investment").strip()
         code = str(item.get("investment_code") or item.get("isin") or name).strip()
         symbol = f"{code} ({name})" if code and code != name and len(code) <= 12 else name
 
         quantity = float(item.get("total_units") or item.get("holding_units") or item.get("units") or 1.0)
+
+        # Current price and Current Value (quantity * current_price)
+        current_price = float(item.get("unit_price") or item.get("current_nav") or item.get("last_price") or 0.0)
+        current_value = float(item.get("market_value") or item.get("current_valuation") or item.get("current_value") or 0.0)
+        if current_value == 0.0 and current_price > 0:
+            current_value = round(quantity * current_price, 2)
+        elif current_price == 0.0 and current_value > 0 and quantity > 0:
+            current_price = round(current_value / quantity, 4)
+
+        # Average price and Invested Amount (quantity * average_price)
         invested_amount = float(item.get("invested_amount") or 0.0)
-        current_value = float(
-            item.get("market_value") or item.get("current_valuation") or item.get("current_value") or invested_amount
-        )
-        current_price = float(
-            item.get("unit_price") or item.get("current_nav") or (current_value / quantity if quantity > 0 else 0.0)
-        )
-        average_price = (
-            invested_amount / quantity if quantity > 0 and invested_amount > 0 else float(item.get("average_buy_nav") or current_price)
-        )
-        pnl = float(item.get("total_pnl") or item.get("unrealized_gain_loss") or round(current_value - invested_amount, 2))
+        raw_avg_price = item.get("average_buy_nav") or item.get("buy_price") or item.get("average_price")
+        average_price = float(raw_avg_price) if raw_avg_price is not None else 0.0
+
+        broker_pnl = item.get("total_pnl") or item.get("unrealized_gain_loss")
+
+        if invested_amount == 0.0 and average_price > 0:
+            invested_amount = round(quantity * average_price, 2)
+        elif average_price == 0.0 and invested_amount > 0 and quantity > 0:
+            average_price = round(invested_amount / quantity, 4)
+        elif invested_amount == 0.0 and average_price == 0.0 and broker_pnl is not None and current_value > 0:
+            # When INDmoney omits average_buy_nav & invested_amount, derive cost basis from PnL:
+            # invested = current_value - pnl  ==>  average_price = invested / quantity
+            pnl_val = round(float(broker_pnl), 2)
+            invested_amount = round(current_value - pnl_val, 2)
+            average_price = round(invested_amount / quantity, 4) if quantity > 0 else 0.0
+        elif average_price == 0.0:
+            average_price = current_price
+            invested_amount = current_value
+
+        pnl = round(float(broker_pnl), 2) if broker_pnl is not None else round(current_value - invested_amount, 2)
+
 
         # Asset classification
         raw_asset_type = str(item.get("asset_type", "")).upper()
+        raw_broker = str(item.get("broker", "")).upper()
+        asset_l2 = str(item.get("assetclass_l2", "")).lower()
+
         if "NPS" in raw_asset_type or "NPS" in name.upper() or "NPS" in code.upper():
             asset_class = AssetClass.NPS
             if symbol == "NPS":
                 symbol = "NPS (National Pension Scheme)"
-        elif "GOLD" in name.upper() or "GOLD" in raw_asset_type or "SGB" in code.upper():
+        elif "SGB" in name.upper() or "SGB" in code.upper() or "SGB" in symbol.upper():
             asset_class = AssetClass.GOLD
-        elif raw_asset_type in ("MF", "MUTUAL_FUND") or "FUND" in name.upper():
+        elif raw_broker == "ALPACA" or raw_asset_type in ("GLOBAL_EQUITY", "US_STOCK", "US_STOCKS") or asset_l2 in ("global_equity", "us_stocks"):
+            asset_class = AssetClass.US_STOCKS
+        elif raw_asset_type in ("MF", "MUTUAL_FUND") or "FUND" in name.upper() or "GOLD" in name.upper() or "SILVER" in name.upper():
             asset_class = AssetClass.MUTUAL_FUND
         else:
             asset_class = AssetClass.EQUITY
