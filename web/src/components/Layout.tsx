@@ -1,12 +1,11 @@
 import React, { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import {
   RefreshCw,
   CheckCircle2,
   LogOut,
   SlidersHorizontal,
   RotateCcw,
-  Radio,
   Menu,
 } from 'lucide-react'
 import { clearToken, getStoredUser, triggerPortfolioSync } from '../utils/api'
@@ -232,8 +231,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
                 <div className="inline-flex p-0.5 bg-slate-200/70 rounded-lg text-xs font-medium shrink-0">
                   {[
                     { id: 'all', label: 'All Assets' },
-                    { id: 'EQUITY', label: 'Stocks & ETFs' },
+                    { id: 'EQUITY', label: 'Equity' },
                     { id: 'MUTUAL_FUND', label: 'Mutual Funds' },
+                    { id: 'US_STOCKS', label: 'US Stocks' },
                     { id: 'GOLD', label: 'Sovereign Gold' },
                     { id: 'NPS', label: 'NPS Retirement' },
                   ].map((item) => (
@@ -264,15 +264,6 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
                   </button>
                 )}
               </div>
-
-              {/* Quick Link to Broker Sync in Filter Strip */}
-              <Link
-                to={{ pathname: '/brokers', search: location.search }}
-                className="hidden xl:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors whitespace-nowrap shrink-0"
-              >
-                <Radio className="w-3 h-3 text-emerald-600 animate-pulse" />
-                <span>2 Active MCP Feeds</span>
-              </Link>
             </div>
           </div>
         )}

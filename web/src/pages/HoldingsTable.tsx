@@ -89,9 +89,30 @@ export const HoldingsTable: React.FC = () => {
   const categoryCounts = useMemo(() => {
     return {
       all: brokerScopedHoldings.length,
-      EQUITY: brokerScopedHoldings.filter((h) => h.asset_class === 'EQUITY').length,
-      MUTUAL_FUND: brokerScopedHoldings.filter((h) => h.asset_class === 'MUTUAL_FUND').length,
-      GOLD: brokerScopedHoldings.filter((h) => h.asset_class === 'GOLD').length,
+      EQUITY: brokerScopedHoldings.filter(
+        (h) =>
+          h.asset_class === 'EQUITY' &&
+          h.currency !== 'USD' &&
+          !h.connection_id.toLowerCase().includes('us') &&
+          !h.connection_id.toLowerCase().includes('alpaca') &&
+          !['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META'].some((s) =>
+            h.instrument_symbol.toUpperCase().includes(s)
+          )
+      ).length,
+      MUTUAL_FUND: brokerScopedHoldings.filter(
+        (h) => h.asset_class === 'MUTUAL_FUND' && !h.instrument_symbol.toUpperCase().includes('SGB')
+      ).length,
+      US_STOCKS: brokerScopedHoldings.filter(
+        (h) =>
+          h.asset_class === 'US_STOCKS' ||
+          h.currency === 'USD' ||
+          h.connection_id.toLowerCase().includes('us') ||
+          h.connection_id.toLowerCase().includes('alpaca') ||
+          ['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META'].some((s) =>
+            h.instrument_symbol.toUpperCase().includes(s)
+          )
+      ).length,
+      GOLD: brokerScopedHoldings.filter((h) => h.instrument_symbol.toUpperCase().includes('SGB')).length,
       NPS: brokerScopedHoldings.filter((h) => h.asset_class === 'NPS').length,
     }
   }, [brokerScopedHoldings])
@@ -100,8 +121,37 @@ export const HoldingsTable: React.FC = () => {
   const filteredHoldings = useMemo(() => {
     return brokerScopedHoldings.filter((h) => {
       // Asset class filter
-      if (activeAssetClass !== 'all' && h.asset_class !== activeAssetClass) {
-        return false
+      if (activeAssetClass !== 'all') {
+        if (activeAssetClass === 'US_STOCKS') {
+          const isUs =
+            h.asset_class === 'US_STOCKS' ||
+            h.currency === 'USD' ||
+            h.connection_id.toLowerCase().includes('us') ||
+            h.connection_id.toLowerCase().includes('alpaca') ||
+            ['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META'].some((s) =>
+              h.instrument_symbol.toUpperCase().includes(s)
+            )
+          if (!isUs) return false
+        } else if (activeAssetClass === 'GOLD') {
+          const isSgb = h.instrument_symbol.toUpperCase().includes('SGB')
+          if (!isSgb) return false
+        } else if (activeAssetClass === 'DEBT') {
+          const sym = h.instrument_symbol.toLowerCase()
+          const isDebt =
+            h.asset_class === 'DEBT' ||
+            sym.includes('debt') ||
+            sym.includes('liquid') ||
+            sym.includes('bond') ||
+            sym.includes('gilt') ||
+            sym.includes('treasury') ||
+            sym.includes('arbitrage') ||
+            sym.includes('fd') ||
+            sym.includes('cash') ||
+            sym.includes('overnight')
+          if (!isDebt) return false
+        } else if (h.asset_class !== activeAssetClass) {
+          return false
+        }
       }
 
       // Gainers / Losers quick filter
@@ -383,22 +433,22 @@ export const HoldingsTable: React.FC = () => {
           </div>
         </div>
 
-        {/* Metric 4: USD Reference */}
+        {/* Metric 4: Total P&L Return */}
         <div className="bg-white p-5 rounded-2xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-200/80 flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              USD Valuation
+              Total P&amp;L Return
             </span>
-            <span className="text-[11px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded font-bold">
-              Rate 83.02
+            <span className={`text-xs font-bold px-2 py-0.5 rounded font-mono ${isPositiveGain ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+              {isPositiveGain ? '+' : ''}{filteredPnLPct.toFixed(2)}%
             </span>
           </div>
           <div className="mt-3">
-            <div className="font-serif text-3xl text-slate-950 tracking-tight font-normal">
-              ${(filteredValuation / 83.02).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+            <div className={`font-serif text-3xl tracking-tight font-normal ${isPositiveGain ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {isPositiveGain ? '+' : ''}{formatINR(filteredPnL)}
             </div>
             <p className="text-[11px] text-slate-400 mt-1.5 leading-normal">
-              Global reserve currency converted benchmark.
+              Audited cumulative portfolio profit &amp; loss return.
             </p>
           </div>
         </div>
@@ -447,8 +497,9 @@ export const HoldingsTable: React.FC = () => {
             {/* Asset Class Filter Buttons */}
             {[
               { id: 'all', label: 'All', count: categoryCounts.all },
-              { id: 'EQUITY', label: 'Stocks & ETFs', count: categoryCounts.EQUITY },
+              { id: 'EQUITY', label: 'Equity', count: categoryCounts.EQUITY },
               { id: 'MUTUAL_FUND', label: 'Mutual Funds', count: categoryCounts.MUTUAL_FUND },
+              { id: 'US_STOCKS', label: 'US Stocks', count: categoryCounts.US_STOCKS },
               { id: 'GOLD', label: 'Sovereign Gold', count: categoryCounts.GOLD },
               { id: 'NPS', label: 'NPS Retirement', count: categoryCounts.NPS },
             ].map((cat) => {
