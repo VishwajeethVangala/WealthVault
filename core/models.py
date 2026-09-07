@@ -28,6 +28,9 @@ class AssetClass(str, Enum):
     MUTUAL_FUND = "MUTUAL_FUND"
     GOLD = "GOLD"
     NPS = "NPS"
+    US_STOCKS = "US_STOCKS"
+    DEBT = "DEBT"
+
 
 
 class TransactionType(str, Enum):
