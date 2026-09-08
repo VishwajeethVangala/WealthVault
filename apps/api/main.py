@@ -16,6 +16,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -92,8 +93,22 @@ async def lifespan(app: FastAPI):
         settings.ENVIRONMENT,
         settings.APP_VERSION,
     )
+    
+    # Initialize persistent Kite MCP bridge
+    from core.market_data.kite_client import get_kite_mcp_client
+    kite_client = get_kite_mcp_client()
+    try:
+        asyncio.create_task(kite_client.ensure_connected())
+    except Exception as exc:
+        logger.warning("Could not pre-initialize Kite MCP bridge: %s", exc)
+
     yield
+
     logger.info("Shutting down %s...", settings.APP_NAME)
+    try:
+        await kite_client.close()
+    except Exception as exc:
+        logger.debug("Error closing Kite MCP client: %s", exc)
 
 
 def create_application() -> FastAPI:

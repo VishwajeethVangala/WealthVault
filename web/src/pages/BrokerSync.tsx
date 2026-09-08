@@ -25,8 +25,10 @@ import {
   disconnectBroker,
 } from '../utils/api'
 import type { BrokerSessionInfo } from '../types'
+import { usePortfolio } from '../context/PortfolioContext'
 
 export const BrokerSync: React.FC = () => {
+  const { refresh: refreshPortfolio } = usePortfolio()
   const [sessions, setSessions] = useState<BrokerSessionInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -108,10 +110,21 @@ export const BrokerSync: React.FC = () => {
     try {
       const updated = await syncBroker(brokerName)
       setSessions((prev) => prev.map((s) => (s.broker_name === brokerName ? updated : s)))
-      setActionSuccess((prev) => ({ ...prev, [brokerName]: 'Synced successfully!' }))
-      setTimeout(() => {
-        setActionSuccess((prev) => ({ ...prev, [brokerName]: null }))
-      }, 3000)
+
+      if (updated.status === 'AUTH_REQUIRED' || updated.status === 'SESSION_EXPIRED') {
+        alert(
+          `${updated.display_name} authorization is required. Please click 'Authorize on Kite' to log in in your browser, then click Sync again.`
+        )
+      } else if (updated.status === 'CONNECTED') {
+        await refreshPortfolio()
+        setActionSuccess((prev) => ({
+          ...prev,
+          [brokerName]: `Synced successfully! ${updated.holdings_count} positions updated.`,
+        }))
+        setTimeout(() => {
+          setActionSuccess((prev) => ({ ...prev, [brokerName]: null }))
+        }, 4000)
+      }
     } catch (err: any) {
       alert(`Sync failed: ${err.message}`)
     } finally {
@@ -465,13 +478,37 @@ export const BrokerSync: React.FC = () => {
                         <h4 className="font-bold text-amber-900 text-xs">
                           {isExpired
                             ? 'Cryptographic Session Token Expired'
+                            : isAuthReq
+                            ? 'Daily Kite OAuth Authorization Required'
                             : 'Broker Authorization Inactive'}
                         </h4>
                         <p className="text-amber-800 mt-0.5 leading-relaxed">
                           {isZerodha
-                            ? 'Zerodha Kite Connect access tokens expire every morning at 06:00 AM IST per exchange compliance. Please re-authenticate your session to resume automated live telemetry.'
-                            : 'INDmoney session token requires renewal to stream your latest US stocks, mutual funds, and NPS holdings.'}
+                            ? 'Zerodha Kite Connect access tokens expire daily. Click below to log in on Kite in your browser, then click Confirm & Sync to stream your real-time holdings.'
+                            : 'INDmoney MCP server is currently unreachable. Connect a live MCP daemon to retrieve up-to-date holdings.'}
                         </p>
+
+                        {isZerodha && session.auth_url && (
+                          <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                            <a
+                              href={session.auth_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
+                            >
+                              <Key className="w-3.5 h-3.5" />
+                              <span>Authorize on Kite (Opens in New Tab)</span>
+                            </a>
+                            <button
+                              onClick={() => handleSingleSync(session.broker_name)}
+                              disabled={!!actionLoading[session.broker_name]}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlySyncing ? 'animate-spin' : ''}`} />
+                              <span>{isCurrentlySyncing ? 'Syncing...' : 'I Have Logged In -> Sync Now'}</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -746,59 +783,108 @@ export const BrokerSync: React.FC = () => {
                 </p>
               </div>
             ) : (
-              /* Credential Input Form */
+              /* Credential Input Form or Interactive OAuth */
               <div className="space-y-4 text-xs">
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600 leading-relaxed">
-                  <p>
-                    Re-authenticating renews your daily access token and re-establishes the MCP tool connection for <strong>{reauthModalBroker.display_name}</strong>.
-                  </p>
-                </div>
+                {reauthModalBroker.auth_url ? (
+                  <div className="space-y-4">
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600 leading-relaxed">
+                      <p className="font-semibold text-slate-900 mb-1">Interactive Kite MCP Authorization</p>
+                      <p>
+                        Zerodha requires daily user authorization on its official domain. Click below to approve the active MCP daemon session, then click Confirm &amp; Sync.
+                      </p>
+                    </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
-                    Client / API Identity
-                  </label>
-                  <input
-                    type="text"
-                    value={reauthApiKey}
-                    onChange={(e) => setReauthApiKey(e.target.value)}
-                    placeholder="Enter Broker API Key or Client ID"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 rounded-xl border border-slate-200 font-mono text-xs focus:bg-white focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all font-medium"
-                  />
-                </div>
+                    <div className="p-4 rounded-xl bg-rose-50 border border-rose-200/80 text-center">
+                      <a
+                        href={reauthModalBroker.auth_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow transition-all active:scale-95"
+                      >
+                        <Key className="w-4 h-4" />
+                        <span>Step 1: Authorize on Kite (New Tab)</span>
+                      </a>
+                      <p className="text-[10px] text-rose-700 mt-2">
+                        Authenticates your daily session on <code>https://mcp.kite.trade</code>
+                      </p>
+                    </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
-                    Daily 2FA / TOTP Code or Session Enctoken
-                  </label>
-                  <input
-                    type="text"
-                    value={reauthTotp}
-                    onChange={(e) => setReauthTotp(e.target.value)}
-                    placeholder="Enter 6-digit Authenticator TOTP (e.g. 481923)"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 rounded-xl border border-slate-200 font-mono text-xs focus:bg-white focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all font-medium"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Leave blank to use pre-authorized biometric OAuth session token.
-                  </p>
-                </div>
+                    <div className="pt-2 flex items-center justify-end gap-2.5">
+                      <button
+                        type="button"
+                        onClick={closeReauthModal}
+                        className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const bName = reauthModalBroker.broker_name
+                          closeReauthModal()
+                          handleSingleSync(bName)
+                        }}
+                        className="px-4 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold transition-all shadow-sm hover:shadow"
+                      >
+                        Step 2: Confirm &amp; Sync Holdings
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-600 leading-relaxed">
+                      <p>
+                        Re-authenticating renews your daily access token and re-establishes the MCP tool connection for <strong>{reauthModalBroker.display_name}</strong>.
+                      </p>
+                    </div>
 
-                <div className="pt-3 flex items-center justify-end gap-2.5">
-                  <button
-                    type="button"
-                    onClick={closeReauthModal}
-                    className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={executeReauth}
-                    className="px-4 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold transition-all shadow-sm hover:shadow"
-                  >
-                    Authorize &amp; Re-Sync
-                  </button>
-                </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
+                        Client / API Identity
+                      </label>
+                      <input
+                        type="text"
+                        value={reauthApiKey}
+                        onChange={(e) => setReauthApiKey(e.target.value)}
+                        placeholder="Enter Broker API Key or Client ID"
+                        className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 rounded-xl border border-slate-200 font-mono text-xs focus:bg-white focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px] mb-1">
+                        Daily 2FA / TOTP Code or Session Enctoken
+                      </label>
+                      <input
+                        type="text"
+                        value={reauthTotp}
+                        onChange={(e) => setReauthTotp(e.target.value)}
+                        placeholder="Enter 6-digit Authenticator TOTP (e.g. 481923)"
+                        className="w-full px-3.5 py-2.5 bg-slate-50 text-slate-900 rounded-xl border border-slate-200 font-mono text-xs focus:bg-white focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all font-medium"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Leave blank to use pre-authorized biometric OAuth session token.
+                      </p>
+                    </div>
+
+                    <div className="pt-3 flex items-center justify-end gap-2.5">
+                      <button
+                        type="button"
+                        onClick={closeReauthModal}
+                        className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={executeReauth}
+                        className="px-4 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 text-white font-bold transition-all shadow-sm hover:shadow"
+                      >
+                        Authorize &amp; Re-Sync
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>

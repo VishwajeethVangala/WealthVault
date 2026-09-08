@@ -261,6 +261,12 @@ async def sync_portfolio(
         )
     except Exception as exc:
         logger.error("INDmoney sync failed during orchestration: %s", exc)
+        await connections_repo.update_status(
+            owner_id=current_user_id,
+            connection_id="conn_indmoney_live",
+            status=BrokerStatus.DISCONNECTED,
+            last_sync_time=sync_time.isoformat(),
+        )
 
     # --- 3. Live Market Quote Enrichment before snapshot calculation ---
     market_service = get_market_data_service()
@@ -539,9 +545,15 @@ async def sync_single_broker(
                 target.auth_url = auth_exc.auth_url
                 target.status = BrokerStatus.AUTH_REQUIRED
                 return target
-            raise HTTPException(status_code=401, detail=str(auth_exc))
         except Exception as exc:
             logger.error("Zerodha single sync failed: %s", exc)
+            await connections_repo.update_status(
+                owner_id=current_user_id,
+                connection_id=conn_id,
+                status=BrokerStatus.PROVIDER_ERROR,
+                last_sync_time=sync_time.isoformat(),
+            )
+            raise HTTPException(status_code=502, detail=f"Zerodha sync failed: {exc}")
     elif broker_clean == "indmoney":
         ind_provider = IndmoneyProvider()
         try:
@@ -560,6 +572,16 @@ async def sync_single_broker(
             )
         except Exception as exc:
             logger.error("INDmoney single sync failed: %s", exc)
+            await connections_repo.update_status(
+                owner_id=current_user_id,
+                connection_id=conn_id,
+                status=BrokerStatus.DISCONNECTED,
+                last_sync_time=sync_time.isoformat(),
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=f"INDmoney MCP server is unreachable or offline: {exc}",
+            )
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported broker: {broker_name}")
 
