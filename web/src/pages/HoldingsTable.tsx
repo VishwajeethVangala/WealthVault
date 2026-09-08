@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import React, { useState, useMemo, useEffect } from 'react'
+import { useSearchParams, Link } from 'react-router-dom'
 import {
   Search,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  ArrowRight,
   TrendingUp,
   TrendingDown,
   Download,
@@ -39,10 +40,13 @@ export const HoldingsTable: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [viewMode, setViewMode] = useState<'auto' | 'table' | 'cards'>('auto')
 
-  // URL-driven filter states from Looker Studio GlobalFilters
+  // URL-driven filter states from Looker Studio GlobalFilters & Dashboard Drill-Down
   const activeBroker = searchParams.get('broker') || 'all'
   const activeAssetClass = searchParams.get('assetClass') || 'all'
   const activePnl = searchParams.get('pnl') || 'all'
+  const querySort = searchParams.get('sort') as SortColumn | null
+  const queryHighlight = searchParams.get('highlight')
+  const [highlightedItem, setHighlightedItem] = useState<string | null>(queryHighlight)
 
   const selectedBrokers = useMemo(() => {
     return activeBroker !== 'all' ? activeBroker.split(',').filter(Boolean) : []
@@ -117,6 +121,49 @@ export const HoldingsTable: React.FC = () => {
     })
   }, [filteredHoldings, sortField, sortOrder])
 
+  // Drill-down reactive effects
+  useEffect(() => {
+    if (querySort) {
+      setSortField(querySort)
+      setSortOrder('desc')
+    }
+  }, [querySort])
+
+  useEffect(() => {
+    if (queryHighlight) {
+      setHighlightedItem(queryHighlight.toLowerCase())
+    }
+  }, [queryHighlight])
+
+  // Automatically page to target holding if paginated
+  useEffect(() => {
+    if (!queryHighlight || sortedHoldings.length === 0) return
+    const targetIndex = sortedHoldings.findIndex(
+      (h) =>
+        h.holding_id.toLowerCase() === queryHighlight.toLowerCase() ||
+        h.instrument_symbol.toLowerCase().includes(queryHighlight.toLowerCase())
+    )
+    if (targetIndex !== -1 && pageSize > 0) {
+      const page = Math.floor(targetIndex / pageSize) + 1
+      setCurrentPage(page)
+    }
+  }, [queryHighlight, sortedHoldings, pageSize])
+
+  // Scroll smoothly to target holding on mount or highlight change
+  useEffect(() => {
+    if (highlightedItem) {
+      const timer = setTimeout(() => {
+        const el =
+          document.getElementById(`holding-row-${highlightedItem}`) ||
+          document.getElementById(`holding-card-${highlightedItem}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 350)
+      return () => clearTimeout(timer)
+    }
+  }, [highlightedItem, currentPage, viewMode])
+
   // Paginated slice
   const paginatedHoldings = useMemo(() => {
     if (pageSize === 0) return sortedHoldings
@@ -149,6 +196,7 @@ export const HoldingsTable: React.FC = () => {
   const handleClearAll = () => {
     setSearchQuery('')
     setPnlFilter('all')
+    setHighlightedItem(null)
     setSearchParams(new URLSearchParams(), { replace: true })
     setCurrentPage(1)
   }
@@ -235,6 +283,73 @@ export const HoldingsTable: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* 0. Contextual Drill-down Banner */}
+      {(activeAssetClass !== 'all' || activePnl !== 'all' || activeBroker !== 'all' || querySort || queryHighlight) && (
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white rounded-2xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Dashboard Drill-Down Active
+                </span>
+                <span className="text-xs text-slate-400 font-mono">
+                  {filteredHoldings.length} matching position{filteredHoldings.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="text-xs sm:text-sm text-slate-200 mt-1 font-medium flex items-center gap-2 flex-wrap">
+                <span>Scope:</span>
+                {selectedAssetClasses.length > 0 && (
+                  <span className="inline-flex items-center gap-1 font-bold text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                    Asset Class: {selectedAssetClasses.join(', ')}
+                  </span>
+                )}
+                {selectedBrokers.length > 0 && (
+                  <span className="inline-flex items-center gap-1 font-bold text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                    Custodian: {selectedBrokers.map((b) => (b === 'zerodha' ? 'Zerodha' : 'INDmoney')).join(', ')}
+                  </span>
+                )}
+                {activePnl !== 'all' && (
+                  <span className="inline-flex items-center gap-1 font-bold text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-700 capitalize">
+                    P&amp;L: {activePnl}
+                  </span>
+                )}
+                {querySort && (
+                  <span className="inline-flex items-center gap-1 font-bold text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                    Sorted by: {querySort.replace('_', ' ')}
+                  </span>
+                )}
+                {queryHighlight && (
+                  <span className="inline-flex items-center gap-1 font-bold text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-700/50">
+                    Target: {queryHighlight.toUpperCase()}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-semibold transition-all shadow-sm"
+            >
+              <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+              <span>Back to Overview</span>
+            </Link>
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>View All Positions</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 1. Header KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Current Value */}
@@ -492,11 +607,23 @@ export const HoldingsTable: React.FC = () => {
             const pnl = holding.pnl ?? (holding.current_value - investedCost)
             const pnlPct = investedCost > 0 ? (pnl / investedCost) * 100 : 0
             const isPositive = pnl >= 0
+            const symLower = holding.instrument_symbol.toLowerCase()
+            const isTarget = Boolean(
+              highlightedItem &&
+                (symLower === highlightedItem ||
+                  symLower.includes(highlightedItem) ||
+                  holding.holding_id.toLowerCase() === highlightedItem)
+            )
 
             return (
               <div
                 key={holding.holding_id}
-                className="p-3.5 sm:p-4 bg-white hover:bg-slate-50/80 transition-colors flex flex-col gap-2.5"
+                id={`holding-card-${symLower}`}
+                className={`p-3.5 sm:p-4 transition-all flex flex-col gap-2.5 ${
+                  isTarget
+                    ? 'bg-emerald-50/90 ring-2 ring-emerald-500 shadow-sm'
+                    : 'bg-white hover:bg-slate-50/80'
+                }`}
               >
                 {/* Row 1: Symbol & Valuation */}
                 <div className="flex items-start justify-between gap-3">
@@ -505,6 +632,11 @@ export const HoldingsTable: React.FC = () => {
                       <span className="font-bold text-slate-950 text-sm tracking-tight truncate">
                         {holding.instrument_symbol}
                       </span>
+                      {isTarget && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-600 text-white uppercase tracking-wider animate-pulse">
+                          Drill Focus
+                        </span>
+                      )}
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
                           holding.asset_class === 'EQUITY'
@@ -700,18 +832,43 @@ export const HoldingsTable: React.FC = () => {
                 const pnl = holding.pnl ?? (holding.current_value - investedCost)
                 const pnlPct = investedCost > 0 ? (pnl / investedCost) * 100 : 0
                 const isPositive = pnl >= 0
+                const symLower = holding.instrument_symbol.toLowerCase()
+                const isTarget = Boolean(
+                  highlightedItem &&
+                    (symLower === highlightedItem ||
+                      symLower.includes(highlightedItem) ||
+                      holding.holding_id.toLowerCase() === highlightedItem)
+                )
 
                 return (
                   <tr
                     key={holding.holding_id}
-                    className="hover:bg-slate-50/80 transition-colors group"
+                    id={`holding-row-${symLower}`}
+                    className={`transition-all group ${
+                      isTarget
+                        ? 'bg-emerald-50/90 ring-2 ring-emerald-500/80 shadow-xs'
+                        : 'hover:bg-slate-50/80'
+                    }`}
                   >
                     {/* Symbol */}
                     <td className="py-3.5 px-4 sm:px-5">
                       <div className="flex flex-col">
-                        <span className="font-bold text-slate-900 text-sm group-hover:text-emerald-700 transition-colors">
-                          {holding.instrument_symbol}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`font-bold text-sm transition-colors ${
+                              isTarget
+                                ? 'text-emerald-900'
+                                : 'text-slate-900 group-hover:text-emerald-700'
+                            }`}
+                          >
+                            {holding.instrument_symbol}
+                          </span>
+                          {isTarget && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-600 text-white uppercase tracking-wider animate-pulse">
+                              Drill Focus
+                            </span>
+                          )}
+                        </div>
                         {/* Tablet secondary summary when Units / Avg Cost are hidden on < xl */}
                         <div className="flex xl:hidden items-center gap-1.5 text-[10px] text-slate-500 font-mono mt-0.5">
                           <span>
