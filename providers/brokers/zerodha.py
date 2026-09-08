@@ -41,6 +41,14 @@ def _extract_mcp_result(result: Any) -> Any:
     return str(result) if result is not None else None
 
 
+class KiteAuthRequiredError(Exception):
+    """Raised when Kite MCP session requires daily interactive OAuth login."""
+
+    def __init__(self, message: str, auth_url: Optional[str] = None) -> None:
+        super().__init__(message)
+        self.auth_url = auth_url
+
+
 class ZerodhaProvider(BrokerProvider):
     """Zerodha Kite broker provider using Model Context Protocol (MCP)."""
 
@@ -48,7 +56,7 @@ class ZerodhaProvider(BrokerProvider):
         self,
         credentials: Optional[Dict[str, Any]] = None,
         server_url: str = "https://mcp.kite.trade/mcp",
-        timeout_seconds: float = 12.0,
+        timeout_seconds: float = 45.0,
     ) -> None:
         super().__init__(credentials)
         self.server_url = server_url
@@ -166,12 +174,10 @@ class ZerodhaProvider(BrokerProvider):
         return []
 
     async def get_holdings(self, include_mf: bool = True) -> List[Dict[str, Any]]:
-        """Invoke live MCP tools 'get_holdings' and 'get_mf_holdings'."""
+        """Invoke live MCP tools 'get_holdings' and 'get_mf_holdings' directly without static file fallback."""
         holdings: List[Dict[str, Any]] = []
-        live_fetched = False
         server_params = self._get_server_params()
 
-        # 1. Live Equities via Kite MCP
         try:
             async with asyncio.timeout(self.timeout):
                 async with stdio_client(server_params) as (read, write):
@@ -180,38 +186,41 @@ class ZerodhaProvider(BrokerProvider):
                         res = await session.call_tool("get_holdings", arguments={})
                         data = _extract_mcp_result(res)
 
+                        # Check if session requires login
                         if isinstance(data, str) and "log in first" in data.lower():
-                            logger.info("Kite MCP session requires authorization. Tagging auth_required.")
+                            logger.info("Kite MCP session requires authorization. Requesting login URL.")
                             self.auth_required = True
-                        elif isinstance(data, list):
+                            login_res = await session.call_tool("login", arguments={})
+                            login_text = _extract_mcp_result(login_res) or ""
+                            match = re.search(r"https?://mcp\.kite\.trade/authorize\S+", str(login_text))
+                            if match:
+                                self.login_url = match.group(0).rstrip(")")
+                            raise KiteAuthRequiredError(
+                                "Zerodha Kite MCP requires daily interactive login. Please authorize via Kite.",
+                                auth_url=self.login_url,
+                            )
+
+                        if isinstance(data, list):
                             holdings.extend(data)
-                            live_fetched = True
                         elif isinstance(data, dict) and "holdings" in data:
                             holdings.extend(data["holdings"])
-                            live_fetched = True
+
+                        # 2. Live Mutual Funds from Coin in the same active session
+                        if include_mf:
+                            try:
+                                mf_res = await session.call_tool("get_mf_holdings", arguments={})
+                                mf_data = _extract_mcp_result(mf_res)
+                                if isinstance(mf_data, list):
+                                    holdings.extend(mf_data)
+                                elif isinstance(mf_data, dict) and "holdings" in mf_data:
+                                    holdings.extend(mf_data["holdings"])
+                            except Exception as mf_err:
+                                logger.warning("Coin MF query note in active session: %s", mf_err)
+        except KiteAuthRequiredError:
+            raise
         except Exception as exc:
-            logger.warning("Kite MCP get_holdings live call note: %s", exc)
-
-        # 2. Live Mutual Funds from Coin
-        if include_mf and live_fetched:
-            mf_data = await self.get_mf_holdings()
-            holdings.extend(mf_data)
-
-        # 3. Fallback to cached schema fixture ONLY if live MCP was unreachable or unauthenticated
-        if not holdings and FALLBACK_SCHEMA_FILE.exists():
-            logger.info("Serving holdings from fallback schema fixture: %s", FALLBACK_SCHEMA_FILE)
-            try:
-                with open(FALLBACK_SCHEMA_FILE, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if isinstance(data, list):
-                        holdings.extend(data)
-                    elif isinstance(data, dict) and "holdings" in data:
-                        holdings.extend(data["holdings"])
-                if include_mf:
-                    mf_data = await self.get_mf_holdings()
-                    holdings.extend(mf_data)
-            except Exception as read_err:
-                logger.error("Could not read fallback schema file: %s", read_err)
+            logger.error("Kite MCP live fetch error: %s", exc)
+            raise RuntimeError(f"Live Kite MCP communication failure: {exc}") from exc
 
         return holdings
 

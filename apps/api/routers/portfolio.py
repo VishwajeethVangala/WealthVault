@@ -27,7 +27,7 @@ from core.models import (
 from core.portfolio.aggregation import PortfolioAggregationService
 from core.portfolio.normalization import NormalizationService
 from providers.brokers.indmoney import IndmoneyProvider
-from providers.brokers.zerodha import ZerodhaProvider
+from providers.brokers.zerodha import KiteAuthRequiredError, ZerodhaProvider
 from storage.blobs.archive import archive_broker_payload
 from storage.tables.repositories import (
     BrokerConnectionRepository,
@@ -217,6 +217,14 @@ async def sync_portfolio(
             owner_id=current_user_id,
             connection_id="conn_zerodha_live",
             status=BrokerStatus.CONNECTED,
+            last_sync_time=sync_time.isoformat(),
+        )
+    except KiteAuthRequiredError as auth_exc:
+        logger.warning("Zerodha sync requires authorization: %s", auth_exc)
+        await connections_repo.update_status(
+            owner_id=current_user_id,
+            connection_id="conn_zerodha_live",
+            status=BrokerStatus.AUTH_REQUIRED,
             last_sync_time=sync_time.isoformat(),
         )
     except Exception as exc:
@@ -517,6 +525,21 @@ async def sync_single_broker(
                 owner_id=current_user_id,
                 connection_id=conn_id,
             )
+        except KiteAuthRequiredError as auth_exc:
+            logger.warning("Zerodha single sync requires authorization: %s", auth_exc)
+            await connections_repo.update_status(
+                owner_id=current_user_id,
+                connection_id=conn_id,
+                status=BrokerStatus.AUTH_REQUIRED,
+                last_sync_time=sync_time.isoformat(),
+            )
+            sessions = await get_broker_sessions(current_user_id=current_user_id)
+            target = next((s for s in sessions if s.broker_name.lower() == broker_clean), None)
+            if target:
+                target.auth_url = auth_exc.auth_url
+                target.status = BrokerStatus.AUTH_REQUIRED
+                return target
+            raise HTTPException(status_code=401, detail=str(auth_exc))
         except Exception as exc:
             logger.error("Zerodha single sync failed: %s", exc)
     elif broker_clean == "indmoney":
