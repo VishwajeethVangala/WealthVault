@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Search,
@@ -15,7 +15,8 @@ import {
   LayoutGrid,
   List,
 } from 'lucide-react'
-import { fetchPortfolioHoldings } from '../utils/api'
+import { usePortfolio } from '../context/PortfolioContext'
+import { classifyAssetClass } from '../utils/portfolioFilters'
 import type { Holding } from '../types'
 
 const formatINR = (val: number): string => {
@@ -28,9 +29,7 @@ const formatINR = (val: number): string => {
 
 export const HoldingsTable: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [holdings, setHoldings] = useState<Holding[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { holdings, loading, error, refresh, counts } = usePortfolio()
   const [searchQuery, setSearchQuery] = useState('')
   type SortColumn = keyof Holding | 'invested_value'
   const [sortField, setSortField] = useState<SortColumn>('current_value')
@@ -40,139 +39,60 @@ export const HoldingsTable: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [viewMode, setViewMode] = useState<'auto' | 'table' | 'cards'>('auto')
 
-  // URL-driven filter states
+  // URL-driven filter states from Looker Studio GlobalFilters
   const activeBroker = searchParams.get('broker') || 'all'
   const activeAssetClass = searchParams.get('assetClass') || 'all'
+  const activePnl = searchParams.get('pnl') || 'all'
 
-  const loadHoldings = async () => {
-    try {
-      setLoading(true)
-      const data = await fetchPortfolioHoldings('all')
-      setHoldings(data)
-      setError(null)
-    } catch (err: any) {
-      console.error('Failed to load holdings:', err)
-      setError(err.message || 'Failed to fetch portfolio holdings')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const selectedBrokers = useMemo(() => {
+    return activeBroker !== 'all' ? activeBroker.split(',').filter(Boolean) : []
+  }, [activeBroker])
 
-  useEffect(() => {
-    loadHoldings()
-  }, [])
-
-  // 1. Custodian-scoped holdings
-  const brokerScopedHoldings = useMemo(() => {
-    return holdings.filter((h) => {
-      if (activeBroker === 'zerodha' && !h.connection_id.toLowerCase().includes('zerodha')) {
-        return false
-      }
-      if (activeBroker === 'indmoney' && !h.connection_id.toLowerCase().includes('indmoney')) {
-        return false
-      }
-      return true
-    })
-  }, [holdings, activeBroker])
-
-
-  // Broker counts
-  const brokerCounts = useMemo(() => {
-    return {
-      all: holdings.length,
-      zerodha: holdings.filter((h) => h.connection_id.toLowerCase().includes('zerodha')).length,
-      indmoney: holdings.filter((h) => h.connection_id.toLowerCase().includes('indmoney')).length,
-    }
-  }, [holdings])
-
-  // Category counts within active custodian scope
-  const categoryCounts = useMemo(() => {
-    return {
-      all: brokerScopedHoldings.length,
-      EQUITY: brokerScopedHoldings.filter(
-        (h) =>
-          h.asset_class === 'EQUITY' &&
-          h.currency !== 'USD' &&
-          !h.connection_id.toLowerCase().includes('us') &&
-          !h.connection_id.toLowerCase().includes('alpaca') &&
-          !['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META'].some((s) =>
-            h.instrument_symbol.toUpperCase().includes(s)
-          )
-      ).length,
-      MUTUAL_FUND: brokerScopedHoldings.filter(
-        (h) => h.asset_class === 'MUTUAL_FUND' && !h.instrument_symbol.toUpperCase().includes('SGB')
-      ).length,
-      US_STOCKS: brokerScopedHoldings.filter(
-        (h) =>
-          h.asset_class === 'US_STOCKS' ||
-          h.currency === 'USD' ||
-          h.connection_id.toLowerCase().includes('us') ||
-          h.connection_id.toLowerCase().includes('alpaca') ||
-          ['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META'].some((s) =>
-            h.instrument_symbol.toUpperCase().includes(s)
-          )
-      ).length,
-      GOLD: brokerScopedHoldings.filter((h) => h.instrument_symbol.toUpperCase().includes('SGB')).length,
-      NPS: brokerScopedHoldings.filter((h) => h.asset_class === 'NPS').length,
-    }
-  }, [brokerScopedHoldings])
+  const selectedAssetClasses = useMemo(() => {
+    return activeAssetClass !== 'all' ? activeAssetClass.split(',').filter(Boolean) : []
+  }, [activeAssetClass])
 
   // 2. Fully filtered subset
   const filteredHoldings = useMemo(() => {
-    return brokerScopedHoldings.filter((h) => {
-      // Asset class filter
-      if (activeAssetClass !== 'all') {
-        if (activeAssetClass === 'US_STOCKS') {
-          const isUs =
-            h.asset_class === 'US_STOCKS' ||
-            h.currency === 'USD' ||
-            h.connection_id.toLowerCase().includes('us') ||
-            h.connection_id.toLowerCase().includes('alpaca') ||
-            ['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META'].some((s) =>
-              h.instrument_symbol.toUpperCase().includes(s)
-            )
-          if (!isUs) return false
-        } else if (activeAssetClass === 'GOLD') {
-          const isSgb = h.instrument_symbol.toUpperCase().includes('SGB')
-          if (!isSgb) return false
-        } else if (activeAssetClass === 'DEBT') {
-          const sym = h.instrument_symbol.toLowerCase()
-          const isDebt =
-            h.asset_class === 'DEBT' ||
-            sym.includes('debt') ||
-            sym.includes('liquid') ||
-            sym.includes('bond') ||
-            sym.includes('gilt') ||
-            sym.includes('treasury') ||
-            sym.includes('arbitrage') ||
-            sym.includes('fd') ||
-            sym.includes('cash') ||
-            sym.includes('overnight')
-          if (!isDebt) return false
-        } else if (h.asset_class !== activeAssetClass) {
-          return false
-        }
+    const query = searchQuery.trim().toLowerCase()
+    return holdings.filter((h) => {
+      // Broker / Custodian (multi-select)
+      if (selectedBrokers.length > 0) {
+        const conn = (h.connection_id || '').toLowerCase()
+        const match = selectedBrokers.some((b) => {
+          if (b === 'zerodha') return conn.includes('zerodha')
+          if (b === 'indmoney') return conn.includes('indmoney')
+          return conn.includes(b.toLowerCase())
+        })
+        if (!match) return false
       }
 
-      // Gainers / Losers quick filter
-      const investedCost = h.quantity * h.average_price
-      const pnl = h.pnl ?? (h.current_value - investedCost)
-      if (pnlFilter === 'gainers' && pnl < 0) return false
-      if (pnlFilter === 'losers' && pnl >= 0) return false
+      // Asset Class (multi-select)
+      if (selectedAssetClasses.length > 0) {
+        const canonical = classifyAssetClass(h)
+        if (!selectedAssetClasses.includes(canonical)) return false
+      }
+
+      // Gainers / Losers filter (Global URL param takes precedence, local pnlFilter fallback)
+      const effectivePnl = activePnl !== 'all' ? activePnl : pnlFilter
+      if (effectivePnl !== 'all') {
+        const investedCost = h.quantity * h.average_price
+        const pnl = h.pnl ?? (h.current_value - investedCost)
+        if (effectivePnl === 'gainers' && pnl < 0) return false
+        if (effectivePnl === 'losers' && pnl >= 0) return false
+      }
 
       // Localized Search
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim()
+      if (query) {
         const symbolMatch = h.instrument_symbol.toLowerCase().includes(query)
-        const idMatch = h.holding_id.toLowerCase().includes(query)
         const brokerMatch = h.connection_id.toLowerCase().includes(query)
         const classMatch = h.asset_class.toLowerCase().includes(query)
-        if (!symbolMatch && !idMatch && !brokerMatch && !classMatch) return false
+        if (!symbolMatch && !brokerMatch && !classMatch) return false
       }
 
       return true
     })
-  }, [brokerScopedHoldings, activeAssetClass, pnlFilter, searchQuery])
+  }, [holdings, selectedBrokers, selectedAssetClasses, activePnl, pnlFilter, searchQuery])
 
   // 3. Dynamic Sorting
   const sortedHoldings = useMemo(() => {
@@ -226,47 +146,12 @@ export const HoldingsTable: React.FC = () => {
     )
   }
 
-  const handleBrokerSelect = (broker: string) => {
-    const nextParams = new URLSearchParams(searchParams)
-    if (broker === 'all') {
-      nextParams.delete('broker')
-    } else {
-      nextParams.set('broker', broker)
-    }
-    setSearchParams(nextParams, { replace: true })
-    setCurrentPage(1)
-  }
-
-  const handleCategorySelect = (category: string) => {
-    const nextParams = new URLSearchParams(searchParams)
-    if (category === 'all') {
-      nextParams.delete('assetClass')
-    } else {
-      nextParams.set('assetClass', category)
-    }
-    setSearchParams(nextParams, { replace: true })
-    setCurrentPage(1)
-  }
-
   const handleClearAll = () => {
     setSearchQuery('')
     setPnlFilter('all')
     setSearchParams(new URLSearchParams(), { replace: true })
     setCurrentPage(1)
   }
-
-  // Summary Metrics
-  const filteredValuation = useMemo(
-    () => filteredHoldings.reduce((sum, h) => sum + (h.current_value || 0), 0),
-    [filteredHoldings]
-  )
-  const filteredInvested = useMemo(
-    () => filteredHoldings.reduce((sum, h) => sum + h.quantity * h.average_price, 0),
-    [filteredHoldings]
-  )
-  const filteredPnL = filteredValuation - filteredInvested
-  const filteredPnLPct = filteredInvested > 0 ? (filteredPnL / filteredInvested) * 100 : 0
-  const isPositiveGain = filteredPnL >= 0
 
   const exportCSV = () => {
     const headers = [
@@ -308,13 +193,24 @@ export const HoldingsTable: React.FC = () => {
     document.body.removeChild(link)
   }
 
+  // Summary Metrics
+  const filteredValuation = useMemo(
+    () => filteredHoldings.reduce((sum, h) => sum + (h.current_value || 0), 0),
+    [filteredHoldings]
+  )
+  const filteredInvested = useMemo(
+    () => filteredHoldings.reduce((sum, h) => sum + h.quantity * h.average_price, 0),
+    [filteredHoldings]
+  )
+  const filteredPnL = filteredValuation - filteredInvested
+  const filteredPnLPct = filteredInvested > 0 ? (filteredPnL / filteredInvested) * 100 : 0
+  const isPositiveGain = filteredPnL >= 0
+
   if (loading && holdings.length === 0) {
     return (
       <div className="py-24 flex flex-col items-center justify-center min-h-[50vh]">
-        <div className="w-10 h-10 border-3 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-        <p className="mt-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-          Loading Canonical Portfolio Holdings...
-        </p>
+        <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="mt-4 text-sm font-medium text-slate-500">Loading consolidated holdings portfolio...</p>
       </div>
     )
   }
@@ -327,7 +223,7 @@ export const HoldingsTable: React.FC = () => {
           <h3 className="font-semibold text-slate-900 text-base">Holdings Ledger Connection Notice</h3>
           <p className="text-xs text-slate-500 mt-1">{error}</p>
           <button
-            onClick={loadHoldings}
+            onClick={() => refresh()}
             className="mt-4 px-4 py-2 bg-slate-950 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-all shadow-sm"
           >
             Retry Connection
@@ -403,7 +299,7 @@ export const HoldingsTable: React.FC = () => {
                 <span className="w-2 h-2 rounded-full bg-slate-900"></span> Stocks &amp; ETFs
               </span>
               <span className="font-semibold text-slate-900 font-mono">
-                {categoryCounts.EQUITY} items
+                {counts.byAssetClass.EQUITY} items
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -411,7 +307,7 @@ export const HoldingsTable: React.FC = () => {
                 <span className="w-2 h-2 rounded-full bg-slate-600"></span> Mutual Funds
               </span>
               <span className="font-semibold text-slate-900 font-mono">
-                {categoryCounts.MUTUAL_FUND} funds
+                {counts.byAssetClass.MUTUAL_FUND} funds
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -419,7 +315,7 @@ export const HoldingsTable: React.FC = () => {
                 <span className="w-2 h-2 rounded-full bg-slate-400"></span> Sovereign Gold
               </span>
               <span className="font-semibold text-slate-900 font-mono">
-                {categoryCounts.GOLD} items
+                {counts.byAssetClass.GOLD} items
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -427,7 +323,7 @@ export const HoldingsTable: React.FC = () => {
                 <span className="w-2 h-2 rounded-full bg-purple-600"></span> NPS Retirement
               </span>
               <span className="font-semibold text-slate-900 font-mono">
-                {categoryCounts.NPS} items
+                {counts.byAssetClass.NPS} items
               </span>
             </div>
           </div>
@@ -456,85 +352,42 @@ export const HoldingsTable: React.FC = () => {
 
       {/* 2. Action Toolbar Above Ledger */}
       {/* 2. Action Toolbar Above Ledger */}
-      <div className="flex flex-col gap-3 mt-1">
-        {/* Row 1: Custodian Tabs + Asset Class Filter Tabs & Scope Count */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-            {/* Custodian Segmented Control */}
-            <div className="inline-flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 text-xs font-semibold shrink-0">
-              {[
-                { id: 'all', label: 'All Custodians', count: brokerCounts.all },
-                { id: 'zerodha', label: 'Zerodha', count: brokerCounts.zerodha },
-                { id: 'indmoney', label: 'INDmoney', count: brokerCounts.indmoney },
-              ].map((b) => {
-                const isSelected = activeBroker === b.id
-                return (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => handleBrokerSelect(b.id)}
-                    className={`h-7 px-3 rounded-lg transition-all duration-150 flex items-center gap-1.5 shrink-0 ${
-                      isSelected
-                        ? 'bg-white text-slate-950 shadow-sm font-bold'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <span className="whitespace-nowrap">{b.label}</span>
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono leading-none ${
-                        isSelected ? 'bg-slate-100 text-slate-900 font-bold' : 'text-slate-400'
-                      }`}
-                    >
-                      {b.count}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="h-5 w-px bg-slate-200 shrink-0 mx-1 hidden sm:block" />
-
-            {/* Asset Class Filter Buttons */}
-            {[
-              { id: 'all', label: 'All', count: categoryCounts.all },
-              { id: 'EQUITY', label: 'Equity', count: categoryCounts.EQUITY },
-              { id: 'MUTUAL_FUND', label: 'Mutual Funds', count: categoryCounts.MUTUAL_FUND },
-              { id: 'US_STOCKS', label: 'US Stocks', count: categoryCounts.US_STOCKS },
-              { id: 'GOLD', label: 'Sovereign Gold', count: categoryCounts.GOLD },
-              { id: 'NPS', label: 'NPS Retirement', count: categoryCounts.NPS },
-            ].map((cat) => {
-              const isSelected = activeAssetClass === cat.id
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => handleCategorySelect(cat.id)}
-                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold transition-all duration-150 select-none border flex items-center gap-2 shrink-0 ${
-                    isSelected
-                      ? 'bg-slate-950 text-white border-slate-950 shadow-sm'
-                      : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-                  }`}
-                >
-                  <span className="whitespace-nowrap">{cat.label}</span>
-                  <span
-                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold leading-none ${
-                      isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
-                    }`}
-                  >
-                    {cat.count}
-                  </span>
-                </button>
-              )
-            })}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-1">
+        {/* Left: Search Box & Scope Summary */}
+        <div className="flex items-center gap-3 flex-1">
+          <div className="relative flex items-center flex-1 sm:max-w-xs md:max-w-sm">
+            <Search className="w-4 h-4 absolute left-3 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1)
+              }}
+              placeholder="Search ticker, scheme, custody..."
+              className="w-full h-9 pl-9 pr-8 bg-white text-slate-900 placeholder:text-slate-400 text-xs rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.03)] border border-slate-200/80 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all font-medium"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('')
+                  setCurrentPage(1)
+                }}
+                className="absolute right-2.5 text-slate-400 hover:text-slate-600 transition-colors p-1"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          {/* Quick Active Scope Metric on far right */}
-          <div className="hidden lg:flex items-center gap-2 text-xs font-medium text-slate-500 shrink-0">
+          <div className="hidden sm:flex items-center gap-2 text-xs font-medium text-slate-500 shrink-0">
             <span className="font-semibold text-slate-900 font-mono">{filteredHoldings.length}</span>
             <span>of</span>
-            <span className="font-semibold text-slate-900 font-mono">{brokerScopedHoldings.length}</span>
-            <span>assets</span>
-            {filteredHoldings.length !== brokerScopedHoldings.length && (
+            <span className="font-semibold text-slate-900 font-mono">{holdings.length}</span>
+            <span>positions</span>
+            {filteredHoldings.length !== holdings.length && (
               <button
                 type="button"
                 onClick={handleClearAll}
@@ -548,127 +401,47 @@ export const HoldingsTable: React.FC = () => {
           </div>
         </div>
 
-        {/* Row 2: Search, Gainers/Losers Segmented Filter & Export CSV */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          {/* Left: Search Box & Gainers/Losers Toggle */}
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
-            {/* Search Box */}
-            <div className="relative flex items-center flex-1 sm:flex-initial">
-              <Search className="w-4 h-4 absolute left-3 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value)
-                  setCurrentPage(1)
-                }}
-                placeholder="Search ticker, scheme, custody..."
-                className="w-full sm:w-64 md:w-72 h-9 pl-9 pr-8 bg-white text-slate-900 placeholder:text-slate-400 text-xs rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.03)] border border-slate-200/80 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 transition-all font-medium"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchQuery('')
-                    setCurrentPage(1)
-                  }}
-                  className="absolute right-2.5 text-slate-400 hover:text-slate-600 transition-colors p-1"
-                  title="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Quick Gainers / Losers Segmented Filter */}
-            <div className="h-9 inline-flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 text-xs font-semibold shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setPnlFilter('all')
-                  setCurrentPage(1)
-                }}
-                className={`h-7 px-3 rounded-lg transition-all duration-150 flex items-center justify-center ${
-                  pnlFilter === 'all'
-                    ? 'bg-white text-slate-950 shadow-sm font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPnlFilter('gainers')
-                  setCurrentPage(1)
-                }}
-                className={`h-7 px-3 rounded-lg transition-all duration-150 flex items-center justify-center ${
-                  pnlFilter === 'gainers'
-                    ? 'bg-white text-emerald-700 shadow-sm font-bold'
-                    : 'text-slate-600 hover:text-emerald-700'
-                }`}
-              >
-                Gainers (+)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPnlFilter('losers')
-                  setCurrentPage(1)
-                }}
-                className={`h-7 px-3 rounded-lg transition-all duration-150 flex items-center justify-center ${
-                  pnlFilter === 'losers'
-                    ? 'bg-white text-rose-700 shadow-sm font-bold'
-                    : 'text-slate-600 hover:text-rose-700'
-                }`}
-              >
-                Losers (-)
-              </button>
-            </div>
-          </div>
-
-          {/* Right: View Mode Switcher & Export CSV Button */}
-          <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto shrink-0">
-            {/* View Mode Switcher */}
-            <div className="h-9 inline-flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setViewMode('table')}
-                className={`h-7 px-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 ${
-                  viewMode === 'table' || viewMode === 'auto'
-                    ? 'bg-white text-slate-950 shadow-sm font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Table View (Tablet/Desktop)"
-              >
-                <List className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Table</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('cards')}
-                className={`h-7 px-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 ${
-                  viewMode === 'cards'
-                    ? 'bg-white text-slate-950 shadow-sm font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Card Feed View (Mobile/Tab)"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="text-[11px]">Cards</span>
-              </button>
-            </div>
-
+        {/* Right: View Mode Switcher & Export CSV Button */}
+        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto shrink-0">
+          {/* View Mode Switcher */}
+          <div className="h-9 inline-flex items-center p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 text-xs font-semibold">
             <button
               type="button"
-              onClick={exportCSV}
-              className="h-9 px-3.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-950 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.03)] text-xs font-semibold flex items-center gap-2 border border-slate-200/80 transition-colors shrink-0"
-              title="Export filtered holdings as CSV"
+              onClick={() => setViewMode('table')}
+              className={`h-7 px-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 ${
+                viewMode === 'table' || viewMode === 'auto'
+                  ? 'bg-white text-slate-950 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Table View (Tablet/Desktop)"
             >
-              <Download className="w-3.5 h-3.5 text-slate-500" />
-              <span className="hidden xs:inline">Export CSV</span>
+              <List className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Table</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              className={`h-7 px-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 ${
+                viewMode === 'cards'
+                  ? 'bg-white text-slate-950 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Card Feed View (Mobile/Tab)"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="text-[11px]">Cards</span>
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={exportCSV}
+            className="h-9 px-3.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-950 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.03)] text-xs font-semibold flex items-center gap-2 border border-slate-200/80 transition-colors shrink-0"
+            title="Export filtered holdings as CSV"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-500" />
+            <span className="hidden xs:inline">Export CSV</span>
+          </button>
         </div>
       </div>
 
