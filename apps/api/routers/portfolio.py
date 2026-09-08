@@ -487,13 +487,88 @@ async def sync_single_broker(
     broker_name: str,
     current_user_id: str = Depends(get_current_user),
 ) -> BrokerSessionInfo:
-    """Trigger targeted live sync for a single broker provider."""
+    """Trigger targeted live sync for a single broker provider, persisting live data to Azure tables."""
     broker_clean = broker_name.lower().strip()
     conn_id = f"conn_{broker_clean}_live"
     sync_time = datetime.now(timezone.utc)
     connections_repo = BrokerConnectionRepository()
+    holdings_repo = HoldingsRepository()
+    snapshots_repo = SnapshotsRepository()
+    normalizer = NormalizationService()
+    aggregator = PortfolioAggregationService()
+    market_service = get_market_data_service()
 
-    # Update status to CONNECTED and record fresh sync time
+    new_broker_holdings: List[Holding] = []
+
+    # 1. Targeted live pull from requested broker MCP
+    if broker_clean == "zerodha":
+        zk_provider = ZerodhaProvider()
+        try:
+            zk_raw = await zk_provider.get_holdings()
+            await archive_broker_payload(
+                owner_id=current_user_id,
+                connection_id=conn_id,
+                raw_data=zk_raw,
+                timestamp=sync_time,
+            )
+            new_broker_holdings = normalizer.normalize_holdings(
+                raw_data=zk_raw,
+                broker_name="zerodha",
+                owner_id=current_user_id,
+                connection_id=conn_id,
+            )
+        except Exception as exc:
+            logger.error("Zerodha single sync failed: %s", exc)
+    elif broker_clean == "indmoney":
+        ind_provider = IndmoneyProvider()
+        try:
+            ind_raw = await ind_provider.get_holdings()
+            await archive_broker_payload(
+                owner_id=current_user_id,
+                connection_id=conn_id,
+                raw_data=ind_raw,
+                timestamp=sync_time,
+            )
+            new_broker_holdings = normalizer.normalize_holdings(
+                raw_data=ind_raw,
+                broker_name="indmoney",
+                owner_id=current_user_id,
+                connection_id=conn_id,
+            )
+        except Exception as exc:
+            logger.error("INDmoney single sync failed: %s", exc)
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported broker: {broker_name}")
+
+    # 2. Enrich newly pulled holdings with live quotes
+    if new_broker_holdings:
+        try:
+            new_broker_holdings, _ = await market_service.enrich_holdings_with_live_quotes(new_broker_holdings)
+        except Exception as q_err:
+            logger.warning("Single broker quote enrichment note: %s", q_err)
+
+    # 3. Combine with other brokers' persisted holdings (if any) and batch persist to Holdings Table
+    existing_holdings = await holdings_repo.get_holdings(owner_id=current_user_id)
+    other_holdings = [
+        h for h in existing_holdings
+        if h.connection_id != conn_id and broker_clean not in h.connection_id.lower()
+    ]
+    combined_holdings = other_holdings + new_broker_holdings
+
+    await holdings_repo.clear_holdings(owner_id=current_user_id)
+    if combined_holdings:
+        await holdings_repo.upsert_holdings(owner_id=current_user_id, holdings=combined_holdings)
+
+    # 4. Compute and save updated daily snapshot
+    as_of_date = sync_time.strftime("%Y-%m-%d")
+    snapshot = aggregator.calculate_snapshot(
+        owner_id=current_user_id,
+        holdings=combined_holdings,
+        as_of_date=as_of_date,
+    )
+    await snapshots_repo.save_snapshot(snapshot)
+
+    # 5. Update status to CONNECTED and record fresh sync time
     await connections_repo.update_status(
         owner_id=current_user_id,
         connection_id=conn_id,
