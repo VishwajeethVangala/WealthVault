@@ -17,8 +17,7 @@ import time
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from mcp import ClientSession
-from mcp.client.stdio import StdioServerParameters, stdio_client
-
+from core.market_data.kite_client import get_kite_mcp_client
 from core.models import AssetClass, Holding, QuoteItem
 
 logger = logging.getLogger("wealthvault.market_data.service")
@@ -119,74 +118,56 @@ class MCPMarketDataService:
         combined: Dict[str, QuoteItem] = dict(cached_quotes)
         live_fetched = False
 
-        # Batch query Kite MCP for missing instruments (max 250 per batch)
+        # Batch query Kite MCP for missing instruments via persistent client (max 250 per batch)
         batch_size = 250
         batches = [missing[i : i + batch_size] for i in range(0, len(missing), batch_size)]
-
-        server_params = StdioServerParameters(
-            command=NPX_BIN,
-            args=["-y", "mcp-remote", self.server_url],
-        )
+        client = get_kite_mcp_client()
 
         for batch in batches:
             try:
-                async with asyncio.timeout(self.timeout):
-                    async with stdio_client(server_params) as (read, write):
-                        async with ClientSession(read, write) as session:
-                            await session.initialize()
-                            # Call Kite MCP get_quotes for complete market depth & OHLC
-                            res = await session.call_tool("get_quotes", arguments={"instruments": batch})
+                payload = await client.get_quotes(batch)
+                now_iso = datetime.now(timezone.utc).isoformat()
+                for inst_key, data in payload.items():
+                    if not isinstance(data, dict):
+                        continue
 
-                            payload: Dict[str, Any] = {}
-                            if hasattr(res, "content") and res.content:
-                                text = getattr(res.content[0], "text", None)
-                                if text:
-                                    try:
-                                        payload = json.loads(text)
-                                    except Exception:
-                                        logger.debug("MCP get_quotes raw text: %s", text)
+                    last_price = float(data.get("last_price", 0.0) or 0.0)
+                    ohlc = data.get("ohlc", {})
+                    close_price = float(ohlc.get("close", 0.0) or 0.0)
+                    open_price = float(ohlc.get("open", 0.0) or 0.0)
+                    high_price = float(ohlc.get("high", 0.0) or 0.0)
+                    low_price = float(ohlc.get("low", 0.0) or 0.0)
 
-                            now_iso = datetime.now(timezone.utc).isoformat()
-                            for inst_key, data in payload.items():
-                                if not isinstance(data, dict):
-                                    continue
+                    net_change = data.get("net_change")
+                    if net_change is not None:
+                        day_change = float(net_change)
+                    elif close_price > 0:
+                        day_change = round(last_price - close_price, 2)
+                    else:
+                        day_change = 0.0
 
-                                last_price = float(data.get("last_price", 0.0) or 0.0)
-                                ohlc = data.get("ohlc", {})
-                                close_price = float(ohlc.get("close", 0.0) or 0.0)
-                                open_price = float(ohlc.get("open", 0.0) or 0.0)
-                                high_price = float(ohlc.get("high", 0.0) or 0.0)
-                                low_price = float(ohlc.get("low", 0.0) or 0.0)
+                    day_pct = (
+                        round((day_change / close_price) * 100.0, 2)
+                        if close_price > 0
+                        else 0.0
+                    )
 
-                                net_change = data.get("net_change")
-                                if net_change is not None:
-                                    day_change = float(net_change)
-                                elif close_price > 0:
-                                    day_change = round(last_price - close_price, 2)
-                                else:
-                                    day_change = 0.0
+                    item = QuoteItem(
+                        instrument=inst_key.upper(),
+                        last_price=last_price,
+                        day_change=day_change,
+                        day_change_percentage=day_pct,
+                        open_price=open_price,
+                        high_price=high_price,
+                        low_price=low_price,
+                        close_price=close_price,
+                        timestamp=now_iso,
+                    )
+                    self.cache.set(inst_key.upper(), item)
+                    combined[inst_key.upper()] = item
 
-                                day_pct = (
-                                    round((day_change / close_price) * 100.0, 2)
-                                    if close_price > 0
-                                    else 0.0
-                                )
-
-                                item = QuoteItem(
-                                    instrument=inst_key.upper(),
-                                    last_price=last_price,
-                                    day_change=day_change,
-                                    day_change_percentage=day_pct,
-                                    open_price=open_price,
-                                    high_price=high_price,
-                                    low_price=low_price,
-                                    close_price=close_price,
-                                    timestamp=now_iso,
-                                )
-                                self.cache.set(inst_key.upper(), item)
-                                combined[inst_key.upper()] = item
-
-                            live_fetched = True
+                if payload:
+                    live_fetched = True
             except Exception as exc:
                 logger.warning("Live MCP market quotes query note (%s): %s", self.server_url, exc)
                 break

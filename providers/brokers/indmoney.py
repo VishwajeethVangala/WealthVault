@@ -80,15 +80,8 @@ class IndmoneyProvider(BrokerProvider):
                                     logger.warning("Could not cache INDmoney schema: %s", write_err)
                                 return transformed
         except Exception as exc:
-            logger.info("INDmoney live MCP stdio note (%s), loading schema fixture: %s", exc, SCHEMA_FILE)
-
-        # Load exact live schema fixture discovered
-        if SCHEMA_FILE.exists():
-            with open(SCHEMA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data
-
-        return {"status": "success", "data": {"holdings": []}}
+            logger.warning("INDmoney live MCP unreachable: %s", exc)
+            raise RuntimeError(f"INDmoney live MCP communication failure: {exc}") from exc
 
     @staticmethod
     def _transform_live_payload(raw_overall: Dict[str, Any]) -> Dict[str, Any]:
