@@ -77,7 +77,7 @@ class MCPMarketDataService:
         self,
         server_url: str = "https://mcp.kite.trade/mcp",
         cache_ttl_seconds: float = 30.0,
-        request_timeout_seconds: float = 12.0,
+        request_timeout_seconds: float = 45.0,
     ) -> None:
         self.server_url = server_url
         self.cache = MarketQuoteCache(default_ttl_seconds=cache_ttl_seconds)
