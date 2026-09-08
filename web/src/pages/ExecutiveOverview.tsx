@@ -168,7 +168,7 @@ const renderPieTooltip = (props: any) => {
 export const ExecutiveOverview: React.FC = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { holdings, loading: portfolioLoading, error: portfolioError, refresh } = usePortfolio()
+  const { holdings, loading: portfolioLoading, error: portfolioError, refresh, dataFreshness, lastRefreshedAt } = usePortfolio()
   const [sessions, setSessions] = useState<BrokerSessionInfo[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(true)
   const [sessionsError, setSessionsError] = useState<string | null>(null)
@@ -595,32 +595,119 @@ export const ExecutiveOverview: React.FC = () => {
       {/* TOP DASHBOARD CARDS (Matching requested executive design)                */}
       {/* ========================================================================= */}
       <div className="flex flex-col gap-4">
-        {/* Header bar with title */}
+        {/* Header bar with title & live status */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight font-serif">Executive Dashboard</h2>
-            <p className="text-xs text-slate-500 font-medium">Real-time audited wealth telemetry and multi-broker asset intelligence</p>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-xl font-bold text-slate-900 tracking-tight font-serif">Executive Dashboard</h2>
+              <div
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                  dataFreshness === 'live'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-50 text-slate-600 border-slate-200'
+                }`}
+                title={
+                  dataFreshness === 'live'
+                    ? 'Live market data streaming from Kite MCP with 30s TTL cache'
+                    : 'Showing persisted holdings data'
+                }
+              >
+                <span className="relative flex h-2 w-2">
+                  {dataFreshness === 'live' && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  )}
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${
+                      dataFreshness === 'live' ? 'bg-emerald-500' : 'bg-slate-400'
+                    }`}
+                  ></span>
+                </span>
+                <span>{dataFreshness === 'live' ? 'Live MCP Feed • 30s TTL' : 'Persisted Storage'}</span>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 font-medium">
+              Real-time audited wealth telemetry and multi-broker asset intelligence
+              {lastRefreshedAt && (
+                <span className="ml-1.5 text-slate-400 font-mono text-[10px]">
+                  (Updated {lastRefreshedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })})
+                </span>
+              )}
+            </p>
           </div>
 
-          {(selectedBrokers.length > 0 || selectedAssetClasses.length > 0) && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-semibold shadow-sm">
-              <span className="text-[10px] uppercase font-bold text-emerald-400">Audited Filter Applied:</span>
-              <span>
-                {[
-                  selectedBrokers.length > 0
-                    ? selectedBrokers.map((b) => (b === 'zerodha' ? 'Zerodha' : 'INDmoney')).join(', ')
-                    : null,
-                  selectedAssetClasses.length > 0
-                    ? selectedAssetClasses.join(', ')
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(' • ')}
-              </span>
-              <span className="text-slate-400 font-mono text-[10px]">({filteredHoldings.length} matching)</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                refresh()
+                loadSessions()
+              }}
+              disabled={portfolioLoading || sessionsLoading}
+              className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-950 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.03)] text-xs font-semibold flex items-center gap-1.5 border border-slate-200/80 transition-colors disabled:opacity-50"
+              title="Refresh live market quotes"
+            >
+              <Radio className={`w-3.5 h-3.5 text-emerald-600 ${portfolioLoading ? 'animate-spin' : ''}`} />
+              <span>Refresh Feed</span>
+            </button>
+
+            {(selectedBrokers.length > 0 || selectedAssetClasses.length > 0) && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-semibold shadow-sm">
+                <span className="text-[10px] uppercase font-bold text-emerald-400">Audited Filter Applied:</span>
+                <span>
+                  {[
+                    selectedBrokers.length > 0
+                      ? selectedBrokers.map((b) => (b === 'zerodha' ? 'Zerodha' : 'INDmoney')).join(', ')
+                      : null,
+                    selectedAssetClasses.length > 0
+                      ? selectedAssetClasses.join(', ')
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' • ')}
+                </span>
+                <span className="text-slate-400 font-mono text-[10px]">({filteredHoldings.length} matching)</span>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Kite MCP Interactive Authorization Notice if session expired */}
+        {zerodhaSession?.auth_url && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                <AlertCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-amber-950">Zerodha Kite MCP Session Authorization Required</h4>
+                <p className="text-[11px] text-amber-800 mt-0.5">
+                  Your Kite MCP session has expired or requires login. Authenticate to stream live quotes and real-time P&amp;L updates directly from Kite.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+              <a
+                href={zerodhaSession.auth_url}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs inline-flex items-center gap-1.5"
+              >
+                <span>Authorize Kite</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  loadSessions()
+                  refresh()
+                }}
+                className="px-3 py-1.5 bg-white border border-amber-300 text-amber-900 hover:bg-amber-100/70 rounded-lg text-xs font-semibold transition-all"
+              >
+                Check Status
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ROW 1: Core Portfolio Metrics (4 Compact Cards) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">

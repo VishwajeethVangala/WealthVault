@@ -11,80 +11,70 @@ from pathlib import Path
 import shutil
 from typing import Any, Dict, List, Optional
 
-from mcp import ClientSession
-from mcp.client.stdio import StdioServerParameters, stdio_client
-
+from core.market_data.indmoney_client import IndmoneyAuthRequiredError, get_indmoney_mcp_client
 from providers.brokers.base import BrokerProvider
 
 logger = logging.getLogger("wealthvault.providers.indmoney")
 
 SCHEMA_FILE = Path("storage/blobs/schemas/indmoney_raw.json")
-NPX_BIN = shutil.which("npx") or shutil.which("npx.cmd") or "npx"
 
 
 class IndmoneyProvider(BrokerProvider):
-    """INDmoney wealth provider using MCP stdio_client with schema fallback."""
+    """INDmoney wealth provider using direct HTTP MCP client with OAuth PKCE."""
 
     def __init__(
         self,
         credentials: Optional[Dict[str, Any]] = None,
         server_url: str = "https://mcp.indmoney.com/mcp",
+        timeout_seconds: float = 45.0,
     ) -> None:
         super().__init__(credentials)
         self.server_url = server_url
+        self.timeout = timeout_seconds
+        self.live_fetched = False
 
     async def connect(self, credentials: Optional[Dict[str, Any]] = None) -> bool:
         """Verify broker connection."""
         if credentials:
             self.credentials.update(credentials)
-        return True
+        status = await self.get_account_status()
+        return status.get("status") == "success"
 
     async def get_account_status(self) -> Dict[str, Any]:
-        """Fetch account status."""
+        """Fetch account and OAuth connection status."""
+        client = get_indmoney_mcp_client()
+        if client.is_authenticated():
+            return {
+                "status": "success",
+                "profile": {
+                    "broker": "INDMONEY",
+                    "account_id": self.credentials.get("account_id", "IND_LIVE"),
+                    "status": "active",
+                },
+            }
+
+        auth_url = client.get_authorization_url()
         return {
-            "status": "success",
-            "profile": {
-                "broker": "INDMONEY",
-                "account_id": self.credentials.get("account_id", "IND_LIVE"),
-                "status": "active",
-            },
+            "status": "auth_required",
+            "message": "INDmoney OAuth authorization required",
+            "auth_url": auth_url,
         }
 
     async def get_holdings(self) -> Any:
-        """Invoke INDmoney MCP tool via stdio_client, falling back to discovered raw schema."""
-        server_params = StdioServerParameters(
-            command=NPX_BIN,
-            args=["-y", "mcp-remote", self.server_url],
-        )
-
+        """Retrieve live family asset holdings directly from INDmoney MCP."""
+        client = get_indmoney_mcp_client()
         try:
-            async with asyncio.timeout(30.0):
-                async with stdio_client(server_params) as (read, write):
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        result = await session.call_tool("get_family_asset_holdings", arguments={"asset": "overall"})
-                        if hasattr(result, "content") and result.content:
-                            text = getattr(result.content[0], "text", None)
-                            if text:
-                                raw_overall = json.loads(text)
-                                transformed = self._transform_live_payload(raw_overall)
-                                # Cache fresh payload
-                                try:
-                                    with open(SCHEMA_FILE, "w", encoding="utf-8") as f:
-                                        json.dump(transformed, f, indent=2)
-                                except Exception as write_err:
-                                    logger.warning("Could not cache INDmoney schema: %s", write_err)
-                                return transformed
+            raw_overall = await client.get_family_asset_holdings("overall")
+            if not raw_overall:
+                return {}
+            transformed = self._transform_live_payload(raw_overall)
+            self.live_fetched = True
+            return transformed
+        except IndmoneyAuthRequiredError:
+            raise
         except Exception as exc:
-            logger.info("INDmoney live MCP stdio note (%s), loading schema fixture: %s", exc, SCHEMA_FILE)
-
-        # Load exact live schema fixture discovered
-        if SCHEMA_FILE.exists():
-            with open(SCHEMA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data
-
-        return {"status": "success", "data": {"holdings": []}}
+            logger.error("INDmoney live holdings retrieval failed: %s", exc)
+            raise RuntimeError(f"INDmoney live MCP communication failure: {exc}") from exc
 
     @staticmethod
     def _transform_live_payload(raw_overall: Dict[str, Any]) -> Dict[str, Any]:
@@ -97,7 +87,14 @@ class IndmoneyProvider(BrokerProvider):
             "IND_STOCK": {"asset_summary": {}, "holdings": []},
         }
 
-        for member in raw_overall.get("family_asset_holdings", []):
+        # Support both {"family_asset_holdings": [...]} and {"overall": {"family_asset_holdings": [...]}}
+        members = (
+            raw_overall.get("family_asset_holdings")
+            or raw_overall.get("overall", {}).get("family_asset_holdings", [])
+            or []
+        )
+
+        for member in members:
             m_name = member.get("name")
             m_asset = member.get("asset")
 
