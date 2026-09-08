@@ -1,4 +1,4 @@
-import type { AuthResponse, BrokerSessionInfo, Holding, PortfolioSummary, ReauthRequest, User } from '../types'
+import type { AuthResponse, BrokerSessionInfo, Holding, MarketQuotesResponse, PortfolioSummary, ReauthRequest, User } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -97,6 +97,11 @@ export async function triggerPortfolioSync(): Promise<any> {
   return fetchApi('/api/v1/portfolio/sync', {
     method: 'POST',
   })
+}
+
+export async function fetchMarketQuotes(instruments: string[]): Promise<MarketQuotesResponse> {
+  const query = instruments.length > 0 ? `?instruments=${encodeURIComponent(instruments.join(','))}` : ''
+  return fetchApi<MarketQuotesResponse>(`/api/v1/portfolio/quotes${query}`)
 }
 
 // Broker Session & MCP Telemetry API Calls

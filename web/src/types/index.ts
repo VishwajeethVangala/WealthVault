@@ -15,6 +15,33 @@ export interface Holding {
   day_change_percentage?: number
   day_pnl?: number
   currency: string
+  data_freshness?: 'live' | 'cached'
+  last_price_updated_at?: string
+}
+
+export interface QuoteItem {
+  instrument_token?: number
+  last_price: number
+  volume?: number
+  average_price?: number
+  ohlc?: {
+    open?: number
+    high?: number
+    low?: number
+    close?: number
+  }
+  net_change?: number
+  lower_circuit_limit?: number
+  upper_circuit_limit?: number
+  last_trade_time?: string
+  oi?: number
+  timestamp?: string
+}
+
+export interface MarketQuotesResponse {
+  quotes: Record<string, QuoteItem>
+  source: string
+  timestamp: string
 }
 
 export interface AssetAllocationMetric {
@@ -90,6 +117,7 @@ export interface BrokerSessionInfo {
   total_valuation: number
   last_latency_ms: number
   error_message?: string
+  auth_url?: string
 }
 
 export interface ReauthRequest {
