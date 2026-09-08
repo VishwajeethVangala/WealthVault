@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { PortfolioProvider } from './context/PortfolioContext'
 import { ExecutiveOverview } from './pages/ExecutiveOverview'
 import { HoldingsTable } from './pages/HoldingsTable'
 import { BrokerSync } from './pages/BrokerSync'
@@ -61,15 +62,17 @@ export const App: React.FC = () => {
   // If authenticated, render full WealthVault Dashboard
   return (
     <BrowserRouter>
-      <Layout onLogout={handleLogout}>
-        <Routes>
-          <Route path="/" element={<ExecutiveOverview />} />
-          <Route path="/holdings" element={<HoldingsTable />} />
-          <Route path="/brokers" element={<BrokerSync />} />
-          <Route path="/sync" element={<Navigate to="/brokers" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
+      <PortfolioProvider>
+        <Layout onLogout={handleLogout}>
+          <Routes>
+            <Route path="/" element={<ExecutiveOverview />} />
+            <Route path="/holdings" element={<HoldingsTable />} />
+            <Route path="/brokers" element={<BrokerSync />} />
+            <Route path="/sync" element={<Navigate to="/brokers" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
+      </PortfolioProvider>
     </BrowserRouter>
   )
 }
