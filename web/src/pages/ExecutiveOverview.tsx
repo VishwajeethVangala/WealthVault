@@ -23,8 +23,10 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { fetchPortfolioHoldings, fetchBrokerSessions } from '../utils/api'
-import type { Holding, BrokerSessionInfo } from '../types'
+import { fetchBrokerSessions } from '../utils/api'
+import { usePortfolio } from '../context/PortfolioContext'
+import { classifyAssetClass } from '../utils/portfolioFilters'
+import type { BrokerSessionInfo } from '../types'
 
 // Vibrant Palette matching the modern executive design
 const TARGET_ALLOCATION: Record<string, number> = {
@@ -165,81 +167,68 @@ const renderPieTooltip = (props: any) => {
 
 export const ExecutiveOverview: React.FC = () => {
   const [searchParams] = useSearchParams()
-  const [holdings, setHoldings] = useState<Holding[]>([])
+  const { holdings, loading: portfolioLoading, error: portfolioError, refresh } = usePortfolio()
   const [sessions, setSessions] = useState<BrokerSessionInfo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [sessionsError, setSessionsError] = useState<string | null>(null)
 
-  // Reactive URL search parameters
+  // Reactive URL search parameters from Looker Studio GlobalFilters
   const activeBroker = searchParams.get('broker') || 'all'
   const activeAssetClass = searchParams.get('assetClass') || 'all'
 
-  const loadData = async () => {
+  const loadSessions = async () => {
     try {
-      setLoading(true)
-      const [holdingsData, sessionsData] = await Promise.all([
-        fetchPortfolioHoldings('all'),
-        fetchBrokerSessions().catch(() => [] as BrokerSessionInfo[]),
-      ])
-      setHoldings(holdingsData)
+      setSessionsLoading(true)
+      const sessionsData = await fetchBrokerSessions().catch(() => [] as BrokerSessionInfo[])
       setSessions(sessionsData)
-      setError(null)
+      setSessionsError(null)
     } catch (err: any) {
       console.error('Failed to load telemetry for executive overview:', err)
-      setError(err.message || 'Failed to aggregate portfolio telemetry')
+      setSessionsError(err.message || 'Failed to aggregate broker session telemetry')
     } finally {
-      setLoading(false)
+      setSessionsLoading(false)
     }
   }
 
   useEffect(() => {
-    loadData()
+    loadSessions()
   }, [])
 
-  // Custodian and Asset Class filtering
+  const loading = portfolioLoading || sessionsLoading
+
+  // Custodian and Asset Class filtering (supports multi-select comma-delimited)
+  const selectedBrokers = useMemo(() => {
+    return activeBroker !== 'all' ? activeBroker.split(',').filter(Boolean) : []
+  }, [activeBroker])
+
+  const selectedAssetClasses = useMemo(() => {
+    return activeAssetClass !== 'all' ? activeAssetClass.split(',').filter(Boolean) : []
+  }, [activeAssetClass])
+
   const filteredHoldings = useMemo(() => {
     return holdings.filter((h) => {
-      if (activeBroker === 'zerodha' && !h.connection_id.toLowerCase().includes('zerodha')) {
-        return false
+      // 1. Custodian filter (multi-select)
+      if (selectedBrokers.length > 0) {
+        const conn = (h.connection_id || '').toLowerCase()
+        const match = selectedBrokers.some((b) => {
+          if (b === 'zerodha') return conn.includes('zerodha')
+          if (b === 'indmoney') return conn.includes('indmoney')
+          return conn.includes(b.toLowerCase())
+        })
+        if (!match) return false
       }
-      if (activeBroker === 'indmoney' && !h.connection_id.toLowerCase().includes('indmoney')) {
-        return false
-      }
-      if (activeAssetClass !== 'all') {
-        if (activeAssetClass === 'US_STOCKS') {
-          const isUs =
-            h.asset_class === 'US_STOCKS' ||
-            h.currency === 'USD' ||
-            h.connection_id.toLowerCase().includes('us') ||
-            h.connection_id.toLowerCase().includes('alpaca') ||
-            ['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META'].some((s) =>
-              h.instrument_symbol.toUpperCase().includes(s)
-            )
-          if (!isUs) return false
-        } else if (activeAssetClass === 'GOLD') {
-          const isSgb = h.instrument_symbol.toUpperCase().includes('SGB')
-          if (!isSgb) return false
-        } else if (activeAssetClass === 'DEBT') {
-          const sym = h.instrument_symbol.toLowerCase()
-          const isDebt =
-            h.asset_class === 'DEBT' ||
-            sym.includes('debt') ||
-            sym.includes('liquid') ||
-            sym.includes('bond') ||
-            sym.includes('gilt') ||
-            sym.includes('treasury') ||
-            sym.includes('arbitrage') ||
-            sym.includes('fd') ||
-            sym.includes('cash') ||
-            sym.includes('overnight')
-          if (!isDebt) return false
-        } else if (h.asset_class !== activeAssetClass) {
+
+      // 2. Asset Class filter (multi-select)
+      if (selectedAssetClasses.length > 0) {
+        const canonical = classifyAssetClass(h)
+        if (!selectedAssetClasses.includes(canonical)) {
           return false
         }
       }
+
       return true
     })
-  }, [holdings, activeBroker, activeAssetClass])
+  }, [holdings, selectedBrokers, selectedAssetClasses])
 
   // Core Financial Metrics Computation
   const metrics = useMemo(() => {
@@ -287,35 +276,24 @@ export const ExecutiveOverview: React.FC = () => {
       .reduce((sum, h) => sum + (h.current_value || 0), 0)
 
     const hasRealData = holdings.length > 0
+    const isAnyFilterActive = activeBroker !== 'all' || activeAssetClass !== 'all'
 
     // US Stocks breakdown
-    const usStockItems = filteredHoldings.filter(
-      (h) =>
-        h.asset_class === 'US_STOCKS' ||
-        h.currency === 'USD' ||
-        h.connection_id.toLowerCase().includes('us') ||
-        h.connection_id.toLowerCase().includes('alpaca') ||
-        ['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META'].some((s) =>
-          h.instrument_symbol.toUpperCase().includes(s)
-        )
-    )
+    const usStockItems = filteredHoldings.filter((h) => classifyAssetClass(h) === 'US_STOCKS')
     const rawUsVal = usStockItems.reduce((s, h) => s + (h.current_value || 0), 0)
     const rawUsInvested = usStockItems.reduce((s, h) => s + h.quantity * h.average_price, 0)
-    const usVal = hasRealData ? rawUsVal : Math.round(current * 0.12)
-    const usInvested = hasRealData ? rawUsInvested : Math.round(invested * 0.10)
+    const usVal = hasRealData && !isAnyFilterActive ? rawUsVal : isAnyFilterActive ? rawUsVal : Math.round(current * 0.12)
+    const usInvested = hasRealData && !isAnyFilterActive ? rawUsInvested : isAnyFilterActive ? rawUsInvested : Math.round(invested * 0.10)
     const usPnl = usVal - usInvested
     const usPnlPct = usInvested > 0 ? (usPnl / usInvested) * 100 : 0
     const usCount = usStockItems.length
 
     // Sovereign Gold Bonds (SGB) - strictly actual SGB tranches (e.g. SGBJUN31)
-    const goldItems = filteredHoldings.filter((h) => {
-      const sym = h.instrument_symbol.toUpperCase()
-      return sym.includes('SGB')
-    })
+    const goldItems = filteredHoldings.filter((h) => classifyAssetClass(h) === 'GOLD')
     const rawGoldVal = goldItems.reduce((s, h) => s + (h.current_value || 0), 0)
     const rawGoldInvested = goldItems.reduce((s, h) => s + h.quantity * h.average_price, 0)
-    const goldVal = hasRealData ? rawGoldVal : Math.round(current * 0.10)
-    const goldInvested = hasRealData ? rawGoldInvested : Math.round(invested * 0.08)
+    const goldVal = hasRealData && !isAnyFilterActive ? rawGoldVal : isAnyFilterActive ? rawGoldVal : Math.round(current * 0.10)
+    const goldInvested = hasRealData && !isAnyFilterActive ? rawGoldInvested : isAnyFilterActive ? rawGoldInvested : Math.round(invested * 0.08)
     const goldPnl = goldVal - goldInvested
     const goldPnlPct = goldInvested > 0 ? (goldPnl / goldInvested) * 100 : 0
     const goldCount = goldItems.length
@@ -325,41 +303,31 @@ export const ExecutiveOverview: React.FC = () => {
       : ''
 
     // NPS Retirement
-    const npsItems = filteredHoldings.filter((h) => h.asset_class === 'NPS')
+    const npsItems = filteredHoldings.filter((h) => classifyAssetClass(h) === 'NPS')
     const rawNpsVal = npsItems.reduce((s, h) => s + (h.current_value || 0), 0)
     const rawNpsInvested = npsItems.reduce((s, h) => s + h.quantity * h.average_price, 0)
-    const npsVal = hasRealData ? rawNpsVal : Math.round(current * 0.08)
-    const npsInvested = hasRealData ? rawNpsInvested : Math.round(invested * 0.07)
+    const npsVal = hasRealData && !isAnyFilterActive ? rawNpsVal : isAnyFilterActive ? rawNpsVal : Math.round(current * 0.08)
+    const npsInvested = hasRealData && !isAnyFilterActive ? rawNpsInvested : isAnyFilterActive ? rawNpsInvested : Math.round(invested * 0.07)
     const npsPnl = npsVal - npsInvested
     const npsPnlPct = npsInvested > 0 ? (npsPnl / npsInvested) * 100 : 0
     const npsCount = npsItems.length
 
     // Mutual Funds
-    const mfItems = filteredHoldings.filter((h) => h.asset_class === 'MUTUAL_FUND' && !h.instrument_symbol.toUpperCase().includes('SGB'))
+    const mfItems = filteredHoldings.filter((h) => classifyAssetClass(h) === 'MUTUAL_FUND')
     const rawMfVal = mfItems.reduce((s, h) => s + (h.current_value || 0), 0)
     const rawMfInvested = mfItems.reduce((s, h) => s + h.quantity * h.average_price, 0)
-    const mfVal = hasRealData ? rawMfVal : Math.round(current * 0.30)
-    const mfInvested = hasRealData ? rawMfInvested : Math.round(invested * 0.28)
+    const mfVal = hasRealData && !isAnyFilterActive ? rawMfVal : isAnyFilterActive ? rawMfVal : Math.round(current * 0.30)
+    const mfInvested = hasRealData && !isAnyFilterActive ? rawMfInvested : isAnyFilterActive ? rawMfInvested : Math.round(invested * 0.28)
     const mfPnl = mfVal - mfInvested
     const mfPnlPct = mfInvested > 0 ? (mfPnl / mfInvested) * 100 : 0
     const mfCount = mfItems.length
 
     // Indian Equity
-    const equityItems = filteredHoldings.filter(
-      (h) =>
-        h.asset_class === 'EQUITY' &&
-        h.currency !== 'USD' &&
-        !h.connection_id.toLowerCase().includes('us') &&
-        !h.connection_id.toLowerCase().includes('alpaca') &&
-        !h.instrument_symbol.toUpperCase().includes('SGB') &&
-        !['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META'].some((s) =>
-          h.instrument_symbol.toUpperCase().includes(s)
-        )
-    )
+    const equityItems = filteredHoldings.filter((h) => classifyAssetClass(h) === 'EQUITY')
     const rawEquityVal = equityItems.reduce((s, h) => s + (h.current_value || 0), 0)
     const rawEquityInvested = equityItems.reduce((s, h) => s + h.quantity * h.average_price, 0)
-    const equityVal = hasRealData ? rawEquityVal : Math.round(current * 0.40)
-    const equityInvested = hasRealData ? rawEquityInvested : Math.round(invested * 0.37)
+    const equityVal = hasRealData && !isAnyFilterActive ? rawEquityVal : isAnyFilterActive ? rawEquityVal : Math.round(current * 0.40)
+    const equityInvested = hasRealData && !isAnyFilterActive ? rawEquityInvested : isAnyFilterActive ? rawEquityInvested : Math.round(invested * 0.37)
     const equityPnl = equityVal - equityInvested
     const equityPnlPct = equityInvested > 0 ? (equityPnl / equityInvested) * 100 : 0
     const equityCount = equityItems.length
@@ -583,16 +551,20 @@ export const ExecutiveOverview: React.FC = () => {
     )
   }
 
-  if (error && holdings.length === 0) {
+  const displayError = portfolioError || sessionsError
+  if (displayError && holdings.length === 0) {
     return (
       <div className="bg-white border border-rose-200 p-8 rounded-2xl shadow-sm flex items-start gap-4">
         <AlertCircle className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
         <div className="flex-1">
           <h3 className="font-semibold text-slate-900 text-base">Telemetry Synchronization Notice</h3>
-          <p className="text-xs text-slate-500 mt-1">{error}</p>
+          <p className="text-xs text-slate-500 mt-1">{displayError}</p>
           <button
             type="button"
-            onClick={loadData}
+            onClick={() => {
+              refresh()
+              loadSessions()
+            }}
             className="mt-4 px-4 py-2 bg-slate-950 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-all shadow-sm"
           >
             Retry Connection
@@ -614,6 +586,25 @@ export const ExecutiveOverview: React.FC = () => {
             <h2 className="text-xl font-bold text-slate-900 tracking-tight font-serif">Executive Dashboard</h2>
             <p className="text-xs text-slate-500 font-medium">Real-time audited wealth telemetry and multi-broker asset intelligence</p>
           </div>
+
+          {(selectedBrokers.length > 0 || selectedAssetClasses.length > 0) && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl text-xs font-semibold shadow-sm">
+              <span className="text-[10px] uppercase font-bold text-emerald-400">Audited Filter Applied:</span>
+              <span>
+                {[
+                  selectedBrokers.length > 0
+                    ? selectedBrokers.map((b) => (b === 'zerodha' ? 'Zerodha' : 'INDmoney')).join(', ')
+                    : null,
+                  selectedAssetClasses.length > 0
+                    ? selectedAssetClasses.join(', ')
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' • ')}
+              </span>
+              <span className="text-slate-400 font-mono text-[10px]">({filteredHoldings.length} matching)</span>
+            </div>
+          )}
         </div>
 
         {/* ROW 1: Core Portfolio Metrics (4 Compact Cards) */}

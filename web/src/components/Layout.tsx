@@ -4,13 +4,12 @@ import {
   RefreshCw,
   CheckCircle2,
   LogOut,
-  SlidersHorizontal,
-  RotateCcw,
   Menu,
 } from 'lucide-react'
 import { clearToken, getStoredUser, triggerPortfolioSync } from '../utils/api'
-import { useSearchParams } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
+import { GlobalFilters } from './GlobalFilters'
+import { usePortfolio } from '../context/PortfolioContext'
 
 interface LayoutProps {
   children: React.ReactNode
@@ -19,8 +18,8 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   const location = useLocation()
-  const [searchParams, setSearchParams] = useSearchParams()
   const user = getStoredUser()
+  const { refresh } = usePortfolio()
 
   // Persistent sidebar collapsed state (for tablet/desktop)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -41,32 +40,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
 
-  // Active filter params
-  const activeBroker = searchParams.get('broker') || 'all'
-  const activeAssetClass = searchParams.get('assetClass') || 'all'
-  const activeRange = searchParams.get('range') || '200D'
-
-  const hasActiveFilters =
-    activeBroker !== 'all' || activeAssetClass !== 'all' || activeRange !== '200D'
-
   const isBrokerSyncPage = location.pathname === '/brokers'
-  const isHoldingsPage = location.pathname === '/holdings'
-
-  const updateParam = (key: string, value: string) => {
-    const next = new URLSearchParams(searchParams)
-    if (value === 'all' && key !== 'range') {
-      next.delete(key)
-    } else if (key === 'range' && value === '200D') {
-      next.delete('range')
-    } else {
-      next.set(key, value)
-    }
-    setSearchParams(next, { replace: true })
-  }
-
-  const handleResetFilters = () => {
-    setSearchParams(new URLSearchParams(), { replace: true })
-  }
 
   // Top-right global sync trigger
   const handleSync = async () => {
@@ -74,6 +48,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     setSyncStatus('Syncing live broker feeds...')
     try {
       await triggerPortfolioSync()
+      await refresh()
       setSyncStatus('Feeds synchronized!')
       setTimeout(() => setSyncStatus(null), 3500)
     } catch (err: any) {
@@ -195,85 +170,15 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
           </div>
         </div>
 
-        {/* 3. Sub-Header: Filter Bar (Visible on Executive Overview only to prevent duplication) */}
-        {!isBrokerSyncPage && !isHoldingsPage && (
-          <div className="h-11 bg-slate-50/80 border-t border-slate-200/70 px-4 sm:px-6 lg:px-8">
-            <div className="h-full flex items-center justify-between gap-4">
-              {/* Filter Pills with hidden scrollbar and whitespace-nowrap */}
-              <div className="flex items-center gap-2 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <span className="hidden sm:flex items-center gap-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 whitespace-nowrap shrink-0">
-                  <SlidersHorizontal className="w-3 h-3" />
-                  <span>Filter:</span>
-                </span>
-
-                {/* Custodian Segmented Filter */}
-                <div className="inline-flex p-0.5 bg-slate-200/70 rounded-lg text-xs font-medium shrink-0">
-                  {[
-                    { id: 'all', label: 'All Custodians' },
-                    { id: 'zerodha', label: 'Zerodha' },
-                    { id: 'indmoney', label: 'INDmoney' },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => updateParam('broker', item.id)}
-                      className={`px-3 py-1 rounded-md transition-all text-xs whitespace-nowrap shrink-0 ${
-                        activeBroker === item.id
-                          ? 'bg-white text-slate-900 font-semibold shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Asset Class Filter */}
-                <div className="inline-flex p-0.5 bg-slate-200/70 rounded-lg text-xs font-medium shrink-0">
-                  {[
-                    { id: 'all', label: 'All Assets' },
-                    { id: 'EQUITY', label: 'Equity' },
-                    { id: 'MUTUAL_FUND', label: 'Mutual Funds' },
-                    { id: 'US_STOCKS', label: 'US Stocks' },
-                    { id: 'GOLD', label: 'Sovereign Gold' },
-                    { id: 'NPS', label: 'NPS Retirement' },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => updateParam('assetClass', item.id)}
-                      className={`px-3 py-1 rounded-md transition-all text-xs whitespace-nowrap shrink-0 ${
-                        activeAssetClass === item.id
-                          ? 'bg-white text-slate-900 font-semibold shadow-sm'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Reset Action */}
-                {hasActiveFilters && (
-                  <button
-                    type="button"
-                    onClick={handleResetFilters}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-100/60 rounded-md transition-colors ml-1 whitespace-nowrap shrink-0"
-                    title="Reset all filters"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Reset</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* 3. Sub-Header: Looker Studio Style Global Filters */}
+        {!isBrokerSyncPage && <GlobalFilters />}
       </header>
 
       {/* 4. Main Content Area Offset by Sidebar Width (0 on mobile, 20/64 on md+) */}
       <main
         className={`flex-1 transition-all duration-300 pb-16 px-3 sm:px-6 lg:px-8 max-w-7xl w-full mx-auto ml-0 ${
           isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'
-        } ${isBrokerSyncPage || isHoldingsPage ? 'pt-20 sm:pt-24' : 'pt-28 sm:pt-32'}`}
+        } ${isBrokerSyncPage ? 'pt-20 sm:pt-24' : 'pt-32 sm:pt-36'}`}
       >
         {children}
       </main>
