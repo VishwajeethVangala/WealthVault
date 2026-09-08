@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import {
   TrendingUp,
   CheckCircle2,
@@ -166,6 +166,7 @@ const renderPieTooltip = (props: any) => {
 
 
 export const ExecutiveOverview: React.FC = () => {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { holdings, loading: portfolioLoading, error: portfolioError, refresh } = usePortfolio()
   const [sessions, setSessions] = useState<BrokerSessionInfo[]>([])
@@ -207,7 +208,7 @@ export const ExecutiveOverview: React.FC = () => {
 
   const filteredHoldings = useMemo(() => {
     return holdings.filter((h) => {
-      // 1. Custodian filter (multi-select)
+      // Broker / Custodian filter (multi-select)
       if (selectedBrokers.length > 0) {
         const conn = (h.connection_id || '').toLowerCase()
         const match = selectedBrokers.some((b) => {
@@ -218,17 +219,31 @@ export const ExecutiveOverview: React.FC = () => {
         if (!match) return false
       }
 
-      // 2. Asset Class filter (multi-select)
+      // Asset Class filter (multi-select)
       if (selectedAssetClasses.length > 0) {
         const canonical = classifyAssetClass(h)
-        if (!selectedAssetClasses.includes(canonical)) {
-          return false
-        }
+        if (!selectedAssetClasses.includes(canonical)) return false
       }
 
       return true
     })
   }, [holdings, selectedBrokers, selectedAssetClasses])
+
+  // Drill-down navigation helper preserving active global filters
+  const handleDrillDown = (params: {
+    assetClass?: string
+    sort?: string
+    pnl?: string
+    highlight?: string
+  }) => {
+    const next = new URLSearchParams()
+    if (activeBroker !== 'all') next.set('broker', activeBroker)
+    if (params.assetClass) next.set('assetClass', params.assetClass)
+    if (params.pnl) next.set('pnl', params.pnl)
+    if (params.sort) next.set('sort', params.sort)
+    if (params.highlight) next.set('highlight', params.highlight)
+    navigate(`/holdings${next.toString() ? `?${next.toString()}` : ''}`)
+  }
 
   // Core Financial Metrics Computation
   const metrics = useMemo(() => {
@@ -610,8 +625,18 @@ export const ExecutiveOverview: React.FC = () => {
         {/* ROW 1: Core Portfolio Metrics (4 Compact Cards) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {/* Card 1: Total Portfolio */}
-          <div className="bg-[#ebf5ff] border border-sky-100/90 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(2,132,199,0.05)] hover:shadow-md transition-all">
-            <div className="w-8 h-8 rounded-lg bg-sky-100/80 text-sky-600 flex items-center justify-center mb-1.5 shadow-2xs">
+          <div
+            onClick={() => handleDrillDown({})}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({}) }}
+            title="Click to view all positions in Holdings Ledger"
+            className="group relative bg-[#ebf5ff] border border-sky-100/90 hover:border-sky-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(2,132,199,0.05)] hover:shadow-md hover:ring-2 hover:ring-sky-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+          >
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-sky-600">
+              <ArrowRight className="w-3.5 h-3.5" />
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-sky-100/80 text-sky-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
               <Wallet className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Total Portfolio</span>
@@ -628,8 +653,18 @@ export const ExecutiveOverview: React.FC = () => {
           </div>
 
           {/* Card 2: Total Investment */}
-          <div className="bg-[#fff7e9] border border-amber-100/90 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(217,119,6,0.05)] hover:shadow-md transition-all">
-            <div className="w-8 h-8 rounded-lg bg-amber-100/80 text-amber-700 flex items-center justify-center mb-1.5 shadow-2xs">
+          <div
+            onClick={() => handleDrillDown({ sort: 'invested_value' })}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ sort: 'invested_value' }) }}
+            title="Click to view holdings sorted by Investment Cost Basis"
+            className="group relative bg-[#fff7e9] border border-amber-100/90 hover:border-amber-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(217,119,6,0.05)] hover:shadow-md hover:ring-2 hover:ring-amber-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+          >
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-amber-600">
+              <ArrowRight className="w-3.5 h-3.5" />
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-amber-100/80 text-amber-700 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
               <PiggyBank className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Total Investment</span>
@@ -655,8 +690,18 @@ export const ExecutiveOverview: React.FC = () => {
           </div>
 
           {/* Card 3: Equity Portfolio */}
-          <div className="bg-[#edf9f0] border border-emerald-100/90 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(16,185,129,0.05)] hover:shadow-md transition-all">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100/80 text-emerald-600 flex items-center justify-center mb-1.5 shadow-2xs">
+          <div
+            onClick={() => handleDrillDown({ assetClass: 'EQUITY' })}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'EQUITY' }) }}
+            title="Click to view Equity stock holdings in Holdings Ledger"
+            className="group relative bg-[#edf9f0] border border-emerald-100/90 hover:border-emerald-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(16,185,129,0.05)] hover:shadow-md hover:ring-2 hover:ring-emerald-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+          >
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-600">
+              <ArrowRight className="w-3.5 h-3.5" />
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-emerald-100/80 text-emerald-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
               <TrendingUp className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Equity Portfolio</span>
@@ -673,8 +718,18 @@ export const ExecutiveOverview: React.FC = () => {
           </div>
 
           {/* Card 4: Mutual Funds */}
-          <div className="bg-[#f8effc] border border-purple-100/90 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(147,51,234,0.05)] hover:shadow-md transition-all">
-            <div className="w-8 h-8 rounded-lg bg-purple-100/80 text-purple-600 flex items-center justify-center mb-1.5 shadow-2xs">
+          <div
+            onClick={() => handleDrillDown({ assetClass: 'MUTUAL_FUND' })}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'MUTUAL_FUND' }) }}
+            title="Click to view Mutual Fund holdings in Holdings Ledger"
+            className="group relative bg-[#f8effc] border border-purple-100/90 hover:border-purple-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(147,51,234,0.05)] hover:shadow-md hover:ring-2 hover:ring-purple-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+          >
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-purple-600">
+              <ArrowRight className="w-3.5 h-3.5" />
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-purple-100/80 text-purple-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
               <Landmark className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Mutual Funds</span>
@@ -694,8 +749,18 @@ export const ExecutiveOverview: React.FC = () => {
         {/* ROW 2: Asset Class & Sovereign Intelligence (4 Compact Cards) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {/* Card 5: US Stocks */}
-          <div className="bg-[#eef2ff] border border-indigo-100/90 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(99,102,241,0.05)] hover:shadow-md transition-all">
-            <div className="w-8 h-8 rounded-lg bg-indigo-100/80 text-indigo-600 flex items-center justify-center mb-1.5 shadow-2xs">
+          <div
+            onClick={() => handleDrillDown({ assetClass: 'US_STOCKS' })}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'US_STOCKS' }) }}
+            title="Click to view US Stock holdings in Holdings Ledger"
+            className="group relative bg-[#eef2ff] border border-indigo-100/90 hover:border-indigo-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(99,102,241,0.05)] hover:shadow-md hover:ring-2 hover:ring-indigo-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+          >
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600">
+              <ArrowRight className="w-3.5 h-3.5" />
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-indigo-100/80 text-indigo-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
               <Globe className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">US Stocks</span>
@@ -712,8 +777,18 @@ export const ExecutiveOverview: React.FC = () => {
           </div>
 
           {/* Card 6: Sovereign Gold Bonds */}
-          <div className="bg-[#fffbeb] border border-amber-200/90 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(245,158,11,0.05)] hover:shadow-md transition-all">
-            <div className="w-8 h-8 rounded-lg bg-amber-100/80 text-amber-600 flex items-center justify-center mb-1.5 shadow-2xs">
+          <div
+            onClick={() => handleDrillDown({ assetClass: 'GOLD', highlight: metrics.goldFirstSymbol || undefined })}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'GOLD', highlight: metrics.goldFirstSymbol || undefined }) }}
+            title="Click to view Sovereign Gold Bond holdings in Holdings Ledger"
+            className="group relative bg-[#fffbeb] border border-amber-200/90 hover:border-amber-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(245,158,11,0.05)] hover:shadow-md hover:ring-2 hover:ring-amber-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+          >
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-amber-600">
+              <ArrowRight className="w-3.5 h-3.5" />
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-amber-100/80 text-amber-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
               <Coins className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Sovereign Gold Bonds</span>
@@ -734,8 +809,18 @@ export const ExecutiveOverview: React.FC = () => {
           </div>
 
           {/* Card 7: NPS Retirement */}
-          <div className="bg-[#f0fdfa] border border-teal-100/90 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(20,184,166,0.05)] hover:shadow-md transition-all">
-            <div className="w-8 h-8 rounded-lg bg-teal-100/80 text-teal-600 flex items-center justify-center mb-1.5 shadow-2xs">
+          <div
+            onClick={() => handleDrillDown({ assetClass: 'NPS' })}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'NPS' }) }}
+            title="Click to view NPS holdings in Holdings Ledger"
+            className="group relative bg-[#f0fdfa] border border-teal-100/90 hover:border-teal-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(20,184,166,0.05)] hover:shadow-md hover:ring-2 hover:ring-teal-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+          >
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-teal-600">
+              <ArrowRight className="w-3.5 h-3.5" />
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-teal-100/80 text-teal-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
               <ShieldCheck className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">NPS Retirement</span>
@@ -752,8 +837,18 @@ export const ExecutiveOverview: React.FC = () => {
           </div>
 
           {/* Card 8: 1-Day P&L */}
-          <div className="bg-[#edf9f0] border border-emerald-100/90 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(16,185,129,0.05)] hover:shadow-md transition-all">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100/80 text-emerald-600 flex items-center justify-center mb-1.5 shadow-2xs">
+          <div
+            onClick={() => handleDrillDown({ pnl: metrics.dayPnlVal >= 0 ? 'gainers' : 'losers' })}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ pnl: metrics.dayPnlVal >= 0 ? 'gainers' : 'losers' }) }}
+            title={`Click to view ${metrics.dayPnlVal >= 0 ? 'gainers' : 'losers'} in Holdings Ledger`}
+            className="group relative bg-[#edf9f0] border border-emerald-100/90 hover:border-emerald-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(16,185,129,0.05)] hover:shadow-md hover:ring-2 hover:ring-emerald-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+          >
+            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-600">
+              <ArrowRight className="w-3.5 h-3.5" />
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-emerald-100/80 text-emerald-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
               <Sparkles className="w-4 h-4 text-emerald-600" />
             </div>
             <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">1-Day P&amp;L</span>
@@ -922,13 +1017,19 @@ export const ExecutiveOverview: React.FC = () => {
                 const item = assetHeatmapData.find((i) => i.key === 'EQUITY') || assetHeatmapData[0]
                 return (
                   <div
-                    className={`${item.bgStyle} p-4 sm:p-5 rounded-xl border border-white/20 flex flex-col justify-between transition-all flex-1 shadow-sm text-white group cursor-pointer`}
+                    onClick={() => handleDrillDown({ assetClass: 'EQUITY' })}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'EQUITY' }) }}
+                    title="Click to view Equity stock holdings in Holdings Ledger"
+                    className={`${item.bgStyle} p-4 sm:p-5 rounded-xl border border-white/20 hover:border-white/50 flex flex-col justify-between transition-all flex-1 shadow-sm text-white group cursor-pointer hover:ring-2 hover:ring-white/40 active:scale-[0.99] select-none`}
                   >
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex items-center gap-2">
                         <h4 className="text-xl sm:text-2xl font-black text-white tracking-tight drop-shadow-xs">
                           {item.name}
                         </h4>
+                        <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all text-white/90" />
                       </div>
                       <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-black/30 backdrop-blur-md border border-white/30 font-mono">
                         {item.isPositive ? '+' : ''}{item.pnlPct.toFixed(1)}% P&amp;L
@@ -967,13 +1068,19 @@ export const ExecutiveOverview: React.FC = () => {
                 const item = assetHeatmapData.find((i) => i.key === 'MUTUAL_FUND') || assetHeatmapData[1]
                 return (
                   <div
-                    className={`${item.bgStyle} p-4 sm:p-5 rounded-xl border border-white/20 flex flex-col justify-between transition-all flex-1 shadow-sm text-white group cursor-pointer`}
+                    onClick={() => handleDrillDown({ assetClass: 'MUTUAL_FUND' })}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'MUTUAL_FUND' }) }}
+                    title="Click to view Mutual Fund holdings in Holdings Ledger"
+                    className={`${item.bgStyle} p-4 sm:p-5 rounded-xl border border-white/20 hover:border-white/50 flex flex-col justify-between transition-all flex-1 shadow-sm text-white group cursor-pointer hover:ring-2 hover:ring-white/40 active:scale-[0.99] select-none`}
                   >
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex items-center gap-2">
                         <h4 className="text-lg sm:text-xl font-black text-white tracking-tight">
                           {item.name}
                         </h4>
+                        <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all text-white/90" />
                       </div>
                       <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-black/30 backdrop-blur-md border border-white/30 font-mono">
                         {item.isPositive ? '+' : ''}{item.pnlPct.toFixed(1)}% P&amp;L
@@ -1015,13 +1122,19 @@ export const ExecutiveOverview: React.FC = () => {
                 .map((item) => (
                   <div
                     key={item.key}
-                    className={`${item.bgStyle} p-3.5 sm:p-4 rounded-xl border border-white/20 flex flex-col justify-between transition-all flex-1 min-h-[120px] shadow-sm text-white group cursor-pointer`}
+                    onClick={() => handleDrillDown({ assetClass: item.key, highlight: item.key === 'GOLD' ? (metrics.goldFirstSymbol || undefined) : undefined })}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: item.key, highlight: item.key === 'GOLD' ? (metrics.goldFirstSymbol || undefined) : undefined }) }}
+                    title={`Click to view ${item.name} holdings in Holdings Ledger`}
+                    className={`${item.bgStyle} p-3.5 sm:p-4 rounded-xl border border-white/20 hover:border-white/50 flex flex-col justify-between transition-all flex-1 min-h-[120px] shadow-sm text-white group cursor-pointer hover:ring-2 hover:ring-white/40 active:scale-[0.99] select-none`}
                   >
                     <div className="flex items-center justify-between">
-                      <div>
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <h4 className="text-sm sm:text-base font-black text-white tracking-tight truncate">
                           {item.name}
                         </h4>
+                        <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all text-white/90 shrink-0" />
                       </div>
                       <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold bg-black/30 backdrop-blur-md border border-white/30 font-mono">
                         {item.isPositive ? '+' : ''}{item.pnlPct.toFixed(1)}%
