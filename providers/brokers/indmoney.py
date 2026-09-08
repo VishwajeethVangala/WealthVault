@@ -29,9 +29,12 @@ class IndmoneyProvider(BrokerProvider):
         self,
         credentials: Optional[Dict[str, Any]] = None,
         server_url: str = "https://mcp.indmoney.com/mcp",
+        timeout_seconds: float = 12.0,
     ) -> None:
         super().__init__(credentials)
         self.server_url = server_url
+        self.timeout = timeout_seconds
+        self.live_fetched = False
 
     async def connect(self, credentials: Optional[Dict[str, Any]] = None) -> bool:
         """Verify broker connection."""
@@ -58,7 +61,7 @@ class IndmoneyProvider(BrokerProvider):
         )
 
         try:
-            async with asyncio.timeout(30.0):
+            async with asyncio.timeout(self.timeout):
                 async with stdio_client(server_params) as (read, write):
                     async with ClientSession(read, write) as session:
                         await session.initialize()
@@ -68,6 +71,7 @@ class IndmoneyProvider(BrokerProvider):
                             if text:
                                 raw_overall = json.loads(text)
                                 transformed = self._transform_live_payload(raw_overall)
+                                self.live_fetched = True
                                 # Cache fresh payload
                                 try:
                                     with open(SCHEMA_FILE, "w", encoding="utf-8") as f:
