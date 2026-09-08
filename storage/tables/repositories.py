@@ -178,21 +178,29 @@ class BrokerConnectionRepository(BaseTableStorage):
         connection_id: str,
         status: BrokerStatus,
         last_sync_time: Optional[str] = None,
-    ) -> Optional[BrokerConnection]:
-        """Update connection status and last sync time."""
+    ) -> BrokerConnection:
+        """Update connection status and last sync time, auto-creating if not found."""
         conn = await self.get_connection(owner_id=owner_id, connection_id=connection_id)
         if not conn:
-            return None
-
-        conn.status = status
-        if last_sync_time is not None:
-            conn.last_sync_time = last_sync_time
+            # Infer broker name from connection_id
+            b_name = "zerodha" if "zerodha" in connection_id.lower() else "indmoney" if "indmoney" in connection_id.lower() else "broker"
+            conn = BrokerConnection(
+                connection_id=connection_id,
+                owner_id=owner_id,
+                broker_name=b_name,
+                status=status,
+                last_sync_time=last_sync_time,
+            )
+        else:
+            conn.status = status
+            if last_sync_time is not None:
+                conn.last_sync_time = last_sync_time
 
         await self.upsert_entity(
             user_id=owner_id,
             entity_id=connection_id,
             data=conn.model_dump(mode="json"),
-            mode="merge",
+            mode="replace",
         )
         return conn
 
