@@ -90,6 +90,10 @@ class Holding(BaseModel):
     current_value: float = Field(..., description="Current total valuation of the holding")
     current_price: Optional[float] = Field(default=None, description="Latest market price or NAV")
     pnl: Optional[float] = Field(default=None, description="Total unrealized profit or loss")
+    day_pnl: Optional[float] = Field(default=None, description="1-day unrealized profit or loss")
+    day_change_percentage: Optional[float] = Field(default=None, description="1-day price percentage change")
+    data_freshness: str = Field(default="live", description="'live' if refreshed via MCP, 'cached' if fallback")
+    last_price_updated_at: Optional[str] = Field(default=None, description="ISO timestamp of last quote update")
     currency: str = Field(default="INR", description="Denomination currency code")
 
 
@@ -204,6 +208,7 @@ class BrokerSessionInfo(BaseModel):
     total_valuation: float = Field(default=0.0, description="Total INR valuation from this broker")
     last_latency_ms: int = Field(default=0, description="Roundtrip latency in milliseconds")
     error_message: Optional[str] = Field(default=None, description="Detailed error message if degraded")
+    auth_url: Optional[str] = Field(default=None, description="Interactive login / OAuth authorization URL if AUTH_REQUIRED")
 
 
 class ReauthRequest(BaseModel):
@@ -212,4 +217,29 @@ class ReauthRequest(BaseModel):
     api_key: Optional[str] = Field(default=None, description="Optional broker API Key")
     totp_token: Optional[str] = Field(default=None, description="Optional TOTP / 2FA code")
     session_token: Optional[str] = Field(default=None, description="Optional raw session enctoken / bearer")
+
+
+class QuoteItem(BaseModel):
+    """Real-time market quote payload from Market Data Provider (MCP)."""
+
+    instrument: str = Field(..., description="Instrument identifier (e.g. 'NSE:INFY')")
+    last_price: float = Field(..., description="Last Traded Price (LTP)")
+    day_change: Optional[float] = Field(default=None, description="Net price change today")
+    day_change_percentage: Optional[float] = Field(default=None, description="Percentage change today")
+    open_price: Optional[float] = Field(default=None, description="Day opening price")
+    high_price: Optional[float] = Field(default=None, description="Day high price")
+    low_price: Optional[float] = Field(default=None, description="Day low price")
+    close_price: Optional[float] = Field(default=None, description="Previous day close price")
+    timestamp: Optional[str] = Field(default=None, description="Quote timestamp")
+
+
+class MarketQuotesResponse(BaseModel):
+    """Batch market quotes response with caching and quota metadata."""
+
+    status: str = Field(default="success", description="Status code")
+    data_freshness: str = Field(default="live", description="'live' or 'cached'")
+    cached_count: int = Field(default=0, description="Count of quotes served from TTL cache")
+    live_count: int = Field(default=0, description="Count of quotes fetched live from MCP")
+    quotes: Dict[str, QuoteItem] = Field(default_factory=dict, description="Map of instrument identifier to quote")
+
 

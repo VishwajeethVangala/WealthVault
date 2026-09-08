@@ -15,6 +15,7 @@ import {
   RotateCcw,
   LayoutGrid,
   List,
+  Radio,
 } from 'lucide-react'
 import { usePortfolio } from '../context/PortfolioContext'
 import { classifyAssetClass } from '../utils/portfolioFilters'
@@ -30,7 +31,7 @@ const formatINR = (val: number): string => {
 
 export const HoldingsTable: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
-  const { holdings, loading, error, refresh, counts } = usePortfolio()
+  const { holdings, loading, error, refresh, counts, dataFreshness, lastRefreshedAt } = usePortfolio()
   const [searchQuery, setSearchQuery] = useState('')
   type SortColumn = keyof Holding | 'invested_value'
   const [sortField, setSortField] = useState<SortColumn>('current_value')
@@ -358,8 +359,19 @@ export const HoldingsTable: React.FC = () => {
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Current Value
             </span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-emerald-700 bg-emerald-50 font-bold border border-emerald-200/60">
-              Live Audited
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors ${
+                dataFreshness === 'live'
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                  : 'text-slate-600 bg-slate-50 border-slate-200'
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  dataFreshness === 'live' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                }`}
+              />
+              {dataFreshness === 'live' ? 'Live MCP Feed' : 'Persisted Storage'}
             </span>
           </div>
           <div className="mt-3">
@@ -502,6 +514,11 @@ export const HoldingsTable: React.FC = () => {
             <span>of</span>
             <span className="font-semibold text-slate-900 font-mono">{holdings.length}</span>
             <span>positions</span>
+            {lastRefreshedAt && (
+              <span className="text-[11px] text-slate-400 font-mono hidden xl:inline">
+                &bull; Synced {lastRefreshedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
             {filteredHoldings.length !== holdings.length && (
               <button
                 type="button"
@@ -556,6 +573,17 @@ export const HoldingsTable: React.FC = () => {
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden xs:inline">Export CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => refresh()}
+            disabled={loading}
+            className="h-9 px-3.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-950 rounded-xl shadow-[0_1px_2px_rgba(0,0,0,0.03)] text-xs font-semibold flex items-center gap-2 border border-slate-200/80 transition-colors shrink-0 disabled:opacity-50"
+            title="Refresh live market quotes from MCP"
+          >
+            <Radio className={`w-3.5 h-3.5 text-emerald-600 ${loading ? 'animate-spin' : ''}`} />
+            <span className="hidden xs:inline">Refresh</span>
           </button>
         </div>
       </div>
@@ -657,9 +685,20 @@ export const HoldingsTable: React.FC = () => {
                     <span className="font-serif font-bold text-base text-slate-950 block">
                       {formatINR(holding.current_value)}
                     </span>
-                    <span className="text-[10px] text-slate-500 font-mono block">
-                      Invested: {formatINR(investedCost)}
-                    </span>
+                    <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 font-mono">
+                      <span>Invested: {formatINR(investedCost)}</span>
+                      {holding.current_price && (
+                        <>
+                          <span>&bull;</span>
+                          <span className="flex items-center gap-0.5">
+                            {holding.data_freshness === 'live' && (
+                              <span className="w-1 h-1 rounded-full bg-emerald-500 inline-block" />
+                            )}
+                            LTP {formatINR(holding.current_price)}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -931,7 +970,25 @@ export const HoldingsTable: React.FC = () => {
 
                     {/* Current Price */}
                     <td className="py-3.5 px-3 text-right text-slate-900 font-semibold font-mono hidden 2xl:table-cell">
-                      {holding.current_price ? formatINR(holding.current_price) : '—'}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {holding.data_freshness === 'live' && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse"
+                            title="Live MCP Quote"
+                          />
+                        )}
+                        <span>{holding.current_price ? formatINR(holding.current_price) : '—'}</span>
+                      </div>
+                      {holding.day_change_percentage !== undefined && holding.day_change_percentage !== null && (
+                        <div
+                          className={`text-[10px] font-bold ${
+                            holding.day_change_percentage >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                          }`}
+                        >
+                          {holding.day_change_percentage >= 0 ? '+' : ''}
+                          {holding.day_change_percentage.toFixed(2)}% (1D)
+                        </div>
+                      )}
                     </td>
 
                     {/* Investment Value */}

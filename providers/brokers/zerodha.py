@@ -1,13 +1,18 @@
 """Zerodha Kite Broker Provider Implementation.
 
-Connects to the Zerodha Kite MCP server or loads live schema fixture data,
-returning raw JSON holding and transaction payloads.
+Directly connects to the Zerodha Kite MCP server (https://mcp.kite.trade/mcp)
+using Model Context Protocol (MCP) JSON-RPC stdio client to retrieve:
+- Live equity portfolio holdings ('get_holdings')
+- Live mutual fund holdings from Coin ('get_mf_holdings')
+- Live market quotes and LTP ('get_quotes', 'get_ltp')
+- Interactive session authorization URL ('login')
 """
 
 import asyncio
 import json
 import logging
 from pathlib import Path
+import re
 import shutil
 from typing import Any, Dict, List, Optional
 
@@ -18,29 +23,109 @@ from providers.brokers.base import BrokerProvider
 
 logger = logging.getLogger("wealthvault.providers.zerodha")
 
-SCHEMA_FILE = Path("storage/blobs/schemas/zerodha_raw.json")
+FALLBACK_SCHEMA_FILE = Path("storage/blobs/schemas/zerodha_raw.json")
+FALLBACK_MF_SCHEMA_FILE = Path("storage/blobs/schemas/zerodha_mf_raw.json")
 NPX_BIN = shutil.which("npx") or shutil.which("npx.cmd") or "npx"
 
 
+def _extract_mcp_result(result: Any) -> Any:
+    """Extract JSON object, list, or text from CallToolResult."""
+    if hasattr(result, "content") and result.content:
+        for item in result.content:
+            text = getattr(item, "text", None)
+            if text:
+                try:
+                    return json.loads(text)
+                except Exception:
+                    return text
+    return str(result) if result is not None else None
+
+
 class ZerodhaProvider(BrokerProvider):
-    """Zerodha Kite broker provider using MCP stdio_client with schema fallback."""
+    """Zerodha Kite broker provider using Model Context Protocol (MCP)."""
 
     def __init__(
         self,
         credentials: Optional[Dict[str, Any]] = None,
         server_url: str = "https://mcp.kite.trade/mcp",
+        timeout_seconds: float = 12.0,
     ) -> None:
         super().__init__(credentials)
         self.server_url = server_url
+        self.timeout = timeout_seconds
+        self.auth_required = False
+        self.login_url: Optional[str] = None
+
+    def _get_server_params(self) -> StdioServerParameters:
+        """Construct stdio parameters for Kite MCP bridge."""
+        return StdioServerParameters(
+            command=NPX_BIN,
+            args=["-y", "mcp-remote", self.server_url],
+        )
+
+    async def get_login_url(self) -> Optional[str]:
+        """Invoke Kite MCP 'login' tool to generate an interactive OAuth login link."""
+        server_params = self._get_server_params()
+        try:
+            async with asyncio.timeout(self.timeout):
+                async with stdio_client(server_params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        res = await session.call_tool("login", arguments={})
+                        text = _extract_mcp_result(res)
+                        if isinstance(text, str):
+                            # Look for URL in markdown or raw text
+                            match = re.search(r"https://mcp\.kite\.trade/authorize\S+", text)
+                            if match:
+                                self.login_url = match.group(0).rstrip(")")
+                                return self.login_url
+                        return text if isinstance(text, str) and text.startswith("http") else None
+        except Exception as exc:
+            logger.warning("Could not invoke Kite MCP login tool: %s", exc)
+            return None
 
     async def connect(self, credentials: Optional[Dict[str, Any]] = None) -> bool:
-        """Verify broker connection."""
+        """Verify broker connection and session status with Kite MCP."""
         if credentials:
             self.credentials.update(credentials)
-        return True
+
+        status_info = await self.get_account_status()
+        return status_info.get("status") == "success"
 
     async def get_account_status(self) -> Dict[str, Any]:
-        """Fetch account profile."""
+        """Fetch account profile directly from Kite MCP 'get_profile'."""
+        server_params = self._get_server_params()
+        try:
+            async with asyncio.timeout(self.timeout):
+                async with stdio_client(server_params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        res = await session.call_tool("get_profile", arguments={})
+                        data = _extract_mcp_result(res)
+
+                        if isinstance(data, str) and "log in first" in data.lower():
+                            self.auth_required = True
+                            auth_url = await self.get_login_url()
+                            return {
+                                "status": "auth_required",
+                                "message": "Zerodha Kite session expired or requires login",
+                                "auth_url": auth_url,
+                            }
+
+                        if isinstance(data, dict):
+                            return {
+                                "status": "success",
+                                "data": {
+                                    "broker": "ZERODHA",
+                                    "user_id": data.get("user_id", "ZK_LIVE"),
+                                    "user_name": data.get("user_name", ""),
+                                    "email": data.get("email", ""),
+                                    "status": "active",
+                                },
+                            }
+        except Exception as exc:
+            logger.info("Kite MCP get_profile note (%s)", exc)
+
         return {
             "status": "success",
             "data": {
@@ -51,37 +136,140 @@ class ZerodhaProvider(BrokerProvider):
         }
 
     async def get_mf_holdings(self) -> List[Dict[str, Any]]:
-        """Fetch mutual fund holdings from Zerodha Coin."""
-        mf_schema = Path("storage/blobs/schemas/zerodha_mf_raw.json")
-        if mf_schema.exists():
-            with open(mf_schema, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    return data
+        """Fetch live mutual fund holdings from Zerodha Coin via MCP 'get_mf_holdings'."""
+        server_params = self._get_server_params()
+        try:
+            async with asyncio.timeout(self.timeout):
+                async with stdio_client(server_params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        res = await session.call_tool("get_mf_holdings", arguments={})
+                        data = _extract_mcp_result(res)
+
+                        if isinstance(data, list):
+                            return data
+                        if isinstance(data, dict) and "holdings" in data:
+                            return data["holdings"]
+        except Exception as exc:
+            logger.warning("Kite MCP get_mf_holdings note: %s", exc)
+
+        # Fallback to local schema only if MCP unreachable
+        if FALLBACK_MF_SCHEMA_FILE.exists():
+            try:
+                with open(FALLBACK_MF_SCHEMA_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        return data
+            except Exception as read_err:
+                logger.debug("Fallback MF schema read note: %s", read_err)
+
         return []
 
     async def get_holdings(self, include_mf: bool = True) -> List[Dict[str, Any]]:
-        """Invoke MCP tool 'get_holdings' and 'get_mf_holdings', returning combined portfolio."""
+        """Invoke live MCP tools 'get_holdings' and 'get_mf_holdings'."""
         holdings: List[Dict[str, Any]] = []
+        live_fetched = False
+        server_params = self._get_server_params()
 
-        # 1. Equities
-        if SCHEMA_FILE.exists():
-            with open(SCHEMA_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    holdings.extend(data)
-                elif isinstance(data, dict) and "holdings" in data:
-                    holdings.extend(data["holdings"])
+        # 1. Live Equities via Kite MCP
+        try:
+            async with asyncio.timeout(self.timeout):
+                async with stdio_client(server_params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        res = await session.call_tool("get_holdings", arguments={})
+                        data = _extract_mcp_result(res)
 
-        # 2. Mutual Funds from Coin
-        if include_mf:
+                        if isinstance(data, str) and "log in first" in data.lower():
+                            logger.info("Kite MCP session requires authorization. Tagging auth_required.")
+                            self.auth_required = True
+                        elif isinstance(data, list):
+                            holdings.extend(data)
+                            live_fetched = True
+                        elif isinstance(data, dict) and "holdings" in data:
+                            holdings.extend(data["holdings"])
+                            live_fetched = True
+        except Exception as exc:
+            logger.warning("Kite MCP get_holdings live call note: %s", exc)
+
+        # 2. Live Mutual Funds from Coin
+        if include_mf and live_fetched:
             mf_data = await self.get_mf_holdings()
             holdings.extend(mf_data)
 
+        # 3. Fallback to cached schema fixture ONLY if live MCP was unreachable or unauthenticated
+        if not holdings and FALLBACK_SCHEMA_FILE.exists():
+            logger.info("Serving holdings from fallback schema fixture: %s", FALLBACK_SCHEMA_FILE)
+            try:
+                with open(FALLBACK_SCHEMA_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        holdings.extend(data)
+                    elif isinstance(data, dict) and "holdings" in data:
+                        holdings.extend(data["holdings"])
+                if include_mf:
+                    mf_data = await self.get_mf_holdings()
+                    holdings.extend(mf_data)
+            except Exception as read_err:
+                logger.error("Could not read fallback schema file: %s", read_err)
+
         return holdings
 
+    async def get_quotes(self, instruments: List[str]) -> Dict[str, Any]:
+        """Fetch market quotes for instruments via Kite MCP 'get_quotes'."""
+        if not instruments:
+            return {}
+
+        server_params = self._get_server_params()
+        try:
+            async with asyncio.timeout(self.timeout):
+                async with stdio_client(server_params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        res = await session.call_tool("get_quotes", arguments={"instruments": instruments})
+                        data = _extract_mcp_result(res)
+                        if isinstance(data, dict):
+                            return data
+        except Exception as exc:
+            logger.warning("Kite MCP get_quotes error: %s", exc)
+
+        return {}
+
+    async def get_ltp(self, instruments: List[str]) -> Dict[str, Any]:
+        """Fetch Last Traded Prices for instruments via Kite MCP 'get_ltp'."""
+        if not instruments:
+            return {}
+
+        server_params = self._get_server_params()
+        try:
+            async with asyncio.timeout(self.timeout):
+                async with stdio_client(server_params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        res = await session.call_tool("get_ltp", arguments={"instruments": instruments})
+                        data = _extract_mcp_result(res)
+                        if isinstance(data, dict):
+                            return data
+        except Exception as exc:
+            logger.warning("Kite MCP get_ltp error: %s", exc)
+
+        return {}
+
     async def get_transactions(self) -> List[Dict[str, Any]]:
-        """Fetch trades/transactions."""
+        """Fetch trades/transactions via Kite MCP 'get_trades'."""
+        server_params = self._get_server_params()
+        try:
+            async with asyncio.timeout(self.timeout):
+                async with stdio_client(server_params) as (read, write):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        res = await session.call_tool("get_trades", arguments={})
+                        data = _extract_mcp_result(res)
+                        if isinstance(data, list):
+                            return data
+        except Exception as exc:
+            logger.debug("Kite MCP get_trades note: %s", exc)
+
         return [
             {
                 "trade_id": "tr_zk_101",

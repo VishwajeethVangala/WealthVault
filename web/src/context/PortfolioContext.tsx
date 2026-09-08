@@ -18,6 +18,8 @@ interface PortfolioContextValue {
   error: string | null
   refresh: () => Promise<void>
   counts: PortfolioCounts
+  dataFreshness: 'live' | 'cached'
+  lastRefreshedAt: Date | null
 }
 
 const defaultCounts: PortfolioCounts = {
@@ -43,29 +45,40 @@ const PortfolioContext = createContext<PortfolioContextValue>({
   error: null,
   refresh: async () => {},
   counts: defaultCounts,
+  dataFreshness: 'cached',
+  lastRefreshedAt: null,
 })
 
 export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       const data = await fetchPortfolioHoldings('all')
       setHoldings(data)
+      setLastRefreshedAt(new Date())
       setError(null)
     } catch (err: any) {
       console.error('PortfolioContext load failed:', err)
-      setError(err.message || 'Failed to fetch portfolio data')
+      if (!silent) {
+        setError(err.message || 'Failed to fetch portfolio data')
+      }
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
     load()
+    // Periodic background sync every 60 seconds
+    const interval = setInterval(() => {
+      load(true)
+    }, 60000)
+    return () => clearInterval(interval)
   }, [load])
 
   const counts = useMemo<PortfolioCounts>(() => {
@@ -108,14 +121,20 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [holdings])
 
+  const dataFreshness = useMemo<'live' | 'cached'>(() => {
+    return holdings.some((h) => h.data_freshness === 'live') ? 'live' : 'cached'
+  }, [holdings])
+
   return (
     <PortfolioContext.Provider
       value={{
         holdings,
         loading,
         error,
-        refresh: load,
+        refresh: () => load(false),
         counts,
+        dataFreshness,
+        lastRefreshedAt,
       }}
     >
       {children}
