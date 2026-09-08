@@ -10,9 +10,11 @@ from datetime import datetime, timezone
 import logging
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import HTMLResponse
 
 from apps.api.routers.accounts import get_current_user
 from core.market_data import get_market_data_service
+from core.market_data.indmoney_client import IndmoneyAuthRequiredError, get_indmoney_mcp_client
 from core.models import (
     BrokerSessionInfo,
     BrokerStatus,
@@ -259,6 +261,14 @@ async def sync_portfolio(
             status=BrokerStatus.CONNECTED,
             last_sync_time=sync_time.isoformat(),
         )
+    except IndmoneyAuthRequiredError as auth_exc:
+        logger.warning("INDmoney sync requires authorization: %s", auth_exc)
+        await connections_repo.update_status(
+            owner_id=current_user_id,
+            connection_id="conn_indmoney_live",
+            status=BrokerStatus.AUTH_REQUIRED,
+            last_sync_time=sync_time.isoformat(),
+        )
     except Exception as exc:
         logger.error("INDmoney sync failed during orchestration: %s", exc)
         await connections_repo.update_status(
@@ -464,6 +474,17 @@ async def get_broker_sessions(
     # INDmoney Session
     ind_conn_obj = existing_map.get("indmoney")
     ind_status = ind_conn_obj.status if ind_conn_obj else BrokerStatus.CONNECTED
+    ind_auth_url: Optional[str] = None
+
+    ind_provider = IndmoneyProvider()
+    try:
+        acct_status = await ind_provider.get_account_status()
+        if acct_status.get("status") == "auth_required":
+            ind_status = BrokerStatus.AUTH_REQUIRED
+            ind_auth_url = acct_status.get("auth_url")
+    except Exception:
+        pass
+
     ind_is_expired = ind_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
     ind_expiry = (now + timedelta(days=14)).isoformat()
 
@@ -485,6 +506,7 @@ async def get_broker_sessions(
             holdings_count=len(ind_holdings),
             total_valuation=ind_val,
             last_latency_ms=172,
+            auth_url=ind_auth_url,
         )
     )
 
@@ -570,6 +592,20 @@ async def sync_single_broker(
                 owner_id=current_user_id,
                 connection_id=conn_id,
             )
+        except IndmoneyAuthRequiredError as auth_exc:
+            logger.warning("INDmoney single sync requires authorization: %s", auth_exc)
+            await connections_repo.update_status(
+                owner_id=current_user_id,
+                connection_id=conn_id,
+                status=BrokerStatus.AUTH_REQUIRED,
+                last_sync_time=sync_time.isoformat(),
+            )
+            sessions = await get_broker_sessions(current_user_id=current_user_id)
+            target = next((s for s in sessions if s.broker_name.lower() == broker_clean), None)
+            if target:
+                target.auth_url = auth_exc.auth_url
+                target.status = BrokerStatus.AUTH_REQUIRED
+                return target
         except Exception as exc:
             logger.error("INDmoney single sync failed: %s", exc)
             await connections_repo.update_status(
@@ -580,7 +616,7 @@ async def sync_single_broker(
             )
             raise HTTPException(
                 status_code=502,
-                detail=f"INDmoney MCP server is unreachable or offline: {exc}",
+                detail=f"INDmoney MCP server communication failure: {exc}",
             )
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported broker: {broker_name}")
@@ -713,4 +749,85 @@ async def disconnect_broker(
     if not target:
         raise HTTPException(status_code=404, detail=f"Broker {broker_name} not found.")
     return target
+
+
+@router.get(
+    "/oauth/indmoney/callback",
+    response_class=HTMLResponse,
+    summary="INDmoney OAuth 2.0 PKCE Callback",
+    description="Receives OAuth 2.0 authorization code from INDmoney, exchanges for tokens, and persists session.",
+)
+async def indmoney_oauth_callback(
+    code: Optional[str] = Query(None, description="Authorization code from INDmoney"),
+    state: Optional[str] = Query(None, description="PKCE state token"),
+    error: Optional[str] = Query(None, description="Error returned from INDmoney"),
+    error_description: Optional[str] = Query(None, description="Error description"),
+) -> HTMLResponse:
+    """Handle INDmoney OAuth redirect and token exchange."""
+    if error:
+        logger.warning("INDmoney authorization returned error: %s (%s)", error, error_description)
+        return HTMLResponse(
+            content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head><title>INDmoney Authorization Failed</title></head>
+            <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; background: #fef2f2;">
+              <div style="background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; max-width: 480px;">
+                <h2 style="color: #b91c1c; margin-bottom: 8px;">✕ INDmoney Authorization Failed</h2>
+                <p style="color: #64748b; font-size: 14px;">{error}: {error_description or ''}</p>
+                <p style="color: #94a3b8; font-size: 12px; margin-top: 16px;">You may close this tab and try again from WealthVault.</p>
+              </div>
+            </body>
+            </html>
+            """,
+            status_code=400,
+        )
+
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing authorization code from INDmoney.")
+
+    client = get_indmoney_mcp_client()
+    try:
+        await client.exchange_code(code=code, state=state)
+    except Exception as exc:
+        logger.error("Failed to exchange INDmoney code: %s", exc)
+        return HTMLResponse(
+            content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head><title>INDmoney Token Exchange Failed</title></head>
+            <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; background: #fef2f2;">
+              <div style="background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; max-width: 480px;">
+                <h2 style="color: #b91c1c; margin-bottom: 8px;">✕ Token Exchange Error</h2>
+                <p style="color: #64748b; font-size: 14px;">{exc}</p>
+              </div>
+            </body>
+            </html>
+            """,
+            status_code=502,
+        )
+
+    return HTMLResponse(
+        content="""
+        <!DOCTYPE html>
+        <html>
+        <head><title>INDmoney Connected</title></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; background: #f8fafc;">
+          <div style="background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; max-width: 480px;">
+            <div style="width: 52px; height: 52px; border-radius: 50%; background: #ecfdf5; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+              <span style="color: #059669; font-size: 28px; font-weight: bold;">✓</span>
+            </div>
+            <h2 style="color: #059669; margin-bottom: 8px; font-weight: 700; font-size: 20px;">INDmoney Connected Successfully!</h2>
+            <p style="color: #64748b; font-size: 14px; line-height: 1.5;">Your WealthVault session is authenticated. You can now close this tab and click <b>Sync Now</b> in WealthVault to stream your US stocks, NPS, and bonds.</p>
+            <script>
+              if (window.opener) {
+                try { window.opener.postMessage('indmoney_authorized', '*'); } catch(e) {}
+              }
+              setTimeout(() => { try { window.close(); } catch(e) {} }, 2500);
+            </script>
+          </div>
+        </body>
+        </html>
+        """
+    )
 

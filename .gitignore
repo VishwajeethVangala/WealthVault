@@ -1,10 +1,12 @@
-﻿# Environment & Secrets
+# Environment & Secrets
 .env
 .env.*
 !.env.example
 client_secret*.json
 *.pem
 *.key
+storage/blobs/*tokens*.json
+storage/blobs/*session*.json
 
 # Dependencies
 node_modules/

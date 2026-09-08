@@ -97,6 +97,31 @@ class TestMarketData(unittest.TestCase):
         self.assertEqual(h.current_value, 17500.0)
         self.assertEqual(h.data_freshness, "cached")
 
+    def test_enrich_mutual_fund_preserves_live_freshness(self):
+        """Verify that live Coin mutual fund holdings are NOT falsely downgraded to cached."""
+        service = MCPMarketDataService()
+        service.fetch_live_quotes = AsyncMock(return_value=({}, True))
+
+        mf_holding = Holding(
+            holding_id="hld_mf_1",
+            owner_id="user1",
+            connection_id="conn_zerodha_live",
+            instrument_symbol="SBI CONTRA FUND - DIRECT PLAN",
+            asset_class=AssetClass.MUTUAL_FUND,
+            quantity=77.688,
+            average_price=424.75,
+            current_price=414.74,
+            current_value=32220.32,
+            data_freshness="live",
+            currency="INR",
+        )
+
+        enriched, freshness = asyncio.run(service.enrich_holdings_with_live_quotes([mf_holding]))
+        self.assertEqual(freshness, "live")
+        self.assertEqual(len(enriched), 1)
+        self.assertEqual(enriched[0].data_freshness, "live")
+        self.assertEqual(enriched[0].current_price, 414.74)
+
 
 if __name__ == "__main__":
     unittest.main()

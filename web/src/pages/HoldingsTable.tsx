@@ -694,7 +694,7 @@ export const HoldingsTable: React.FC = () => {
                             {holding.data_freshness === 'live' && (
                               <span className="w-1 h-1 rounded-full bg-emerald-500 inline-block" />
                             )}
-                            LTP {formatINR(holding.current_price)}
+                            {holding.asset_class === 'MUTUAL_FUND' ? 'NAV' : 'LTP'} {formatINR(holding.current_price)}
                           </span>
                         </>
                       )}
@@ -974,7 +974,7 @@ export const HoldingsTable: React.FC = () => {
                         {holding.data_freshness === 'live' && (
                           <span
                             className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse"
-                            title="Live MCP Quote"
+                            title={holding.asset_class === 'MUTUAL_FUND' ? 'Live Coin NAV' : 'Live MCP Quote'}
                           />
                         )}
                         <span>{holding.current_price ? formatINR(holding.current_price) : '—'}</span>

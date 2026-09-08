@@ -1,0 +1,9 @@
+{
+  "client_id": "dfed4e00-5c2a-4aec-ae9e-53afff3637a2",
+  "client_secret": "6f392883326629bd269c7425981ea90d853c1e3275ce1c62c525706f255c9c41",
+  "redirect_uri": "http://127.0.0.1:8000/api/v1/portfolio/oauth/indmoney/callback",
+  "scope": "portfolio:read",
+  "token_endpoint": "https://mcp.indmoney.com/token",
+  "authorization_endpoint": "https://mcp.indmoney.com/authorize",
+  "server_url": "https://mcp.indmoney.com/mcp"
+}
