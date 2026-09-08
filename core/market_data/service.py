@@ -220,12 +220,24 @@ class MCPMarketDataService:
                 })
                 enriched.append(Holding(**updated_dict))
             else:
-                # Retain existing prices with cached tag
+                # Retain existing prices from live broker sync.
+                # Mutual funds from Coin do not have intraday exchange ticks; their live price is the official NAV
+                # from Zerodha Coin, so their 'live' freshness is preserved.
+                # Equities that failed to fetch live exchange quotes fall back to 'cached'.
                 updated_dict = h.model_dump()
-                updated_dict["data_freshness"] = "cached"
+                if h.asset_class == AssetClass.MUTUAL_FUND and h.data_freshness == "live":
+                    updated_dict["data_freshness"] = "live"
+                else:
+                    updated_dict["data_freshness"] = "cached"
                 enriched.append(Holding(**updated_dict))
 
-        overall_freshness = "live" if live_succeeded and any(h.data_freshness == "live" for h in enriched) else "cached"
+        # Overall freshness is 'live' if exchange quotes succeeded or if the portfolio is all live mutual funds
+        has_live_holdings = any(h.data_freshness == "live" for h in enriched)
+        if instruments_to_query:
+            overall_freshness = "live" if (live_succeeded and has_live_holdings) else "cached"
+        else:
+            overall_freshness = "live" if has_live_holdings else "cached"
+
         return enriched, overall_freshness
 
 

@@ -63,6 +63,15 @@ export const BrokerSync: React.FC = () => {
 
   useEffect(() => {
     loadSessions()
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data === 'indmoney_authorized') {
+        loadSessions()
+        handleSingleSync('indmoney')
+      }
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
   }, [])
 
   // Format INR currency
@@ -479,25 +488,29 @@ export const BrokerSync: React.FC = () => {
                           {isExpired
                             ? 'Cryptographic Session Token Expired'
                             : isAuthReq
-                            ? 'Daily Kite OAuth Authorization Required'
+                            ? isZerodha
+                              ? 'Daily Kite OAuth Authorization Required'
+                              : 'INDmoney OAuth Authorization Required'
                             : 'Broker Authorization Inactive'}
                         </h4>
                         <p className="text-amber-800 mt-0.5 leading-relaxed">
                           {isZerodha
                             ? 'Zerodha Kite Connect access tokens expire daily. Click below to log in on Kite in your browser, then click Confirm & Sync to stream your real-time holdings.'
-                            : 'INDmoney MCP server is currently unreachable. Connect a live MCP daemon to retrieve up-to-date holdings.'}
+                            : 'INDmoney OAuth authorization is required or expired. Click below to log in on INDmoney in your browser, then click Confirm & Sync to stream your live US stocks, NPS, and bonds.'}
                         </p>
 
-                        {isZerodha && session.auth_url && (
+                        {session.auth_url && (
                           <div className="mt-3 flex flex-wrap items-center gap-2.5">
                             <a
                               href={session.auth_url}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95"
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 ${
+                                isZerodha ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
+                              } text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95`}
                             >
                               <Key className="w-3.5 h-3.5" />
-                              <span>Authorize on Kite (Opens in New Tab)</span>
+                              <span>{isZerodha ? 'Authorize on Kite (Opens in New Tab)' : 'Authorize on INDmoney (Opens in New Tab)'}</span>
                             </a>
                             <button
                               onClick={() => handleSingleSync(session.broker_name)}
@@ -666,13 +679,37 @@ export const BrokerSync: React.FC = () => {
                     </div>
                   ) : (
                     /* Inactive / Expired: Prominent Re-Authenticate Button */
-                    <button
-                      onClick={() => openReauthModal(session)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 hover:shadow"
-                    >
-                      <Key className="w-4 h-4 text-emerald-400" />
-                      <span>Re-Authenticate &amp; Login</span>
-                    </button>
+                    session.auth_url ? (
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={session.auth_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`inline-flex items-center gap-1.5 px-4 py-2 ${
+                            isZerodha ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
+                          } text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95`}
+                        >
+                          <Key className="w-3.5 h-3.5" />
+                          <span>{isZerodha ? 'Authorize Kite' : 'Authorize INDmoney'}</span>
+                        </a>
+                        <button
+                          onClick={() => handleSingleSync(session.broker_name)}
+                          disabled={!!actionLoading[session.broker_name]}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlySyncing ? 'animate-spin' : ''}`} />
+                          <span>{isCurrentlySyncing ? 'Syncing...' : 'Sync Now'}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => openReauthModal(session)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 hover:shadow"
+                      >
+                        <Key className="w-4 h-4 text-emerald-400" />
+                        <span>Re-Authenticate &amp; Login</span>
+                      </button>
+                    )
                   )}
 
                   {/* Diagnostic / Testing Actions */}

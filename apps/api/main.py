@@ -102,6 +102,9 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Could not pre-initialize Kite MCP bridge: %s", exc)
 
+    from core.market_data.indmoney_client import get_indmoney_mcp_client
+    ind_client = get_indmoney_mcp_client()
+
     yield
 
     logger.info("Shutting down %s...", settings.APP_NAME)
@@ -109,6 +112,10 @@ async def lifespan(app: FastAPI):
         await kite_client.close()
     except Exception as exc:
         logger.debug("Error closing Kite MCP client: %s", exc)
+    try:
+        await ind_client.close()
+    except Exception as exc:
+        logger.debug("Error closing INDmoney MCP client: %s", exc)
 
 
 def create_application() -> FastAPI:
