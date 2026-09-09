@@ -89,6 +89,38 @@ class BlobArchivalService:
         logger.info("Archived raw payload to: %s", full_path)
         return full_path
 
+    async def purge_connection_blobs(
+        self,
+        owner_id: str,
+        connection_id: str,
+    ) -> int:
+        """Purge all archived blobs under {owner_id}/{connection_id}/ from container.
+
+        Args:
+            owner_id: User tenant ID.
+            connection_id: Identifier of the broker connection.
+
+        Returns:
+            Number of blobs successfully deleted.
+        """
+        await self._ensure_container()
+        prefix = f"{owner_id}/{connection_id}/"
+        container_client = self.service_client.get_container_client(self.container_name)
+
+        deleted_count = 0
+        try:
+            async for blob in container_client.list_blobs(name_starts_with=prefix):
+                try:
+                    await container_client.delete_blob(blob.name)
+                    deleted_count += 1
+                except Exception as b_err:
+                    logger.warning("Could not delete blob %s: %s", blob.name, b_err)
+            logger.info("Purged %d blobs for prefix %s", deleted_count, prefix)
+        except Exception as exc:
+            logger.warning("Error listing/purging blobs for prefix %s: %s", prefix, exc)
+
+        return deleted_count
+
     async def close(self) -> None:
         """Release underlying HTTP client connections."""
         if self._service_client:
@@ -103,7 +135,7 @@ class BlobArchivalService:
         await self.close()
 
 
-# Module-level convenience function
+# Module-level convenience functions
 async def archive_broker_payload(
     owner_id: str,
     connection_id: str,
@@ -121,3 +153,16 @@ async def archive_broker_payload(
         )
     finally:
         await service.close()
+
+
+async def purge_broker_blobs(owner_id: str, connection_id: str) -> int:
+    """Convenience helper to purge broker payload blobs using the default service."""
+    service = BlobArchivalService()
+    try:
+        return await service.purge_connection_blobs(
+            owner_id=owner_id,
+            connection_id=connection_id,
+        )
+    finally:
+        await service.close()
+

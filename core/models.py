@@ -265,3 +265,16 @@ class MarketQuotesResponse(BaseModel):
     quotes: Dict[str, QuoteItem] = Field(default_factory=dict, description="Map of instrument identifier to quote")
 
 
+class BrokerDeleteResponse(BaseModel):
+    """Result of removing a broker connection and wiping associated data."""
+
+    status: str = Field(default="success", description="Status indicator")
+    broker_name: str = Field(..., description="Target broker platform name")
+    holdings_purged: int = Field(default=0, description="Count of purged holding entities")
+    blobs_purged: int = Field(default=0, description="Count of deleted raw blob payloads")
+    snapshot_updated: bool = Field(default=True, description="Whether daily snapshot was recomputed")
+    remaining_holdings_count: int = Field(default=0, description="Count of remaining holdings across other brokers")
+    new_total_valuation: float = Field(default=0.0, description="Updated portfolio total valuation in INR")
+
+
+
