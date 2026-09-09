@@ -45,6 +45,8 @@ class ZerodhaProvider(BrokerProvider):
         client = get_kite_mcp_client()
         try:
             await client.ensure_connected()
+            if not client.auth_url:
+                await client.reset_session()
             self.login_url = client.auth_url
             return self.login_url
         except Exception as exc:
@@ -66,6 +68,7 @@ class ZerodhaProvider(BrokerProvider):
             await client.ensure_connected()
             data = await client.get_profile()
             if isinstance(data, dict) and data.get("user_id"):
+                self.auth_required = False
                 return {
                     "status": "success",
                     "data": {
@@ -76,34 +79,31 @@ class ZerodhaProvider(BrokerProvider):
                         "status": "active",
                     },
                 }
+            # If get_profile returned empty or not authenticated
+            self.auth_required = True
+            auth_url = client.auth_url or await self.get_login_url()
+            return {
+                "status": "auth_required",
+                "message": "Zerodha Kite session requires login",
+                "auth_url": auth_url,
+            }
         except KiteAuthRequiredError as auth_err:
             self.auth_required = True
-            self.login_url = auth_err.auth_url or client.auth_url
+            self.login_url = auth_err.auth_url or client.auth_url or await self.get_login_url()
             return {
                 "status": "auth_required",
                 "message": "Zerodha Kite session expired or requires login",
                 "auth_url": self.login_url,
             }
         except Exception as exc:
-            logger.info("Kite MCP get_profile note: %s", exc)
-
-        if not client.is_authenticated:
+            logger.warning("Kite MCP get_profile error: %s", exc)
             self.auth_required = True
-            self.login_url = client.auth_url
+            auth_url = client.auth_url or await self.get_login_url()
             return {
                 "status": "auth_required",
-                "message": "Zerodha Kite session requires login",
-                "auth_url": client.auth_url,
+                "message": f"Zerodha Kite session error: {exc}",
+                "auth_url": auth_url,
             }
-
-        return {
-            "status": "success",
-            "data": {
-                "broker": "ZERODHA",
-                "user_id": self.credentials.get("user_id", "ZK_LIVE"),
-                "status": "active",
-            },
-        }
 
     async def get_mf_holdings(self) -> List[Dict[str, Any]]:
         """Fetch live mutual fund holdings from Zerodha Coin via persistent Kite MCP bridge."""
