@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   XCircle,
   Clock,
-  ShieldCheck,
   Key,
   Lock,
   Cpu,
@@ -631,36 +630,6 @@ export const BrokerSync: React.FC = () => {
               </div>
             )
           })}
-        </div>
-      </div>
-
-      {/* 4. Institutional Architecture Memo */}
-      <div className="bg-white rounded-2xl p-6 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] border border-slate-200/80">
-        <div className="flex items-center gap-2 mb-3">
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <h2 className="font-serif text-lg text-slate-950 font-medium">
-            Broker Synchronization Compliance &amp; Protocol Architecture
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-600 leading-relaxed">
-          <div className="flex flex-col gap-1 p-4 rounded-xl bg-slate-50 border border-slate-100">
-            <span className="font-bold text-slate-900 text-sm">Strict Zero-Leakage Isolation</span>
-            <p className="mt-1">
-              Every broker session is keyed strictly by Azure Table Storage PartitionKey <code className="text-slate-800 font-mono">owner_id</code>. Demat holdings and trade transactions never bleed across client boundaries.
-            </p>
-          </div>
-          <div className="flex flex-col gap-1 p-4 rounded-xl bg-slate-50 border border-slate-100">
-            <span className="font-bold text-slate-900 text-sm">Immutable Blob Archiving</span>
-            <p className="mt-1">
-              Every orchestrated sync writes complete raw broker JSON payloads directly to Azure Blob Storage under <code className="text-slate-800 font-mono">raw-broker-payloads/{'{user_id}'}/{'{connection_id}'}/</code> for regulatory audit.
-            </p>
-          </div>
-          <div className="flex flex-col gap-1 p-4 rounded-xl bg-slate-50 border border-slate-100">
-            <span className="font-bold text-slate-900 text-sm">Kite Connect Daily Protocol</span>
-            <p className="mt-1">
-              SEBI security standards require Indian broker sessions (Zerodha Kite) to rotate daily at 06:00 AM IST. WealthVault surfaces proactive renewal alerts so your valuations remain uninterrupted.
-            </p>
-          </div>
         </div>
       </div>
     </div>
