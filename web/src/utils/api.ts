@@ -1,4 +1,4 @@
-import type { AuthResponse, BrokerSessionInfo, Holding, MarketQuotesResponse, PortfolioSummary, ReauthRequest, User } from '../types'
+import type { AuthResponse, BrokerCatalogItem, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, PortfolioSummary, ReauthRequest, User } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -133,4 +133,22 @@ export async function disconnectBroker(brokerName: string): Promise<BrokerSessio
     method: 'POST',
   })
 }
+
+export async function fetchBrokerCatalog(): Promise<BrokerCatalogItem[]> {
+  return fetchApi<BrokerCatalogItem[]>('/api/v1/portfolio/brokers/catalog')
+}
+
+export async function addBrokerConnection(data: CreateBrokerConnectionRequest): Promise<BrokerSessionInfo> {
+  return fetchApi<BrokerSessionInfo>('/api/v1/portfolio/connections', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteBrokerConnection(brokerName: string): Promise<any> {
+  return fetchApi(`/api/v1/portfolio/connections/${encodeURIComponent(brokerName)}`, {
+    method: 'DELETE',
+  })
+}
+
 
