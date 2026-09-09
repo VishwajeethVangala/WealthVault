@@ -107,6 +107,7 @@ export interface BrokerSessionInfo {
   status: BrokerStatus
   last_sync_time?: string
   account_id: string
+  account_label?: string
   auth_type: string
   session_expires_at?: string
   is_expired: boolean
@@ -136,17 +137,21 @@ export interface BrokerCatalogItem {
   description: string
   supported: boolean
   is_connected: boolean
+  connected_count?: number
 }
 
 export interface CreateBrokerConnectionRequest {
   broker_name: string
   account_id?: string
+  account_label?: string
+  connection_id?: string
   custom_mcp_url?: string
 }
 
 export interface BrokerDeleteResponse {
   status: string
   broker_name: string
+  connection_id?: string
   holdings_purged: number
   blobs_purged: number
   snapshot_updated: boolean

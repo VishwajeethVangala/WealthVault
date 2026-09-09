@@ -109,27 +109,27 @@ export async function fetchBrokerSessions(): Promise<BrokerSessionInfo[]> {
   return fetchApi<BrokerSessionInfo[]>('/api/v1/portfolio/sessions')
 }
 
-export async function syncBroker(brokerName: string): Promise<BrokerSessionInfo> {
-  return fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(brokerName)}/sync`, {
+export async function syncBroker(connectionIdOrBroker: string): Promise<BrokerSessionInfo> {
+  return fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(connectionIdOrBroker)}/sync`, {
     method: 'POST',
   })
 }
 
-export async function reauthBroker(brokerName: string, data?: ReauthRequest): Promise<BrokerSessionInfo> {
-  return fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(brokerName)}/reauth`, {
+export async function reauthBroker(connectionIdOrBroker: string, data?: ReauthRequest): Promise<BrokerSessionInfo> {
+  return fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(connectionIdOrBroker)}/reauth`, {
     method: 'POST',
     body: JSON.stringify(data || {}),
   })
 }
 
-export async function expireBroker(brokerName: string): Promise<BrokerSessionInfo> {
-  return fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(brokerName)}/expire`, {
+export async function expireBroker(connectionIdOrBroker: string): Promise<BrokerSessionInfo> {
+  return fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(connectionIdOrBroker)}/expire`, {
     method: 'POST',
   })
 }
 
-export async function disconnectBroker(brokerName: string): Promise<BrokerSessionInfo> {
-  return fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(brokerName)}/disconnect`, {
+export async function disconnectBroker(connectionIdOrBroker: string): Promise<BrokerSessionInfo> {
+  return fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(connectionIdOrBroker)}/disconnect`, {
     method: 'POST',
   })
 }
@@ -145,8 +145,8 @@ export async function addBrokerConnection(data: CreateBrokerConnectionRequest): 
   })
 }
 
-export async function deleteBrokerConnection(brokerName: string, wipeBlobs = true): Promise<BrokerDeleteResponse> {
-  return fetchApi<BrokerDeleteResponse>(`/api/v1/portfolio/connections/${encodeURIComponent(brokerName)}?wipe_blobs=${wipeBlobs}`, {
+export async function deleteBrokerConnection(connectionIdOrBroker: string, wipeBlobs = true): Promise<BrokerDeleteResponse> {
+  return fetchApi<BrokerDeleteResponse>(`/api/v1/portfolio/connections/${encodeURIComponent(connectionIdOrBroker)}?wipe_blobs=${wipeBlobs}`, {
     method: 'DELETE',
   })
 }

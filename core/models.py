@@ -75,6 +75,14 @@ class BrokerConnection(BaseModel):
         default=None,
         description="ISO 8601 timestamp of last successful sync",
     )
+    account_id: Optional[str] = Field(
+        default=None,
+        description="Client or Account ID (e.g. SRK113, HUF101)",
+    )
+    account_label: Optional[str] = Field(
+        default=None,
+        description="User-defined account label/alias (e.g. 'Personal Demat', 'Family HUF')",
+    )
 
 
 class Holding(BaseModel):
@@ -198,6 +206,7 @@ class BrokerSessionInfo(BaseModel):
     status: BrokerStatus = Field(..., description="Connection / session status")
     last_sync_time: Optional[str] = Field(default=None, description="ISO timestamp of last successful sync")
     account_id: str = Field(..., description="Broker user ID / client ID")
+    account_label: Optional[str] = Field(default=None, description="User-defined account label / alias")
     auth_type: str = Field(..., description="Authentication protocol (e.g. Daily Kite TOTP, OAuth2 Bearer)")
     session_expires_at: Optional[str] = Field(default=None, description="When the current session token expires")
     is_expired: bool = Field(default=False, description="Whether session is expired")
@@ -216,6 +225,8 @@ class CreateBrokerConnectionRequest(BaseModel):
 
     broker_name: str = Field(..., description="Broker key name (e.g. zerodha, indmoney, groww, upstox)")
     account_id: Optional[str] = Field(default=None, description="Optional custom client / account identifier")
+    account_label: Optional[str] = Field(default=None, description="Optional user-defined account label / alias")
+    connection_id: Optional[str] = Field(default=None, description="Optional custom connection identifier")
     custom_mcp_url: Optional[str] = Field(default=None, description="Optional custom MCP endpoint URL")
 
 
@@ -231,6 +242,7 @@ class BrokerCatalogItem(BaseModel):
     description: str
     supported: bool = True
     is_connected: bool = False
+    connected_count: int = 0
 
 
 class ReauthRequest(BaseModel):
@@ -270,6 +282,7 @@ class BrokerDeleteResponse(BaseModel):
 
     status: str = Field(default="success", description="Status indicator")
     broker_name: str = Field(..., description="Target broker platform name")
+    connection_id: Optional[str] = Field(default=None, description="Identifier of the deleted connection")
     holdings_purged: int = Field(default=0, description="Count of purged holding entities")
     blobs_purged: int = Field(default=0, description="Count of deleted raw blob payloads")
     snapshot_updated: bool = Field(default=True, description="Whether daily snapshot was recomputed")
