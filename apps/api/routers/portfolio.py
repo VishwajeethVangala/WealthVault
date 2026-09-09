@@ -437,15 +437,33 @@ async def get_broker_sessions(
     zk_conn_obj = existing_map.get("zerodha")
     zk_status = zk_conn_obj.status if zk_conn_obj else BrokerStatus.CONNECTED
     zk_auth_url: Optional[str] = None
-
     zk_provider = ZerodhaProvider()
-    try:
-        acct_status = await zk_provider.get_account_status()
-        if acct_status.get("status") == "auth_required":
+
+    if zk_conn_obj and zk_conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
+        zk_status = zk_conn_obj.status
+        try:
+            zk_auth_url = await zk_provider.get_login_url()
+        except Exception as exc:
+            logger.warning("Could not fetch Kite auth URL for inactive session: %s", exc)
+    else:
+        try:
+            acct_status = await zk_provider.get_account_status()
+            if acct_status.get("status") == "auth_required":
+                zk_status = BrokerStatus.AUTH_REQUIRED
+                zk_auth_url = acct_status.get("auth_url")
+            elif acct_status.get("status") == "success":
+                zk_status = BrokerStatus.CONNECTED
+        except Exception as exc:
+            logger.warning("Zerodha status probe note: %s", exc)
             zk_status = BrokerStatus.AUTH_REQUIRED
-            zk_auth_url = acct_status.get("auth_url")
-    except Exception:
-        pass
+            zk_auth_url = await zk_provider.get_login_url()
+
+    # If Zerodha is not connected, ensure fresh auth URL is always available
+    if zk_status != BrokerStatus.CONNECTED and not zk_auth_url:
+        try:
+            zk_auth_url = await zk_provider.get_login_url()
+        except Exception:
+            pass
 
     zk_is_expired = zk_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
 
@@ -475,15 +493,32 @@ async def get_broker_sessions(
     ind_conn_obj = existing_map.get("indmoney")
     ind_status = ind_conn_obj.status if ind_conn_obj else BrokerStatus.CONNECTED
     ind_auth_url: Optional[str] = None
-
     ind_provider = IndmoneyProvider()
-    try:
-        acct_status = await ind_provider.get_account_status()
-        if acct_status.get("status") == "auth_required":
+
+    if ind_conn_obj and ind_conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
+        ind_status = ind_conn_obj.status
+        try:
+            from core.market_data.indmoney_client import get_indmoney_mcp_client
+            ind_auth_url = get_indmoney_mcp_client().get_authorization_url()
+        except Exception as exc:
+            logger.warning("Could not fetch INDmoney auth URL for inactive session: %s", exc)
+    else:
+        try:
+            acct_status = await ind_provider.get_account_status()
+            if acct_status.get("status") == "auth_required":
+                ind_status = BrokerStatus.AUTH_REQUIRED
+                ind_auth_url = acct_status.get("auth_url")
+            elif acct_status.get("status") == "success":
+                ind_status = BrokerStatus.CONNECTED
+        except Exception as exc:
+            logger.warning("INDmoney status probe note: %s", exc)
             ind_status = BrokerStatus.AUTH_REQUIRED
-            ind_auth_url = acct_status.get("auth_url")
-    except Exception:
-        pass
+            ind_auth_url = ind_provider.get_account_status().get("auth_url")
+
+    # If INDmoney is not connected, ensure fresh auth URL is always available
+    if ind_status != BrokerStatus.CONNECTED and not ind_auth_url:
+        from core.market_data.indmoney_client import get_indmoney_mcp_client
+        ind_auth_url = get_indmoney_mcp_client().get_authorization_url()
 
     ind_is_expired = ind_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
     ind_expiry = (now + timedelta(days=14)).isoformat()

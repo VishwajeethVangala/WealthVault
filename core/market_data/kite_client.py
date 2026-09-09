@@ -86,57 +86,74 @@ class KiteMCPClient:
         self._request_counter += 1
         return self._request_counter
 
-    async def ensure_connected(self) -> None:
-        """Ensure an active Kite MCP session exists and is initialized."""
+    async def reset_session(self) -> str:
+        """Force reset Kite session, establishing a new session ID and fresh daily authorization URL."""
+        async with self._lock:
+            self.session_id = None
+            self.auth_url = None
+            self.is_authenticated = False
+            self._save_session()
+            await self._init_new_session()
+            return self.auth_url or ""
+
+    async def _init_new_session(self) -> None:
+        """Establish a new Kite MCP HTTP session and retrieve fresh login URL."""
+        logger.info("Establishing new Kite MCP session to %s...", self.server_url)
+        http = self._get_http_session()
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "mcp-remote/0.8.5",
+            "Accept": "application/json, text/event-stream",
+        }
+        init_payload = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "wealthvault", "version": "1.0.0"},
+            },
+        }
+
+        try:
+            async with http.post(self.server_url, headers=headers, json=init_payload) as resp:
+                resp_headers = dict(resp.headers)
+                self.session_id = resp_headers.get("mcp-session-id")
+                logger.info("New Kite MCP session established: %s", self.session_id)
+        except Exception as exc:
+            logger.error("Failed to initialize Kite MCP HTTP session: %s", exc)
+            raise
+
         if self.session_id:
+            headers["mcp-session-id"] = self.session_id
+            login_payload = {
+                "jsonrpc": "2.0",
+                "id": self._next_id(),
+                "method": "tools/call",
+                "params": {"name": "login", "arguments": {}},
+            }
+            try:
+                async with http.post(self.server_url, headers=headers, json=login_payload) as resp:
+                    text = await resp.text()
+                    match = re.search(r"https?://mcp\.kite\.trade/authorize[^\s)\"']+", text)
+                    if match:
+                        self.auth_url = match.group(0).rstrip(')"')
+                        self.is_authenticated = False
+                        self._save_session()
+                        logger.info("Fresh Kite MCP authorization URL generated: %s", self.auth_url)
+            except Exception as exc:
+                logger.warning("Could not retrieve login URL for new session: %s", exc)
+
+    async def ensure_connected(self) -> None:
+        """Ensure an active Kite MCP session exists and has an auth URL."""
+        if self.session_id and self.auth_url:
             return
 
         async with self._lock:
-            if self.session_id:
+            if self.session_id and self.auth_url:
                 return
-
-            logger.info("Initializing new Kite MCP session to %s...", self.server_url)
-            http = self._get_http_session()
-            headers = {
-                "Content-Type": "application/json",
-                "User-Agent": "mcp-remote/0.8.5",
-                "Accept": "application/json, text/event-stream",
-            }
-            init_payload = {
-                "jsonrpc": "2.0",
-                "id": self._next_id(),
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "wealthvault", "version": "1.0.0"},
-                },
-            }
-
-            try:
-                async with http.post(self.server_url, headers=headers, json=init_payload) as resp:
-                    resp_headers = dict(resp.headers)
-                    self.session_id = resp_headers.get("mcp-session-id")
-                    logger.info("New Kite MCP session established: %s", self.session_id)
-            except Exception as exc:
-                logger.error("Failed to initialize Kite MCP HTTP session: %s", exc)
-                raise
-
-            # Call login tool to obtain authorization URL for the new session
-            if self.session_id:
-                try:
-                    login_data = await self.call_tool("login", arguments={})
-                    login_text = str(login_data)
-                    match = re.search(r"https?://mcp\.kite\.trade/authorize\S+", login_text)
-                    if match:
-                        self.auth_url = match.group(0).rstrip(")")
-                        self.is_authenticated = False
-                        self._save_session()
-                        logger.info("Kite MCP authorization URL generated: %s", self.auth_url)
-                except KiteAuthRequiredError:
-                    pass
-                except Exception as exc:
-                    logger.warning("Could not retrieve initial login URL: %s", exc)
+            await self._init_new_session()
 
     async def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> Any:
         """Invoke an MCP tool directly over HTTP JSON-RPC 2.0 with session persistence."""
@@ -163,7 +180,22 @@ class KiteMCPClient:
 
         try:
             async with http.post(self.server_url, headers=headers, json=payload) as resp:
-                data = await resp.json()
+                raw_text = await resp.text()
+
+                # Handle Invalid / Expired session from server
+                if resp.status in (400, 401, 403) or "Invalid session ID" in raw_text or "Session expired" in raw_text:
+                    logger.warning("Kite MCP session is invalid or expired (%d: %s). Re-initializing fresh session...", resp.status, raw_text.strip())
+                    await self.reset_session()
+                    raise KiteAuthRequiredError(
+                        f"Zerodha Kite session expired. Please authorize at: {self.auth_url}",
+                        auth_url=self.auth_url,
+                    )
+
+                data: Dict[str, Any] = {}
+                try:
+                    data = json.loads(raw_text)
+                except Exception:
+                    data = {"text": raw_text}
 
                 if "result" in data:
                     res_obj = data["result"]
@@ -178,7 +210,6 @@ class KiteMCPClient:
                         lower_text.startswith("failed to ") and ("execute" in lower_text or "get" in lower_text)
                     ):
                         self.is_authenticated = False
-                        # Fetch fresh auth URL
                         await self._refresh_auth_url()
                         self._save_session()
                         raise KiteAuthRequiredError(
@@ -186,7 +217,6 @@ class KiteMCPClient:
                             auth_url=self.auth_url,
                         )
 
-                    # Successful response: try to parse as JSON
                     parsed: Any = text
                     try:
                         parsed = json.loads(text)
@@ -197,8 +227,8 @@ class KiteMCPClient:
                     self._save_session()
                     return parsed
                 elif "error" in data:
-                    err_msg = data["error"].get("message", str(data["error"]))
-                    if "auth" in err_msg.lower() or "session" in err_msg.lower():
+                    err_msg = str(data["error"].get("message") if isinstance(data["error"], dict) else data["error"])
+                    if "auth" in err_msg.lower() or "session" in err_msg.lower() or "login" in err_msg.lower():
                         self.is_authenticated = False
                         await self._refresh_auth_url()
                         self._save_session()
@@ -216,8 +246,9 @@ class KiteMCPClient:
             raise
 
     async def _refresh_auth_url(self) -> None:
-        """Call login tool to obtain latest authorization URL."""
+        """Call login tool or re-initialize to obtain latest authorization URL."""
         if not self.session_id:
+            await self._init_new_session()
             return
         http = self._get_http_session()
         headers = {
@@ -234,12 +265,15 @@ class KiteMCPClient:
         }
         try:
             async with http.post(self.server_url, headers=headers, json=payload) as resp:
-                data = await resp.json()
-                if "result" in data and "content" in data["result"]:
-                    text = data["result"]["content"][0].get("text", "")
-                    match = re.search(r"https?://mcp\.kite\.trade/authorize\S+", str(text))
-                    if match:
-                        self.auth_url = match.group(0).rstrip(")")
+                raw = await resp.text()
+                if resp.status in (400, 401, 403) or "Invalid session ID" in raw:
+                    logger.info("Session ID invalid during refresh. Re-initializing new session...")
+                    await self._init_new_session()
+                    return
+                match = re.search(r"https?://mcp\.kite\.trade/authorize[^\s)\"']+", raw)
+                if match:
+                    self.auth_url = match.group(0).rstrip(')"')
+                    self._save_session()
         except Exception as exc:
             logger.debug("Could not refresh auth URL: %s", exc)
 
