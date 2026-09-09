@@ -1,4 +1,4 @@
-import type { AuthResponse, BrokerCatalogItem, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, PortfolioSummary, ReauthRequest, User } from '../types'
+import type { AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, PortfolioSummary, ReauthRequest, User } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -145,8 +145,8 @@ export async function addBrokerConnection(data: CreateBrokerConnectionRequest): 
   })
 }
 
-export async function deleteBrokerConnection(brokerName: string): Promise<any> {
-  return fetchApi(`/api/v1/portfolio/connections/${encodeURIComponent(brokerName)}`, {
+export async function deleteBrokerConnection(brokerName: string, wipeBlobs = true): Promise<BrokerDeleteResponse> {
+  return fetchApi<BrokerDeleteResponse>(`/api/v1/portfolio/connections/${encodeURIComponent(brokerName)}?wipe_blobs=${wipeBlobs}`, {
     method: 'DELETE',
   })
 }

@@ -144,4 +144,15 @@ export interface CreateBrokerConnectionRequest {
   custom_mcp_url?: string
 }
 
+export interface BrokerDeleteResponse {
+  status: string
+  broker_name: string
+  holdings_purged: number
+  blobs_purged: number
+  snapshot_updated: boolean
+  remaining_holdings_count: number
+  new_total_valuation: number
+}
+
+
 

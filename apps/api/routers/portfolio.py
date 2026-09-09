@@ -17,6 +17,7 @@ from core.market_data import get_market_data_service
 from core.market_data.indmoney_client import IndmoneyAuthRequiredError, get_indmoney_mcp_client
 from core.models import (
     BrokerCatalogItem,
+    BrokerDeleteResponse,
     BrokerSessionInfo,
     BrokerStatus,
     CreateBrokerConnectionRequest,
@@ -32,7 +33,7 @@ from core.portfolio.aggregation import PortfolioAggregationService
 from core.portfolio.normalization import NormalizationService
 from providers.brokers.indmoney import IndmoneyProvider
 from providers.brokers.zerodha import KiteAuthRequiredError, ZerodhaProvider
-from storage.blobs.archive import archive_broker_payload
+from storage.blobs.archive import archive_broker_payload, purge_broker_blobs
 from storage.tables.repositories import (
     BrokerConnectionRepository,
     HoldingsRepository,
@@ -475,13 +476,15 @@ async def get_broker_sessions(
     connections_repo = BrokerConnectionRepository()
     holdings_repo = HoldingsRepository()
 
-    # Query or seed connections
+    # Query or seed connections (only on first-time onboarding for this tenant)
     existing = await connections_repo.list_connections(owner_id=current_user_id)
     existing_map = {c.broker_name.lower(): c for c in existing}
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    if "zerodha" not in existing_map:
+    is_init = await connections_repo.is_tenant_initialized(owner_id=current_user_id)
+    if not is_init and not existing:
+        # First-time onboarding initialization for this tenant
         await connections_repo.create_connection(
             owner_id=current_user_id,
             broker_name="zerodha",
@@ -494,11 +497,6 @@ async def get_broker_sessions(
             status=BrokerStatus.CONNECTED,
             last_sync_time=now_iso,
         )
-        conn = await connections_repo.get_connection(current_user_id, "conn_zerodha_live")
-        if conn:
-            existing_map["zerodha"] = conn
-
-    if "indmoney" not in existing_map:
         await connections_repo.create_connection(
             owner_id=current_user_id,
             broker_name="indmoney",
@@ -511,9 +509,11 @@ async def get_broker_sessions(
             status=BrokerStatus.CONNECTED,
             last_sync_time=now_iso,
         )
-        conn = await connections_repo.get_connection(current_user_id, "conn_indmoney_live")
-        if conn:
-            existing_map["indmoney"] = conn
+        await connections_repo.mark_tenant_initialized(owner_id=current_user_id)
+        existing = await connections_repo.list_connections(owner_id=current_user_id)
+        existing_map = {c.broker_name.lower(): c for c in existing}
+    elif not is_init and existing:
+        await connections_repo.mark_tenant_initialized(owner_id=current_user_id)
 
     # Fetch holdings for metrics calculation
     holdings = await holdings_repo.get_holdings(owner_id=current_user_id)
@@ -535,121 +535,123 @@ async def get_broker_sessions(
 
     sessions: List[BrokerSessionInfo] = []
 
-    # Zerodha Session - probe connection status
-    zk_conn_obj = existing_map.get("zerodha")
-    zk_status = zk_conn_obj.status if zk_conn_obj else BrokerStatus.CONNECTED
-    zk_auth_url: Optional[str] = None
-    zk_provider = ZerodhaProvider()
+    # Zerodha Session - probe connection status ONLY IF active in connections table
+    if "zerodha" in existing_map:
+        zk_conn_obj = existing_map.get("zerodha")
+        zk_status = zk_conn_obj.status if zk_conn_obj else BrokerStatus.CONNECTED
+        zk_auth_url: Optional[str] = None
+        zk_provider = ZerodhaProvider()
 
-    if zk_conn_obj and zk_conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
-        zk_status = zk_conn_obj.status
-        try:
-            zk_auth_url = await zk_provider.get_login_url()
-        except Exception as exc:
-            logger.warning("Could not fetch Kite auth URL for inactive session: %s", exc)
-    else:
-        try:
-            acct_status = await zk_provider.get_account_status()
-            if acct_status.get("status") == "auth_required":
+        if zk_conn_obj and zk_conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
+            zk_status = zk_conn_obj.status
+            try:
+                zk_auth_url = await zk_provider.get_login_url()
+            except Exception as exc:
+                logger.warning("Could not fetch Kite auth URL for inactive session: %s", exc)
+        else:
+            try:
+                acct_status = await zk_provider.get_account_status()
+                if acct_status.get("status") == "auth_required":
+                    zk_status = BrokerStatus.AUTH_REQUIRED
+                    zk_auth_url = acct_status.get("auth_url")
+                elif acct_status.get("status") == "success":
+                    zk_status = BrokerStatus.CONNECTED
+            except Exception as exc:
+                logger.warning("Zerodha status probe note: %s", exc)
                 zk_status = BrokerStatus.AUTH_REQUIRED
-                zk_auth_url = acct_status.get("auth_url")
-            elif acct_status.get("status") == "success":
-                zk_status = BrokerStatus.CONNECTED
-        except Exception as exc:
-            logger.warning("Zerodha status probe note: %s", exc)
-            zk_status = BrokerStatus.AUTH_REQUIRED
-            zk_auth_url = await zk_provider.get_login_url()
+                zk_auth_url = await zk_provider.get_login_url()
 
-    # If Zerodha is not connected, ensure fresh auth URL is always available
-    if zk_status != BrokerStatus.CONNECTED and not zk_auth_url:
-        try:
-            zk_auth_url = await zk_provider.get_login_url()
-        except Exception:
-            pass
+        # If Zerodha is not connected, ensure fresh auth URL is always available
+        if zk_status != BrokerStatus.CONNECTED and not zk_auth_url:
+            try:
+                zk_auth_url = await zk_provider.get_login_url()
+            except Exception:
+                pass
 
-    zk_is_expired = zk_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
+        zk_is_expired = zk_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
 
-    sessions.append(
-        BrokerSessionInfo(
-            connection_id=zk_conn_obj.connection_id if zk_conn_obj else "conn_zerodha_live",
-            owner_id=current_user_id,
-            broker_name="zerodha",
-            display_name="Zerodha Kite Connect",
-            status=zk_status,
-            last_sync_time=zk_conn_obj.last_sync_time if zk_conn_obj and zk_conn_obj.last_sync_time else now_iso,
-            account_id="SRK113",
-            auth_type="Daily Kite OAuth / Enctoken",
-            session_expires_at=kite_expiry.isoformat(),
-            is_expired=zk_is_expired,
-            mcp_server_url="https://mcp.kite.trade/mcp",
-            mcp_protocol="MCP Stdio / JSON-RPC v2.0",
-            tools_count=22,
-            holdings_count=len(zk_holdings),
-            total_valuation=zk_val,
-            last_latency_ms=138,
-            auth_url=zk_auth_url,
+        sessions.append(
+            BrokerSessionInfo(
+                connection_id=zk_conn_obj.connection_id if zk_conn_obj else "conn_zerodha_live",
+                owner_id=current_user_id,
+                broker_name="zerodha",
+                display_name="Zerodha Kite Connect",
+                status=zk_status,
+                last_sync_time=zk_conn_obj.last_sync_time if zk_conn_obj and zk_conn_obj.last_sync_time else now_iso,
+                account_id="SRK113",
+                auth_type="Daily Kite OAuth / Enctoken",
+                session_expires_at=kite_expiry.isoformat(),
+                is_expired=zk_is_expired,
+                mcp_server_url="https://mcp.kite.trade/mcp",
+                mcp_protocol="MCP Stdio / JSON-RPC v2.0",
+                tools_count=22,
+                holdings_count=len(zk_holdings),
+                total_valuation=zk_val,
+                last_latency_ms=138,
+                auth_url=zk_auth_url,
+            )
         )
-    )
 
-    # INDmoney Session
-    ind_conn_obj = existing_map.get("indmoney")
-    ind_status = ind_conn_obj.status if ind_conn_obj else BrokerStatus.CONNECTED
-    ind_auth_url: Optional[str] = None
-    ind_provider = IndmoneyProvider()
+    # INDmoney Session - probe connection status ONLY IF active in connections table
+    if "indmoney" in existing_map:
+        ind_conn_obj = existing_map.get("indmoney")
+        ind_status = ind_conn_obj.status if ind_conn_obj else BrokerStatus.CONNECTED
+        ind_auth_url: Optional[str] = None
+        ind_provider = IndmoneyProvider()
 
-    if ind_conn_obj and ind_conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
-        ind_status = ind_conn_obj.status
-        try:
+        if ind_conn_obj and ind_conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
+            ind_status = ind_conn_obj.status
+            try:
+                from core.market_data.indmoney_client import get_indmoney_mcp_client
+                ind_auth_url = get_indmoney_mcp_client().get_authorization_url()
+            except Exception as exc:
+                logger.warning("Could not fetch INDmoney auth URL for inactive session: %s", exc)
+        else:
+            try:
+                acct_status = await ind_provider.get_account_status()
+                if acct_status.get("status") == "auth_required":
+                    ind_status = BrokerStatus.AUTH_REQUIRED
+                    ind_auth_url = acct_status.get("auth_url")
+                elif acct_status.get("status") == "success":
+                    ind_status = BrokerStatus.CONNECTED
+            except Exception as exc:
+                logger.warning("INDmoney status probe note: %s", exc)
+                ind_status = BrokerStatus.AUTH_REQUIRED
+                ind_auth_url = ind_provider.get_account_status().get("auth_url")
+
+        # If INDmoney is not connected, ensure fresh auth URL is always available
+        if ind_status != BrokerStatus.CONNECTED and not ind_auth_url:
             from core.market_data.indmoney_client import get_indmoney_mcp_client
             ind_auth_url = get_indmoney_mcp_client().get_authorization_url()
-        except Exception as exc:
-            logger.warning("Could not fetch INDmoney auth URL for inactive session: %s", exc)
-    else:
-        try:
-            acct_status = await ind_provider.get_account_status()
-            if acct_status.get("status") == "auth_required":
-                ind_status = BrokerStatus.AUTH_REQUIRED
-                ind_auth_url = acct_status.get("auth_url")
-            elif acct_status.get("status") == "success":
-                ind_status = BrokerStatus.CONNECTED
-        except Exception as exc:
-            logger.warning("INDmoney status probe note: %s", exc)
-            ind_status = BrokerStatus.AUTH_REQUIRED
-            ind_auth_url = ind_provider.get_account_status().get("auth_url")
 
-    # If INDmoney is not connected, ensure fresh auth URL is always available
-    if ind_status != BrokerStatus.CONNECTED and not ind_auth_url:
-        from core.market_data.indmoney_client import get_indmoney_mcp_client
-        ind_auth_url = get_indmoney_mcp_client().get_authorization_url()
+        ind_is_expired = ind_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
+        ind_expiry = (now + timedelta(days=14)).isoformat()
 
-    ind_is_expired = ind_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
-    ind_expiry = (now + timedelta(days=14)).isoformat()
-
-    sessions.append(
-        BrokerSessionInfo(
-            connection_id=ind_conn_obj.connection_id if ind_conn_obj else "conn_indmoney_live",
-            owner_id=current_user_id,
-            broker_name="indmoney",
-            display_name="INDmoney Private Wealth",
-            status=ind_status,
-            last_sync_time=ind_conn_obj.last_sync_time if ind_conn_obj and ind_conn_obj.last_sync_time else now_iso,
-            account_id="Vangala Vishwajeeth",
-            auth_type="Biometric OAuth2 Bearer",
-            session_expires_at=ind_expiry,
-            is_expired=ind_is_expired,
-            mcp_server_url="https://mcp.indmoney.com/mcp",
-            mcp_protocol="MCP Stdio / JSON-RPC v2.0",
-            tools_count=21,
-            holdings_count=len(ind_holdings),
-            total_valuation=ind_val,
-            last_latency_ms=172,
-            auth_url=ind_auth_url,
+        sessions.append(
+            BrokerSessionInfo(
+                connection_id=ind_conn_obj.connection_id if ind_conn_obj else "conn_indmoney_live",
+                owner_id=current_user_id,
+                broker_name="indmoney",
+                display_name="INDmoney Private Wealth",
+                status=ind_status,
+                last_sync_time=ind_conn_obj.last_sync_time if ind_conn_obj and ind_conn_obj.last_sync_time else now_iso,
+                account_id="Vangala Vishwajeeth",
+                auth_type="Biometric OAuth2 Bearer",
+                session_expires_at=ind_expiry,
+                is_expired=ind_is_expired,
+                mcp_server_url="https://mcp.indmoney.com/mcp",
+                mcp_protocol="MCP Stdio / JSON-RPC v2.0",
+                tools_count=21,
+                holdings_count=len(ind_holdings),
+                total_valuation=ind_val,
+                last_latency_ms=172,
+                auth_url=ind_auth_url,
+            )
         )
-    )
 
     # Additional Connected Custodian Sessions (Groww, Upstox, Angel One, Dhan, ICICI Direct, HDFC Sky, etc.)
     for broker_key, conn_obj in existing_map.items():
-        if broker_key in ("zerodha", "indmoney"):
+        if broker_key in ("zerodha", "indmoney") or broker_key.startswith("_meta"):
             continue
         meta = BROKER_METADATA_CATALOG.get(
             broker_key,
@@ -1123,20 +1125,78 @@ async def create_broker_connection(
 
 @router.delete(
     "/connections/{broker_name}",
+    response_model=BrokerDeleteResponse,
     status_code=status.HTTP_200_OK,
-    summary="Delete / Disconnect Broker Custodian Connection",
-    description="Removes a linked broker custodian connection from Azure Table storage.",
+    summary="Delete / Disconnect Broker Custodian Connection & Wipe All Associated Data",
+    description="Removes a linked broker custodian connection, purges all associated holdings from Azure Tables, recomputes daily snapshot, and cleans up archived blobs.",
 )
 async def delete_broker_connection(
     broker_name: str,
+    wipe_blobs: bool = Query(default=True, description="Whether to also permanently delete raw JSON payloads in blob storage"),
     current_user_id: str = Depends(get_current_user),
-) -> Dict[str, Any]:
-    """Delete a broker custodian connection."""
+) -> BrokerDeleteResponse:
+    """Delete a broker custodian connection and wipe all associated holdings & snapshot data."""
     broker_clean = broker_name.lower().strip()
     conn_id = f"conn_{broker_clean}_live"
     connections_repo = BrokerConnectionRepository()
+    holdings_repo = HoldingsRepository()
+    snapshots_repo = SnapshotsRepository()
+    aggregator = PortfolioAggregationService()
 
-    deleted = await connections_repo.delete_connection(owner_id=current_user_id, connection_id=conn_id)
-    return {"status": "success", "broker_name": broker_clean, "deleted": deleted}
+    # 1. Delete connection entity from Azure Table
+    await connections_repo.delete_connection(owner_id=current_user_id, connection_id=conn_id)
+
+    # 2. Purge all holdings belonging to this broker
+    purged_holdings = await holdings_repo.delete_holdings_by_connection(
+        owner_id=current_user_id,
+        connection_id=conn_id,
+        broker_name=broker_clean,
+    )
+
+    # 3. Purge archived blobs if requested
+    purged_blobs = 0
+    if wipe_blobs:
+        try:
+            purged_blobs = await purge_broker_blobs(owner_id=current_user_id, connection_id=conn_id)
+        except Exception as blob_err:
+            logger.warning("Purging blobs note for %s: %s", conn_id, blob_err)
+
+    # 4. Fetch remaining holdings and recompute portfolio snapshot
+    remaining_holdings = await holdings_repo.get_holdings(owner_id=current_user_id)
+    as_of_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    new_snapshot = aggregator.calculate_snapshot(
+        owner_id=current_user_id,
+        holdings=remaining_holdings,
+        as_of_date=as_of_date,
+    )
+    await snapshots_repo.save_snapshot(new_snapshot)
+
+    # 5. Invalidate client session / credentials in-memory if Kite or INDmoney
+    if broker_clean == "zerodha":
+        try:
+            zk_provider = ZerodhaProvider()
+            zk_provider.client.reset_session()
+        except Exception as z_err:
+            logger.debug("Zerodha session reset note: %s", z_err)
+
+    logger.info(
+        "Wiped broker %s for user %s: %d holdings purged, %d blobs purged, new total valuation: %.2f",
+        broker_clean,
+        current_user_id,
+        purged_holdings,
+        purged_blobs,
+        new_snapshot.total_current_value,
+    )
+
+    return BrokerDeleteResponse(
+        status="success",
+        broker_name=broker_clean,
+        holdings_purged=purged_holdings,
+        blobs_purged=purged_blobs,
+        snapshot_updated=True,
+        remaining_holdings_count=len(remaining_holdings),
+        new_total_valuation=new_snapshot.total_current_value,
+    )
+
 
 

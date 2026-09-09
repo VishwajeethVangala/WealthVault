@@ -50,7 +50,11 @@ export const BrokerSync: React.FC = () => {
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [addingBroker, setAddingBroker] = useState<string | null>(null)
-  const [deletingBroker, setDeletingBroker] = useState<string | null>(null)
+
+  // Remove Broker & Wipe Data Modal state
+  const [removeModalSession, setRemoveModalSession] = useState<BrokerSessionInfo | null>(null)
+  const [wipeBlobs, setWipeBlobs] = useState(true)
+  const [isWiping, setIsWiping] = useState(false)
 
   const loadSessions = async () => {
     try {
@@ -104,18 +108,28 @@ export const BrokerSync: React.FC = () => {
     }
   }
 
-  const handleDeleteBroker = async (brokerName: string, displayName: string) => {
-    if (!confirm(`Are you sure you want to disconnect and remove ${displayName}?`)) return
-    setDeletingBroker(brokerName)
+  const handleConfirmWipe = async () => {
+    if (!removeModalSession) return
+    const brokerName = removeModalSession.broker_name
+    const displayName = removeModalSession.display_name
+    setIsWiping(true)
     try {
-      await deleteBrokerConnection(brokerName)
+      const res = await deleteBrokerConnection(brokerName, wipeBlobs)
+      setRemoveModalSession(null)
       await loadSessions()
       await loadCatalog()
       await refreshPortfolio()
+      setActionSuccess((prev) => ({
+        ...prev,
+        [brokerName]: `${displayName} disconnected: ${res.holdings_purged} holdings purged. Net worth updated.`,
+      }))
+      setTimeout(() => {
+        setActionSuccess((prev) => ({ ...prev, [brokerName]: null }))
+      }, 5000)
     } catch (err: any) {
-      alert(`Failed to remove connection: ${err.message}`)
+      alert(`Failed to remove broker: ${err.message}`)
     } finally {
-      setDeletingBroker(null)
+      setIsWiping(false)
     }
   }
 
@@ -428,16 +442,13 @@ export const BrokerSync: React.FC = () => {
                           <h3 className="font-serif text-lg text-slate-950 font-medium leading-tight">
                             {session.display_name}
                           </h3>
-                          {session.broker_name !== 'zerodha' && session.broker_name !== 'indmoney' && (
-                            <button
-                              onClick={() => handleDeleteBroker(session.broker_name, session.display_name)}
-                              disabled={deletingBroker === session.broker_name}
-                              className="text-slate-300 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer"
-                              title="Remove Custodian Connection"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => setRemoveModalSession(session)}
+                            className="text-slate-300 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-lg transition-colors cursor-pointer"
+                            title={`Remove ${session.display_name} and wipe data`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                         <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
                           <span className="font-mono font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
@@ -674,10 +685,18 @@ export const BrokerSync: React.FC = () => {
                       <button
                         onClick={() => handleSingleSync(session.broker_name)}
                         disabled={!!actionLoading[session.broker_name]}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlySyncing ? 'animate-spin' : ''}`} />
                         <span>{isCurrentlySyncing ? 'Syncing...' : 'Sync Now'}</span>
+                      </button>
+                      <button
+                        onClick={() => setRemoveModalSession(session)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                        title={`Remove ${session.display_name} and wipe data`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Remove</span>
                       </button>
                     </div>
                   ) : (
@@ -688,7 +707,7 @@ export const BrokerSync: React.FC = () => {
                         disabled={!!actionLoading[session.broker_name]}
                         className={`inline-flex items-center gap-1.5 px-4 py-2 ${
                           isZerodha ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
-                        } text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-50`}
+                        } text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer`}
                       >
                         <Key className="w-3.5 h-3.5" />
                         <span>
@@ -702,10 +721,18 @@ export const BrokerSync: React.FC = () => {
                       <button
                         onClick={() => handleSingleSync(session.broker_name)}
                         disabled={!!actionLoading[session.broker_name]}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlySyncing ? 'animate-spin' : ''}`} />
                         <span>{isCurrentlySyncing ? 'Syncing...' : 'Sync Now'}</span>
+                      </button>
+                      <button
+                        onClick={() => setRemoveModalSession(session)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs font-semibold rounded-xl transition-all cursor-pointer"
+                        title={`Remove ${session.display_name} and wipe data`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Remove</span>
                       </button>
                     </div>
                   )}
@@ -905,6 +932,120 @@ export const BrokerSync: React.FC = () => {
                 className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Remove Broker & Wipe Data Confirmation Modal */}
+      {removeModalSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-rose-100 w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-rose-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-rose-700">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-medium text-slate-950">
+                    Remove {removeModalSession.display_name}
+                  </h3>
+                  <p className="text-xs text-rose-700 font-medium mt-0.5">
+                    Irreversible broker disconnection &amp; data wipeout
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRemoveModalSession(null)}
+                disabled={isWiping}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-white/80 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-xs text-slate-700 space-y-2.5">
+                <div className="font-bold text-slate-900 flex items-center justify-between pb-2 border-b border-slate-200">
+                  <span>Custodian Connection</span>
+                  <span className="font-mono text-[11px] text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    {removeModalSession.connection_id}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Holdings to be purged:</span>
+                  <span className="font-bold text-rose-700">
+                    {removeModalSession.holdings_count} positions
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Valuation to be deducted:</span>
+                  <span className="font-bold text-rose-700">
+                    {formatINR(removeModalSession.total_valuation)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+                  <span className="text-slate-500">Consolidated Net Worth:</span>
+                  <span className="font-semibold text-slate-800">
+                    Automatically recalculated
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2.5 text-xs text-amber-900">
+                <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  All canonical holding records associated with <b>{removeModalSession.display_name}</b> will be permanently wiped from your private vault database.
+                </span>
+              </div>
+
+              {/* Blob Storage Wipe Option */}
+              <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:bg-slate-50/70 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={wipeBlobs}
+                  onChange={(e) => setWipeBlobs(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                />
+                <div className="text-xs">
+                  <span className="font-bold text-slate-900 block">
+                    Purge archived raw JSON payloads
+                  </span>
+                  <span className="text-slate-500 text-[11px] mt-0.5 block">
+                    Permanently delete raw JSON sync payloads stored in Azure Blob Storage under <code className="font-mono bg-slate-100 px-1 rounded">raw-broker-payloads/{removeModalSession.connection_id}</code>.
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2.5">
+              <button
+                onClick={() => setRemoveModalSession(null)}
+                disabled={isWiping}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmWipe}
+                disabled={isWiping}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+              >
+                {isWiping ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Wiping Data &amp; Disconnecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Wipe Data &amp; Disconnect</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
