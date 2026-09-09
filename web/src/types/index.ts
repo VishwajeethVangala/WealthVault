@@ -126,3 +126,22 @@ export interface ReauthRequest {
   session_token?: string
 }
 
+export interface BrokerCatalogItem {
+  broker_name: string
+  display_name: string
+  tag: string
+  color: string
+  auth_type: string
+  mcp_protocol: string
+  description: string
+  supported: boolean
+  is_connected: boolean
+}
+
+export interface CreateBrokerConnectionRequest {
+  broker_name: string
+  account_id?: string
+  custom_mcp_url?: string
+}
+
+

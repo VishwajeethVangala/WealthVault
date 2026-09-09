@@ -211,6 +211,28 @@ class BrokerSessionInfo(BaseModel):
     auth_url: Optional[str] = Field(default=None, description="Interactive login / OAuth authorization URL if AUTH_REQUIRED")
 
 
+class CreateBrokerConnectionRequest(BaseModel):
+    """Payload for creating or linking a new broker custodian connection."""
+
+    broker_name: str = Field(..., description="Broker key name (e.g. zerodha, indmoney, groww, upstox)")
+    account_id: Optional[str] = Field(default=None, description="Optional custom client / account identifier")
+    custom_mcp_url: Optional[str] = Field(default=None, description="Optional custom MCP endpoint URL")
+
+
+class BrokerCatalogItem(BaseModel):
+    """Metadata describing an available broker custodian integration."""
+
+    broker_name: str
+    display_name: str
+    tag: str
+    color: str
+    auth_type: str
+    mcp_protocol: str
+    description: str
+    supported: bool = True
+    is_connected: bool = False
+
+
 class ReauthRequest(BaseModel):
     """Payload for broker session re-authentication."""
 
