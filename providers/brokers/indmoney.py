@@ -27,11 +27,17 @@ class IndmoneyProvider(BrokerProvider):
         credentials: Optional[Dict[str, Any]] = None,
         server_url: str = "https://mcp.indmoney.com/mcp",
         timeout_seconds: float = 45.0,
+        connection_id: str = "conn_indmoney_live",
     ) -> None:
         super().__init__(credentials)
         self.server_url = server_url
         self.timeout = timeout_seconds
+        self.connection_id = connection_id
         self.live_fetched = False
+
+    @property
+    def client(self) -> Any:
+        return get_indmoney_mcp_client(connection_id=self.connection_id)
 
     async def connect(self, credentials: Optional[Dict[str, Any]] = None) -> bool:
         """Verify broker connection."""
@@ -42,7 +48,7 @@ class IndmoneyProvider(BrokerProvider):
 
     async def get_account_status(self) -> Dict[str, Any]:
         """Fetch account and OAuth connection status."""
-        client = get_indmoney_mcp_client()
+        client = self.client
         if client.is_authenticated():
             return {
                 "status": "success",
@@ -62,7 +68,7 @@ class IndmoneyProvider(BrokerProvider):
 
     async def get_holdings(self) -> Any:
         """Retrieve live family asset holdings directly from INDmoney MCP."""
-        client = get_indmoney_mcp_client()
+        client = self.client
         try:
             raw_overall = await client.get_family_asset_holdings("overall")
             if not raw_overall:

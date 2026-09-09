@@ -30,12 +30,23 @@ class KiteAuthRequiredError(Exception):
 
 
 class KiteMCPClient:
-    """Singleton persistent HTTP client for Zerodha Kite MCP server."""
+    """Persistent HTTP client for Zerodha Kite MCP server, isolated per connection ID."""
 
-    _instance: Optional["KiteMCPClient"] = None
+    _instances: Dict[str, "KiteMCPClient"] = {}
 
-    def __init__(self, server_url: str = "https://mcp.kite.trade/mcp") -> None:
+    def __init__(
+        self,
+        server_url: str = "https://mcp.kite.trade/mcp",
+        connection_id: str = "conn_zerodha_live",
+    ) -> None:
         self.server_url = server_url
+        self.connection_id = connection_id
+        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_zerodha_live")
+        self.session_file = Path(f"storage/blobs/kite_session_{safe_id}.json")
+        # Backwards compatibility for original default session file
+        if (connection_id == "conn_zerodha_live" or "default" in connection_id) and not self.session_file.exists() and SESSION_FILE.exists():
+            self.session_file = SESSION_FILE
+
         self.session_id: Optional[str] = None
         self.auth_url: Optional[str] = None
         self.is_authenticated: bool = False
@@ -45,36 +56,37 @@ class KiteMCPClient:
         self._load_saved_session()
 
     @classmethod
-    def get_instance(cls) -> "KiteMCPClient":
-        if cls._instance is None:
-            cls._instance = KiteMCPClient()
-        return cls._instance
+    def get_instance(cls, connection_id: str = "conn_zerodha_live") -> "KiteMCPClient":
+        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_zerodha_live")
+        if safe_id not in cls._instances:
+            cls._instances[safe_id] = KiteMCPClient(connection_id=connection_id)
+        return cls._instances[safe_id]
 
     def _load_saved_session(self) -> None:
         """Load persistent session ID and auth URL from disk."""
-        if SESSION_FILE.exists():
+        if self.session_file.exists():
             try:
-                with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                with open(self.session_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.session_id = data.get("session_id")
                     self.auth_url = data.get("auth_url")
                     self.is_authenticated = bool(data.get("is_authenticated", False))
-                    logger.info("Loaded persistent Kite session_id: %s (authenticated: %s)", self.session_id, self.is_authenticated)
+                    logger.info("Loaded persistent Kite session for %s: %s (authenticated: %s)", self.connection_id, self.session_id, self.is_authenticated)
             except Exception as exc:
-                logger.warning("Failed to load saved Kite session: %s", exc)
+                logger.warning("Failed to load saved Kite session for %s: %s", self.connection_id, exc)
 
     def _save_session(self) -> None:
         """Save persistent session ID and auth URL to disk."""
         try:
-            SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            self.session_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.session_file, "w", encoding="utf-8") as f:
                 json.dump({
                     "session_id": self.session_id,
                     "auth_url": self.auth_url,
                     "is_authenticated": self.is_authenticated,
                 }, f, indent=2)
         except Exception as exc:
-            logger.warning("Failed to save Kite session: %s", exc)
+            logger.warning("Failed to save Kite session for %s: %s", self.connection_id, exc)
 
     def _get_http_session(self) -> aiohttp.ClientSession:
         if self._http_session is None or self._http_session.closed:
@@ -327,6 +339,6 @@ class KiteMCPClient:
         logger.info("Kite MCP HTTP client closed.")
 
 
-def get_kite_mcp_client() -> KiteMCPClient:
-    """Retrieve global singleton instance of KiteMCPClient."""
-    return KiteMCPClient.get_instance()
+def get_kite_mcp_client(connection_id: str = "conn_zerodha_live") -> KiteMCPClient:
+    """Retrieve persistent instance of KiteMCPClient for the specified connection ID."""
+    return KiteMCPClient.get_instance(connection_id=connection_id)

@@ -90,6 +90,8 @@ class BrokerConnectionRepository(BaseTableStorage):
         owner_id: str,
         broker_name: str,
         connection_id: Optional[str] = None,
+        account_id: Optional[str] = None,
+        account_label: Optional[str] = None,
         status: BrokerStatus = BrokerStatus.CONNECTED,
     ) -> BrokerConnection:
         """Create a new broker connection enforcing PartitionKey == owner_id.
@@ -98,16 +100,20 @@ class BrokerConnectionRepository(BaseTableStorage):
             owner_id: User ID of tenant owner (PartitionKey).
             broker_name: Name/identifier of the broker platform.
             connection_id: Optional custom connection ID (RowKey), auto-generated if omitted.
+            account_id: Optional broker account / client ID (e.g. SRK113).
+            account_label: Optional user alias (e.g. 'Personal Demat', 'Family HUF').
             status: Initial connection status.
 
         Returns:
             The created BrokerConnection entity.
         """
-        conn_id = connection_id or f"conn_{uuid.uuid4().hex[:12]}"
+        conn_id = connection_id or f"conn_{broker_name.lower().strip()}_{uuid.uuid4().hex[:6]}"
         connection = BrokerConnection(
             connection_id=conn_id,
             owner_id=owner_id,
             broker_name=broker_name.lower().strip(),
+            account_id=account_id,
+            account_label=account_label,
             status=status,
             last_sync_time=None,
         )
@@ -141,6 +147,8 @@ class BrokerConnectionRepository(BaseTableStorage):
             connection_id=data["connection_id"],
             owner_id=data["owner_id"],
             broker_name=data["broker_name"],
+            account_id=data.get("account_id"),
+            account_label=data.get("account_label"),
             status=_parse_broker_status(data["status"]),
             last_sync_time=data.get("last_sync_time"),
         )
@@ -167,6 +175,8 @@ class BrokerConnectionRepository(BaseTableStorage):
                         connection_id=item["connection_id"],
                         owner_id=item["owner_id"],
                         broker_name=item["broker_name"],
+                        account_id=item.get("account_id"),
+                        account_label=item.get("account_label"),
                         status=_parse_broker_status(item["status"]),
                         last_sync_time=item.get("last_sync_time"),
                     )
@@ -201,6 +211,8 @@ class BrokerConnectionRepository(BaseTableStorage):
         connection_id: str,
         status: BrokerStatus,
         last_sync_time: Optional[str] = None,
+        account_id: Optional[str] = None,
+        account_label: Optional[str] = None,
     ) -> BrokerConnection:
         """Update connection status and last sync time, auto-creating if not found."""
         conn = await self.get_connection(owner_id=owner_id, connection_id=connection_id)
@@ -211,6 +223,8 @@ class BrokerConnectionRepository(BaseTableStorage):
                 connection_id=connection_id,
                 owner_id=owner_id,
                 broker_name=b_name,
+                account_id=account_id,
+                account_label=account_label,
                 status=status,
                 last_sync_time=last_sync_time,
             )
@@ -218,6 +232,10 @@ class BrokerConnectionRepository(BaseTableStorage):
             conn.status = status
             if last_sync_time is not None:
                 conn.last_sync_time = last_sync_time
+            if account_id is not None:
+                conn.account_id = account_id
+            if account_label is not None:
+                conn.account_label = account_label
 
         await self.upsert_entity(
             user_id=owner_id,
@@ -401,14 +419,16 @@ class HoldingsRepository(BaseTableStorage):
             item_conn = str(item.get("connection_id", "")).lower()
             item_row = str(item.get("RowKey", "")).lower()
 
-            is_match = (
-                item_conn == conn_clean
-                or broker_clean in item_conn
+            # Exact match on connection_id takes priority to isolate multi-account holdings
+            if item_conn == conn_clean:
+                to_delete.append(item)
+            # Legacy fallback only if connection_id was never populated on older holding records
+            elif not item_conn and (
+                broker_clean in item_row
                 or item_row.startswith(f"hld_{tag_clean}")
-                or (broker_clean == "zerodha" and (item_row.startswith("hld_zk") or "zerodha" in item_conn))
-                or (broker_clean == "indmoney" and (item_row.startswith("hld_ind") or "indmoney" in item_conn))
-            )
-            if is_match:
+                or (broker_clean == "zerodha" and item_row.startswith("hld_zk"))
+                or (broker_clean == "indmoney" and item_row.startswith("hld_ind"))
+            ):
                 to_delete.append(item)
 
         if not to_delete:

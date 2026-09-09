@@ -51,6 +51,11 @@ export const BrokerSync: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [addingBroker, setAddingBroker] = useState<string | null>(null)
 
+  // Multi-account addition configuration state
+  const [selectedBrokerForAdd, setSelectedBrokerForAdd] = useState<BrokerCatalogItem | null>(null)
+  const [accountLabelInput, setAccountLabelInput] = useState('')
+  const [accountIdInput, setAccountIdInput] = useState('')
+
   // Remove Broker & Wipe Data Modal state
   const [removeModalSession, setRemoveModalSession] = useState<BrokerSessionInfo | null>(null)
   const [wipeBlobs, setWipeBlobs] = useState(true)
@@ -82,11 +87,32 @@ export const BrokerSync: React.FC = () => {
     }
   }
 
+  const openConnectForm = (brokerItem: BrokerCatalogItem) => {
+    setSelectedBrokerForAdd(brokerItem)
+    const existingForBroker = sessions.filter(
+      (s) => s.broker_name.toLowerCase() === brokerItem.broker_name.toLowerCase()
+    )
+    if (existingForBroker.length > 0) {
+      setAccountLabelInput(`Account ${existingForBroker.length + 1}`)
+    } else {
+      setAccountLabelInput(
+        brokerItem.broker_name === 'zerodha'
+          ? 'Personal Demat'
+          : brokerItem.broker_name === 'indmoney'
+          ? 'Primary Wealth'
+          : 'Primary Account'
+      )
+    }
+    setAccountIdInput('')
+  }
+
   const handleAddBroker = async (brokerItem: BrokerCatalogItem) => {
     setAddingBroker(brokerItem.broker_name)
     try {
       const newSession = await addBrokerConnection({
         broker_name: brokerItem.broker_name,
+        account_label: accountLabelInput.trim() || undefined,
+        account_id: accountIdInput.trim() || undefined,
       })
       await loadSessions()
       await loadCatalog()
@@ -94,12 +120,13 @@ export const BrokerSync: React.FC = () => {
         window.open(newSession.auth_url, '_blank')
       }
       setShowAddModal(false)
+      setSelectedBrokerForAdd(null)
       setActionSuccess((prev) => ({
         ...prev,
-        [brokerItem.broker_name]: `${brokerItem.display_name} connected successfully.`,
+        [newSession.connection_id]: `${newSession.display_name} connected successfully.`,
       }))
       setTimeout(() => {
-        setActionSuccess((prev) => ({ ...prev, [brokerItem.broker_name]: null }))
+        setActionSuccess((prev) => ({ ...prev, [newSession.connection_id]: null }))
       }, 4000)
     } catch (err: any) {
       alert(`Failed to add connection: ${err.message}`)
@@ -110,21 +137,21 @@ export const BrokerSync: React.FC = () => {
 
   const handleConfirmWipe = async () => {
     if (!removeModalSession) return
-    const brokerName = removeModalSession.broker_name
+    const connId = removeModalSession.connection_id
     const displayName = removeModalSession.display_name
     setIsWiping(true)
     try {
-      const res = await deleteBrokerConnection(brokerName, wipeBlobs)
+      const res = await deleteBrokerConnection(connId, wipeBlobs)
       setRemoveModalSession(null)
       await loadSessions()
       await loadCatalog()
       await refreshPortfolio()
       setActionSuccess((prev) => ({
         ...prev,
-        [brokerName]: `${displayName} disconnected: ${res.holdings_purged} holdings purged. Net worth updated.`,
+        [connId]: `${displayName} disconnected: ${res.holdings_purged} holdings purged. Net worth updated.`,
       }))
       setTimeout(() => {
-        setActionSuccess((prev) => ({ ...prev, [brokerName]: null }))
+        setActionSuccess((prev) => ({ ...prev, [connId]: null }))
       }, 5000)
     } catch (err: any) {
       alert(`Failed to remove broker: ${err.message}`)
@@ -152,7 +179,6 @@ export const BrokerSync: React.FC = () => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data === 'indmoney_authorized') {
         loadSessions()
-        handleSingleSync('indmoney')
       }
     }
     window.addEventListener('message', handleMessage)
@@ -199,53 +225,54 @@ export const BrokerSync: React.FC = () => {
     return { relative, full: `${dateStr} at ${timeStr} IST` }
   }
 
-  const handleSingleSync = async (brokerName: string) => {
-    setActionLoading((prev) => ({ ...prev, [brokerName]: 'syncing' }))
+  const handleSingleSync = async (session: BrokerSessionInfo) => {
+    const connId = session.connection_id
+    setActionLoading((prev) => ({ ...prev, [connId]: 'syncing' }))
     try {
-      const updated = await syncBroker(brokerName)
-      setSessions((prev) => prev.map((s) => (s.broker_name === brokerName ? updated : s)))
+      const updated = await syncBroker(connId)
+      setSessions((prev) => prev.map((s) => (s.connection_id === connId ? updated : s)))
 
       if (updated.status === 'AUTH_REQUIRED' || updated.status === 'SESSION_EXPIRED') {
         alert(
-          `${updated.display_name} authorization is required. Please click 'Authorize on Kite' to log in in your browser, then click Sync again.`
+          `${updated.display_name} authorization is required. Please click 'Authorize' to log in in your browser, then click Sync again.`
         )
       } else if (updated.status === 'CONNECTED') {
         await refreshPortfolio()
         setActionSuccess((prev) => ({
           ...prev,
-          [brokerName]: `Synced successfully! ${updated.holdings_count} positions updated.`,
+          [connId]: `Synced successfully! ${updated.holdings_count} positions updated.`,
         }))
         setTimeout(() => {
-          setActionSuccess((prev) => ({ ...prev, [brokerName]: null }))
+          setActionSuccess((prev) => ({ ...prev, [connId]: null }))
         }, 4000)
       }
     } catch (err: any) {
       alert(`Sync failed: ${err.message}`)
     } finally {
-      setActionLoading((prev) => ({ ...prev, [brokerName]: null }))
+      setActionLoading((prev) => ({ ...prev, [connId]: null }))
     }
   }
 
-
   const handleStartAuth = async (session: BrokerSessionInfo) => {
+    const connId = session.connection_id
     if (session.auth_url) {
       window.open(session.auth_url, '_blank')
       return
     }
-    setActionLoading((prev) => ({ ...prev, [session.broker_name]: 'authorizing' }))
+    setActionLoading((prev) => ({ ...prev, [connId]: 'authorizing' }))
     try {
       // 1. Refresh sessions to fetch the latest auth_url generated by backend
       const fresh = await fetchBrokerSessions()
       setSessions(fresh)
-      const target = fresh.find((s) => s.broker_name === session.broker_name)
+      const target = fresh.find((s) => s.connection_id === connId)
       if (target?.auth_url) {
         window.open(target.auth_url, '_blank')
         return
       }
 
       // 2. Fallback: call sync endpoint which forces session re-init & acquires fresh auth_url
-      const synced = await syncBroker(session.broker_name)
-      setSessions((prev) => prev.map((s) => (s.broker_name === session.broker_name ? synced : s)))
+      const synced = await syncBroker(connId)
+      setSessions((prev) => prev.map((s) => (s.connection_id === connId ? synced : s)))
       if (synced?.auth_url) {
         window.open(synced.auth_url, '_blank')
       } else {
@@ -254,7 +281,7 @@ export const BrokerSync: React.FC = () => {
     } catch (err: any) {
       alert(`Could not start authorization: ${err.message}`)
     } finally {
-      setActionLoading((prev) => ({ ...prev, [session.broker_name]: null }))
+      setActionLoading((prev) => ({ ...prev, [connId]: null }))
     }
   }
 
@@ -412,8 +439,8 @@ export const BrokerSync: React.FC = () => {
             const isAuthReq = session.status === 'AUTH_REQUIRED'
             const isDisconnected = session.status === 'DISCONNECTED'
             const syncTimeInfo = formatTimestamp(session.last_sync_time)
-            const isCurrentlySyncing = actionLoading[session.broker_name] === 'syncing'
-            const successMsg = actionSuccess[session.broker_name]
+            const isCurrentlySyncing = actionLoading[session.connection_id] === 'syncing'
+            const successMsg = actionSuccess[session.connection_id]
 
             return (
               <div
@@ -442,6 +469,11 @@ export const BrokerSync: React.FC = () => {
                           <h3 className="font-serif text-lg text-slate-950 font-medium leading-tight">
                             {session.display_name}
                           </h3>
+                          {session.account_label && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                              {session.account_label}
+                            </span>
+                          )}
                           <button
                             onClick={() => setRemoveModalSession(session)}
                             className="text-slate-300 hover:text-rose-600 hover:bg-rose-50 p-1 rounded-lg transition-colors cursor-pointer"
@@ -522,14 +554,14 @@ export const BrokerSync: React.FC = () => {
                         <div className="mt-3 flex flex-wrap items-center gap-2.5">
                           <button
                             onClick={() => handleStartAuth(session)}
-                            disabled={!!actionLoading[session.broker_name]}
+                            disabled={!!actionLoading[session.connection_id]}
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 ${
                               isZerodha ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
                             } text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-50`}
                           >
                             <Key className="w-3.5 h-3.5" />
                             <span>
-                              {actionLoading[session.broker_name] === 'authorizing'
+                              {actionLoading[session.connection_id] === 'authorizing'
                                 ? 'Opening Login...'
                                 : isZerodha
                                 ? 'Authorize on Kite (Opens in New Tab)'
@@ -537,8 +569,8 @@ export const BrokerSync: React.FC = () => {
                             </span>
                           </button>
                           <button
-                            onClick={() => handleSingleSync(session.broker_name)}
-                            disabled={!!actionLoading[session.broker_name]}
+                            onClick={() => handleSingleSync(session)}
+                            disabled={!!actionLoading[session.connection_id]}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50"
                           >
                             <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlySyncing ? 'animate-spin' : ''}`} />
@@ -601,21 +633,21 @@ export const BrokerSync: React.FC = () => {
                       <button
                         onClick={() =>
                           setExpandedTools(
-                            expandedTools === session.broker_name ? null : session.broker_name
+                            expandedTools === session.connection_id ? null : session.connection_id
                           )
                         }
                         className="text-[11px] font-semibold text-slate-700 hover:text-slate-950 flex items-center gap-1"
                       >
                         <Eye className="w-3 h-3" />
                         <span>
-                          {expandedTools === session.broker_name ? 'Hide' : 'View'} {session.tools_count} MCP Tools
+                          {expandedTools === session.connection_id ? 'Hide' : 'View'} {session.tools_count} MCP Tools
                         </span>
                       </button>
                     </div>
                   </div>
 
                   {/* Expandable MCP Tools Directory */}
-                  {expandedTools === session.broker_name && (
+                  {expandedTools === session.connection_id && (
                     <div className="mt-3 p-3.5 rounded-xl bg-slate-950 text-slate-200 text-xs font-mono">
                       <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-[11px]">
                         <span className="text-emerald-400 font-bold flex items-center gap-1.5">
@@ -683,8 +715,8 @@ export const BrokerSync: React.FC = () => {
                   {isConnected ? (
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => handleSingleSync(session.broker_name)}
-                        disabled={!!actionLoading[session.broker_name]}
+                        onClick={() => handleSingleSync(session)}
+                        disabled={!!actionLoading[session.connection_id]}
                         className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-950 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlySyncing ? 'animate-spin' : ''}`} />
@@ -704,14 +736,14 @@ export const BrokerSync: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleStartAuth(session)}
-                        disabled={!!actionLoading[session.broker_name]}
+                        disabled={!!actionLoading[session.connection_id]}
                         className={`inline-flex items-center gap-1.5 px-4 py-2 ${
                           isZerodha ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
                         } text-white font-bold text-xs rounded-xl shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer`}
                       >
                         <Key className="w-3.5 h-3.5" />
                         <span>
-                          {actionLoading[session.broker_name] === 'authorizing'
+                          {actionLoading[session.connection_id] === 'authorizing'
                             ? 'Connecting...'
                             : isZerodha
                             ? 'Authorize Kite'
@@ -719,8 +751,8 @@ export const BrokerSync: React.FC = () => {
                         </span>
                       </button>
                       <button
-                        onClick={() => handleSingleSync(session.broker_name)}
-                        disabled={!!actionLoading[session.broker_name]}
+                        onClick={() => handleSingleSync(session)}
+                        disabled={!!actionLoading[session.connection_id]}
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isCurrentlySyncing ? 'animate-spin' : ''}`} />
@@ -809,22 +841,129 @@ export const BrokerSync: React.FC = () => {
             </div>
 
             {/* Modal Search Bar */}
-            <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search broker custodians (e.g. Zerodha, Groww, Upstox, Dhan, INDmoney)..."
-                  className="w-full pl-10 pr-4 py-2 text-xs bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-950 text-slate-900 placeholder:text-slate-400"
-                />
+            {!selectedBrokerForAdd && (
+              <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/50">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search broker custodians (e.g. Zerodha, Groww, Upstox, Dhan, INDmoney)..."
+                    className="w-full pl-10 pr-4 py-2 text-xs bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-950 text-slate-900 placeholder:text-slate-400"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Modal Catalog Body */}
             <div className="p-6 overflow-y-auto flex-1 space-y-3">
-              {catalogLoading ? (
+              {selectedBrokerForAdd ? (
+                /* Multi-Account Configuration Form */
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBrokerForAdd(null)}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <span>&larr;</span>
+                    <span>Back to Custodian Catalog</span>
+                  </button>
+
+                  <div className="flex items-center gap-3.5 p-4 rounded-xl bg-slate-50 border border-slate-200/80">
+                    <div
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-white shadow-sm shrink-0 ${
+                        getBrokerBrand(selectedBrokerForAdd.broker_name).color
+                      }`}
+                    >
+                      {getBrokerBrand(selectedBrokerForAdd.broker_name).tag}
+                    </div>
+                    <div>
+                      <h3 className="font-serif text-base font-semibold text-slate-950">
+                        Add {selectedBrokerForAdd.display_name} Account
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        Multi-Account isolation &bull; Dedicated credentials &amp; isolated sync
+                      </p>
+                    </div>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      handleAddBroker(selectedBrokerForAdd)
+                    }}
+                    className="space-y-4 pt-1"
+                  >
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Account Alias / Label
+                      </label>
+                      <input
+                        type="text"
+                        value={accountLabelInput}
+                        onChange={(e) => setAccountLabelInput(e.target.value)}
+                        placeholder="e.g. Personal Demat, Family HUF, Spouse Wealth"
+                        className="w-full px-3.5 py-2.5 text-xs bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-950 text-slate-900 placeholder:text-slate-400 shadow-sm"
+                      />
+                      <span className="text-[11px] text-slate-400 mt-1 block">
+                        Differentiates this connection card from your other {selectedBrokerForAdd.display_name} accounts.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Account / Demat / Client ID <span className="text-slate-400 font-normal">(Optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={accountIdInput}
+                        onChange={(e) => setAccountIdInput(e.target.value)}
+                        placeholder={
+                          selectedBrokerForAdd.broker_name === 'zerodha'
+                            ? 'e.g. SRK113 or Demat Client ID'
+                            : 'e.g. Client / User Identifier'
+                        }
+                        className="w-full px-3.5 py-2.5 text-xs bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-950 text-slate-900 placeholder:text-slate-400 shadow-sm"
+                      />
+                    </div>
+
+                    <div className="p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-900 flex items-start gap-2.5">
+                      <Server className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                      <div className="leading-relaxed">
+                        <b>Independent Ledger:</b> A discrete connection will be provisioned in your vault. Holdings will remain segregated per account while automatically rolling up into your consolidated Net Worth.
+                      </div>
+                    </div>
+
+                    <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBrokerForAdd(null)}
+                        className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={addingBroker === selectedBrokerForAdd.broker_name}
+                        className="inline-flex items-center gap-2 px-5 py-2 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                      >
+                        {addingBroker === selectedBrokerForAdd.broker_name ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Connecting Account...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Connect &amp; Authorize Account</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : catalogLoading ? (
                 <div className="py-12 flex flex-col items-center justify-center">
                   <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
                   <p className="text-xs text-slate-500 mt-2">Loading supported custodians...</p>
@@ -843,19 +982,18 @@ export const BrokerSync: React.FC = () => {
                     })
                     .map((item) => {
                       const brand = getBrokerBrand(item.broker_name)
-                      const isConnected = sessions.some(
-                        (s) => s.broker_name.toLowerCase() === item.broker_name.toLowerCase()
-                      )
+                      const connectedCount =
+                        item.connected_count ??
+                        sessions.filter(
+                          (s) => s.broker_name.toLowerCase() === item.broker_name.toLowerCase()
+                        ).length
+                      const isConnected = connectedCount > 0
                       const isConnecting = addingBroker === item.broker_name
 
                       return (
                         <div
                           key={item.broker_name}
-                          className={`p-4 rounded-xl border transition-all flex flex-col justify-between ${
-                            isConnected
-                              ? 'bg-slate-50/70 border-slate-200 opacity-80'
-                              : 'bg-white border-slate-200/80 hover:border-slate-400 hover:shadow-sm'
-                          }`}
+                          className="p-4 rounded-xl border transition-all flex flex-col justify-between bg-white border-slate-200/80 hover:border-slate-400 hover:shadow-sm"
                         >
                           <div>
                             <div className="flex items-start justify-between gap-3">
@@ -877,7 +1015,9 @@ export const BrokerSync: React.FC = () => {
                               {isConnected && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60 shrink-0">
                                   <Check className="w-3 h-3 text-emerald-600" />
-                                  <span>Connected</span>
+                                  <span>
+                                    {connectedCount} {connectedCount === 1 ? 'Account' : 'Accounts'}
+                                  </span>
                                 </span>
                               )}
                             </div>
@@ -890,29 +1030,23 @@ export const BrokerSync: React.FC = () => {
                             <span className="text-[10px] font-mono text-slate-400">
                               {item.auth_type}
                             </span>
-                            {isConnected ? (
-                              <span className="text-[11px] font-semibold text-slate-400">
-                                Already in Vault
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => handleAddBroker(item)}
-                                disabled={isConnecting}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
-                              >
-                                {isConnecting ? (
-                                  <>
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                    <span>Linking...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Plus className="w-3.5 h-3.5" />
-                                    <span>Connect</span>
-                                  </>
-                                )}
-                              </button>
-                            )}
+                            <button
+                              onClick={() => openConnectForm(item)}
+                              disabled={isConnecting}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer"
+                            >
+                              {isConnecting ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 animate-spin" />
+                                  <span>Linking...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>{isConnected ? '+ Add Another Account' : 'Connect'}</span>
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
                       )
@@ -975,6 +1109,14 @@ export const BrokerSync: React.FC = () => {
                     {removeModalSession.connection_id}
                   </span>
                 </div>
+                {removeModalSession.account_label && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Account Label / Alias:</span>
+                    <span className="font-semibold text-slate-800">
+                      {removeModalSession.account_label}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">Holdings to be purged:</span>
                   <span className="font-bold text-rose-700">

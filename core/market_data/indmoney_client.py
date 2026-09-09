@@ -12,6 +12,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import time
 from typing import Any, Dict, List, Optional
 import urllib.parse
@@ -33,19 +34,27 @@ class IndmoneyAuthRequiredError(Exception):
 
 
 class IndmoneyMCPClient:
-    """Singleton persistent HTTP OAuth client for INDmoney MCP server."""
+    """Persistent HTTP OAuth client for INDmoney MCP server, isolated per connection ID."""
 
-    _instance: Optional["IndmoneyMCPClient"] = None
+    _instances: Dict[str, "IndmoneyMCPClient"] = {}
 
     def __init__(
         self,
         server_url: str = "https://mcp.indmoney.com/mcp",
         token_endpoint: str = "https://mcp.indmoney.com/token",
         authorization_endpoint: str = "https://mcp.indmoney.com/authorize",
+        connection_id: str = "conn_indmoney_live",
     ) -> None:
         self.server_url = server_url
         self.token_endpoint = token_endpoint
         self.authorization_endpoint = authorization_endpoint
+        self.connection_id = connection_id
+        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_indmoney_live")
+        self.tokens_file = Path(f"storage/blobs/indmoney_tokens_{safe_id}.json")
+        # Backwards compatibility for original default tokens file
+        if (connection_id == "conn_indmoney_live" or "default" in connection_id) and not self.tokens_file.exists() and TOKENS_FILE.exists():
+            self.tokens_file = TOKENS_FILE
+
         self.client_id: str = "dfed4e00-5c2a-4aec-ae9e-53afff3637a2"
         self.client_secret: str = "6f392883326629bd269c7425981ea90d853c1e3275ce1c62c525706f255c9c41"
         self.redirect_uri: str = "http://127.0.0.1:8000/api/v1/portfolio/oauth/indmoney/callback"
@@ -66,10 +75,11 @@ class IndmoneyMCPClient:
         self._load_tokens()
 
     @classmethod
-    def get_instance(cls) -> "IndmoneyMCPClient":
-        if cls._instance is None:
-            cls._instance = IndmoneyMCPClient()
-        return cls._instance
+    def get_instance(cls, connection_id: str = "conn_indmoney_live") -> "IndmoneyMCPClient":
+        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_indmoney_live")
+        if safe_id not in cls._instances:
+            cls._instances[safe_id] = IndmoneyMCPClient(connection_id=connection_id)
+        return cls._instances[safe_id]
 
     def _load_client_info(self) -> None:
         if CLIENT_FILE.exists():
@@ -86,30 +96,30 @@ class IndmoneyMCPClient:
                 logger.warning("Could not load INDmoney client info: %s", exc)
 
     def _load_tokens(self) -> None:
-        if TOKENS_FILE.exists():
+        if self.tokens_file.exists():
             try:
-                with open(TOKENS_FILE, "r", encoding="utf-8") as f:
+                with open(self.tokens_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.access_token = data.get("access_token")
                     self.refresh_token = data.get("refresh_token")
                     self.expires_at = float(data.get("expires_at", 0.0))
-                    logger.info("Loaded INDmoney tokens from disk (expires in %ds)", max(0, int(self.expires_at - time.time())))
+                    logger.info("Loaded INDmoney tokens for %s from disk (expires in %ds)", self.connection_id, max(0, int(self.expires_at - time.time())))
             except Exception as exc:
-                logger.warning("Could not load INDmoney tokens: %s", exc)
+                logger.warning("Could not load INDmoney tokens for %s: %s", self.connection_id, exc)
 
     def _save_tokens(self) -> None:
         try:
-            TOKENS_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(TOKENS_FILE, "w", encoding="utf-8") as f:
+            self.tokens_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.tokens_file, "w", encoding="utf-8") as f:
                 json.dump({
                     "access_token": self.access_token,
                     "refresh_token": self.refresh_token,
                     "expires_at": self.expires_at,
                     "updated_at": time.time(),
                 }, f, indent=2)
-            logger.info("Saved INDmoney tokens to disk successfully.")
+            logger.info("Saved INDmoney tokens for %s to disk successfully.", self.connection_id)
         except Exception as exc:
-            logger.warning("Failed to save INDmoney tokens: %s", exc)
+            logger.warning("Failed to save INDmoney tokens for %s: %s", self.connection_id, exc)
 
     def _get_http_session(self) -> aiohttp.ClientSession:
         if self._http_session is None or self._http_session.closed:
@@ -129,6 +139,17 @@ class IndmoneyMCPClient:
             return True
         return bool(self.refresh_token)
 
+    def reset_tokens(self) -> None:
+        """Clear tokens and remove persisted tokens file for this connection."""
+        self.access_token = None
+        self.refresh_token = None
+        self.expires_at = 0.0
+        try:
+            if self.tokens_file.exists():
+                self.tokens_file.unlink()
+        except Exception as exc:
+            logger.debug("Failed to unlink tokens file for %s: %s", self.connection_id, exc)
+
     def get_authorization_url(self) -> str:
         """Generate OAuth 2.0 PKCE authorization URL pointing to WealthVault callback."""
         raw_verifier = os.urandom(32)
@@ -136,7 +157,8 @@ class IndmoneyMCPClient:
         challenge_bytes = hashlib.sha256(code_verifier.encode("ascii")).digest()
         code_challenge = base64.urlsafe_b64encode(challenge_bytes).rstrip(b"=").decode("ascii")
 
-        state = base64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode("ascii")
+        nonce = base64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode("ascii")
+        state = f"{self.connection_id}::{nonce}"
         self._pending_verifier = code_verifier
         self._pending_state = state
         self._pending_verifiers[state] = {
@@ -347,6 +369,6 @@ class IndmoneyMCPClient:
             self._http_session = None
 
 
-def get_indmoney_mcp_client() -> IndmoneyMCPClient:
-    """Retrieve global singleton instance of IndmoneyMCPClient."""
-    return IndmoneyMCPClient.get_instance()
+def get_indmoney_mcp_client(connection_id: str = "conn_indmoney_live") -> IndmoneyMCPClient:
+    """Retrieve persistent instance of IndmoneyMCPClient for the specified connection ID."""
+    return IndmoneyMCPClient.get_instance(connection_id=connection_id)
