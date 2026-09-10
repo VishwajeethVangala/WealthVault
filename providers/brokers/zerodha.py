@@ -33,18 +33,26 @@ class ZerodhaProvider(BrokerProvider):
         credentials: Optional[Dict[str, Any]] = None,
         server_url: str = "https://mcp.kite.trade/mcp",
         timeout_seconds: float = 45.0,
+        connection_id: str = "conn_zerodha_live",
     ) -> None:
         super().__init__(credentials)
         self.server_url = server_url
         self.timeout = timeout_seconds
+        self.connection_id = connection_id
         self.auth_required = False
         self.login_url: Optional[str] = None
 
+    @property
+    def client(self) -> Any:
+        return get_kite_mcp_client(connection_id=self.connection_id)
+
     async def get_login_url(self) -> Optional[str]:
         """Get interactive session authorization URL from persistent Kite MCP bridge."""
-        client = get_kite_mcp_client()
+        client = self.client
         try:
             await client.ensure_connected()
+            if not client.auth_url:
+                await client.reset_session()
             self.login_url = client.auth_url
             return self.login_url
         except Exception as exc:
@@ -61,11 +69,12 @@ class ZerodhaProvider(BrokerProvider):
 
     async def get_account_status(self) -> Dict[str, Any]:
         """Fetch account profile directly from persistent Kite MCP bridge."""
-        client = get_kite_mcp_client()
+        client = self.client
         try:
             await client.ensure_connected()
             data = await client.get_profile()
             if isinstance(data, dict) and data.get("user_id"):
+                self.auth_required = False
                 return {
                     "status": "success",
                     "data": {
@@ -76,38 +85,35 @@ class ZerodhaProvider(BrokerProvider):
                         "status": "active",
                     },
                 }
+            # If get_profile returned empty or not authenticated
+            self.auth_required = True
+            auth_url = client.auth_url or await self.get_login_url()
+            return {
+                "status": "auth_required",
+                "message": "Zerodha Kite session requires login",
+                "auth_url": auth_url,
+            }
         except KiteAuthRequiredError as auth_err:
             self.auth_required = True
-            self.login_url = auth_err.auth_url or client.auth_url
+            self.login_url = auth_err.auth_url or client.auth_url or await self.get_login_url()
             return {
                 "status": "auth_required",
                 "message": "Zerodha Kite session expired or requires login",
                 "auth_url": self.login_url,
             }
         except Exception as exc:
-            logger.info("Kite MCP get_profile note: %s", exc)
-
-        if not client.is_authenticated:
+            logger.warning("Kite MCP get_profile error: %s", exc)
             self.auth_required = True
-            self.login_url = client.auth_url
+            auth_url = client.auth_url or await self.get_login_url()
             return {
                 "status": "auth_required",
-                "message": "Zerodha Kite session requires login",
-                "auth_url": client.auth_url,
+                "message": f"Zerodha Kite session error: {exc}",
+                "auth_url": auth_url,
             }
-
-        return {
-            "status": "success",
-            "data": {
-                "broker": "ZERODHA",
-                "user_id": self.credentials.get("user_id", "ZK_LIVE"),
-                "status": "active",
-            },
-        }
 
     async def get_mf_holdings(self) -> List[Dict[str, Any]]:
         """Fetch live mutual fund holdings from Zerodha Coin via persistent Kite MCP bridge."""
-        client = get_kite_mcp_client()
+        client = self.client
         try:
             return await client.get_mf_holdings()
         except Exception as exc:
@@ -116,7 +122,7 @@ class ZerodhaProvider(BrokerProvider):
 
     async def get_holdings(self, include_mf: bool = True) -> List[Dict[str, Any]]:
         """Invoke live MCP tools 'get_holdings' and 'get_mf_holdings' directly without static file fallback."""
-        client = get_kite_mcp_client()
+        client = self.client
         holdings: List[Dict[str, Any]] = []
 
         equity = await client.get_holdings()
@@ -137,7 +143,7 @@ class ZerodhaProvider(BrokerProvider):
         """Fetch market quotes for instruments via persistent Kite MCP bridge."""
         if not instruments:
             return {}
-        client = get_kite_mcp_client()
+        client = self.client
         try:
             return await client.get_quotes(instruments)
         except Exception as exc:
@@ -148,7 +154,7 @@ class ZerodhaProvider(BrokerProvider):
         """Fetch Last Traded Prices for instruments via persistent Kite MCP bridge."""
         if not instruments:
             return {}
-        client = get_kite_mcp_client()
+        client = self.client
         try:
             return await client.get_ltp(instruments)
         except Exception as exc:

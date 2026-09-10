@@ -75,6 +75,14 @@ class BrokerConnection(BaseModel):
         default=None,
         description="ISO 8601 timestamp of last successful sync",
     )
+    account_id: Optional[str] = Field(
+        default=None,
+        description="Client or Account ID (e.g. SRK113, HUF101)",
+    )
+    account_label: Optional[str] = Field(
+        default=None,
+        description="User-defined account label/alias (e.g. 'Personal Demat', 'Family HUF')",
+    )
 
 
 class Holding(BaseModel):
@@ -198,6 +206,7 @@ class BrokerSessionInfo(BaseModel):
     status: BrokerStatus = Field(..., description="Connection / session status")
     last_sync_time: Optional[str] = Field(default=None, description="ISO timestamp of last successful sync")
     account_id: str = Field(..., description="Broker user ID / client ID")
+    account_label: Optional[str] = Field(default=None, description="User-defined account label / alias")
     auth_type: str = Field(..., description="Authentication protocol (e.g. Daily Kite TOTP, OAuth2 Bearer)")
     session_expires_at: Optional[str] = Field(default=None, description="When the current session token expires")
     is_expired: bool = Field(default=False, description="Whether session is expired")
@@ -209,6 +218,31 @@ class BrokerSessionInfo(BaseModel):
     last_latency_ms: int = Field(default=0, description="Roundtrip latency in milliseconds")
     error_message: Optional[str] = Field(default=None, description="Detailed error message if degraded")
     auth_url: Optional[str] = Field(default=None, description="Interactive login / OAuth authorization URL if AUTH_REQUIRED")
+
+
+class CreateBrokerConnectionRequest(BaseModel):
+    """Payload for creating or linking a new broker custodian connection."""
+
+    broker_name: str = Field(..., description="Broker key name (e.g. zerodha, indmoney, groww, upstox)")
+    account_id: Optional[str] = Field(default=None, description="Optional custom client / account identifier")
+    account_label: Optional[str] = Field(default=None, description="Optional user-defined account label / alias")
+    connection_id: Optional[str] = Field(default=None, description="Optional custom connection identifier")
+    custom_mcp_url: Optional[str] = Field(default=None, description="Optional custom MCP endpoint URL")
+
+
+class BrokerCatalogItem(BaseModel):
+    """Metadata describing an available broker custodian integration."""
+
+    broker_name: str
+    display_name: str
+    tag: str
+    color: str
+    auth_type: str
+    mcp_protocol: str
+    description: str
+    supported: bool = True
+    is_connected: bool = False
+    connected_count: int = 0
 
 
 class ReauthRequest(BaseModel):
@@ -241,5 +275,19 @@ class MarketQuotesResponse(BaseModel):
     cached_count: int = Field(default=0, description="Count of quotes served from TTL cache")
     live_count: int = Field(default=0, description="Count of quotes fetched live from MCP")
     quotes: Dict[str, QuoteItem] = Field(default_factory=dict, description="Map of instrument identifier to quote")
+
+
+class BrokerDeleteResponse(BaseModel):
+    """Result of removing a broker connection and wiping associated data."""
+
+    status: str = Field(default="success", description="Status indicator")
+    broker_name: str = Field(..., description="Target broker platform name")
+    connection_id: Optional[str] = Field(default=None, description="Identifier of the deleted connection")
+    holdings_purged: int = Field(default=0, description="Count of purged holding entities")
+    blobs_purged: int = Field(default=0, description="Count of deleted raw blob payloads")
+    snapshot_updated: bool = Field(default=True, description="Whether daily snapshot was recomputed")
+    remaining_holdings_count: int = Field(default=0, description="Count of remaining holdings across other brokers")
+    new_total_valuation: float = Field(default=0.0, description="Updated portfolio total valuation in INR")
+
 
 

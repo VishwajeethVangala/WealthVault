@@ -7,6 +7,7 @@ multi-tenant partitioning:
 """
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import logging
 from typing import Any, Dict, List, Optional
@@ -89,6 +90,8 @@ class BrokerConnectionRepository(BaseTableStorage):
         owner_id: str,
         broker_name: str,
         connection_id: Optional[str] = None,
+        account_id: Optional[str] = None,
+        account_label: Optional[str] = None,
         status: BrokerStatus = BrokerStatus.CONNECTED,
     ) -> BrokerConnection:
         """Create a new broker connection enforcing PartitionKey == owner_id.
@@ -97,16 +100,20 @@ class BrokerConnectionRepository(BaseTableStorage):
             owner_id: User ID of tenant owner (PartitionKey).
             broker_name: Name/identifier of the broker platform.
             connection_id: Optional custom connection ID (RowKey), auto-generated if omitted.
+            account_id: Optional broker account / client ID (e.g. SRK113).
+            account_label: Optional user alias (e.g. 'Personal Demat', 'Family HUF').
             status: Initial connection status.
 
         Returns:
             The created BrokerConnection entity.
         """
-        conn_id = connection_id or f"conn_{uuid.uuid4().hex[:12]}"
+        conn_id = connection_id or f"conn_{broker_name.lower().strip()}_{uuid.uuid4().hex[:6]}"
         connection = BrokerConnection(
             connection_id=conn_id,
             owner_id=owner_id,
             broker_name=broker_name.lower().strip(),
+            account_id=account_id,
+            account_label=account_label,
             status=status,
             last_sync_time=None,
         )
@@ -140,6 +147,8 @@ class BrokerConnectionRepository(BaseTableStorage):
             connection_id=data["connection_id"],
             owner_id=data["owner_id"],
             broker_name=data["broker_name"],
+            account_id=data.get("account_id"),
+            account_label=data.get("account_label"),
             status=_parse_broker_status(data["status"]),
             last_sync_time=data.get("last_sync_time"),
         )
@@ -158,12 +167,16 @@ class BrokerConnectionRepository(BaseTableStorage):
         items = await self.query_entities(user_id=owner_id)
         connections: List[BrokerConnection] = []
         for item in items:
+            if str(item.get("connection_id", "")).startswith("_meta"):
+                continue
             try:
                 connections.append(
                     BrokerConnection(
                         connection_id=item["connection_id"],
                         owner_id=item["owner_id"],
                         broker_name=item["broker_name"],
+                        account_id=item.get("account_id"),
+                        account_label=item.get("account_label"),
                         status=_parse_broker_status(item["status"]),
                         last_sync_time=item.get("last_sync_time"),
                     )
@@ -172,12 +185,34 @@ class BrokerConnectionRepository(BaseTableStorage):
                 logger.warning("Skipping malformed broker connection record: %s", exc)
         return connections
 
+    async def is_tenant_initialized(self, owner_id: str) -> bool:
+        """Check if tenant has been initialized with default broker configuration."""
+        data = await self.get_entity(user_id=owner_id, entity_id="_meta_initialized")
+        return data is not None
+
+    async def mark_tenant_initialized(self, owner_id: str) -> None:
+        """Record tenant initialization marker in broker connections table."""
+        await self.upsert_entity(
+            user_id=owner_id,
+            entity_id="_meta_initialized",
+            data={
+                "connection_id": "_meta_initialized",
+                "owner_id": owner_id,
+                "broker_name": "_meta",
+                "status": "INITIALIZED",
+                "initialized_at": datetime.now(timezone.utc).isoformat(),
+            },
+            mode="replace",
+        )
+
     async def update_status(
         self,
         owner_id: str,
         connection_id: str,
         status: BrokerStatus,
         last_sync_time: Optional[str] = None,
+        account_id: Optional[str] = None,
+        account_label: Optional[str] = None,
     ) -> BrokerConnection:
         """Update connection status and last sync time, auto-creating if not found."""
         conn = await self.get_connection(owner_id=owner_id, connection_id=connection_id)
@@ -188,6 +223,8 @@ class BrokerConnectionRepository(BaseTableStorage):
                 connection_id=connection_id,
                 owner_id=owner_id,
                 broker_name=b_name,
+                account_id=account_id,
+                account_label=account_label,
                 status=status,
                 last_sync_time=last_sync_time,
             )
@@ -195,6 +232,10 @@ class BrokerConnectionRepository(BaseTableStorage):
             conn.status = status
             if last_sync_time is not None:
                 conn.last_sync_time = last_sync_time
+            if account_id is not None:
+                conn.account_id = account_id
+            if account_label is not None:
+                conn.account_label = account_label
 
         await self.upsert_entity(
             user_id=owner_id,
@@ -347,6 +388,85 @@ class HoldingsRepository(BaseTableStorage):
                 deleted_count += len(chunk)
 
         logger.info("Cleared %d existing holdings for user %s", deleted_count, owner_id)
+        return deleted_count
+
+    async def delete_holdings_by_connection(
+        self,
+        owner_id: str,
+        connection_id: str,
+        broker_name: str,
+    ) -> int:
+        """Purge all holding entities belonging to a specific broker/connection.
+
+        Args:
+            owner_id: Tenant user ID.
+            connection_id: Connection ID (e.g. conn_zerodha_live).
+            broker_name: Name of broker platform (e.g. zerodha, indmoney).
+
+        Returns:
+            Number of holding entities deleted.
+        """
+        existing = await self.query_entities(user_id=owner_id)
+        if not existing:
+            return 0
+
+        broker_clean = broker_name.lower().strip()
+        conn_clean = connection_id.lower().strip()
+        tag_clean = broker_clean[:3]
+
+        to_delete = []
+        for item in existing:
+            item_conn = str(item.get("connection_id", "")).lower()
+            item_row = str(item.get("RowKey", "")).lower()
+
+            # Exact match on connection_id takes priority to isolate multi-account holdings
+            if item_conn == conn_clean:
+                to_delete.append(item)
+            # Legacy fallback only if connection_id was never populated on older holding records
+            elif not item_conn and (
+                broker_clean in item_row
+                or item_row.startswith(f"hld_{tag_clean}")
+                or (broker_clean == "zerodha" and item_row.startswith("hld_zk"))
+                or (broker_clean == "indmoney" and item_row.startswith("hld_ind"))
+            ):
+                to_delete.append(item)
+
+        if not to_delete:
+            return 0
+
+        client = await self.get_table_client()
+        sanitized_owner = sanitize_key(owner_id)
+        deleted_count = 0
+        chunk_size = 100
+
+        for i in range(0, len(to_delete), chunk_size):
+            chunk = to_delete[i : i + chunk_size]
+            batch_ops = []
+            for item in chunk:
+                batch_ops.append((
+                    "delete",
+                    {"PartitionKey": sanitized_owner, "RowKey": item["RowKey"]},
+                ))
+
+            try:
+                await client.submit_transaction(batch_ops)
+                deleted_count += len(chunk)
+            except Exception as exc:
+                logger.info("Batch delete transaction note (%s), deleting concurrently", exc)
+                tasks = [
+                    self.delete_entity(user_id=owner_id, entity_id=item["RowKey"])
+                    for item in chunk
+                ]
+                await asyncio.gather(*tasks)
+                deleted_count += len(chunk)
+
+        logger.info(
+            "Purged %d holdings for broker %s (connection: %s, user: %s)",
+            deleted_count,
+            broker_clean,
+            conn_clean,
+            owner_id,
+        )
         return deleted_count
 
 
