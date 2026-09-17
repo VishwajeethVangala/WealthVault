@@ -424,7 +424,7 @@ export const GlobalFilters: React.FC = () => {
 
   return (
     <div className="h-12 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] select-none">
-      <div className="h-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
+      <div className="h-full w-full px-4 sm:px-6 lg:px-8 xl:px-10 flex items-center justify-between gap-3">
         {/* Left: Looker Studio Filter Dropdown Pills */}
         <div className="flex items-center gap-2 overflow-x-auto sm:overflow-visible py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           <div className="hidden sm:flex items-center gap-1.5 text-slate-400 text-xs font-bold mr-1 shrink-0 uppercase tracking-wider">

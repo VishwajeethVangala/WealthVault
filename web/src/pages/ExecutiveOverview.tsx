@@ -709,8 +709,8 @@ export const ExecutiveOverview: React.FC = () => {
           </div>
         )}
 
-        {/* ROW 1: Core Portfolio Metrics (4 Compact Cards) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {/* ROW 1: Core Portfolio Metrics (4 Cards) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 2xl:gap-5">
           {/* Card 1: Total Portfolio */}
           <div
             onClick={() => handleDrillDown({})}
@@ -718,23 +718,23 @@ export const ExecutiveOverview: React.FC = () => {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({}) }}
             title="Click to view all positions in Holdings Ledger"
-            className="group relative bg-[#ebf5ff] border border-sky-100/90 hover:border-sky-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(2,132,199,0.05)] hover:shadow-md hover:ring-2 hover:ring-sky-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+            className="group relative bg-[#ebf5ff] border border-sky-100/90 hover:border-sky-300 rounded-2xl p-4 sm:p-5 2xl:p-6 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(2,132,199,0.05)] hover:shadow-md hover:ring-2 hover:ring-sky-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
           >
-            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-sky-600">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-sky-600">
+              <ArrowRight className="w-4 h-4" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-sky-100/80 text-sky-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
-              <Wallet className="w-4 h-4" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-sky-100/80 text-sky-600 flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+              <Wallet className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Total Portfolio</span>
-            <span className="text-xl sm:text-2xl font-extrabold text-[#0284c7] my-0.5 font-mono tracking-tight">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wide">Total Portfolio</span>
+            <span className="text-xl sm:text-2xl 2xl:text-3xl font-extrabold text-[#0284c7] my-0.5 sm:my-1 font-mono tracking-tight">
               {formatCompactValue(metrics.currentVal)}
             </span>
-            <span className={`text-xs font-bold ${metrics.pnlVal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className={`text-xs sm:text-sm font-bold ${metrics.pnlVal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.pnlVal >= 0 ? '+' : ''}
               {metrics.pnlPct.toFixed(2)}%
             </span>
-            <span className="text-[11px] font-medium text-slate-500 font-mono">
+            <span className="text-[11px] sm:text-xs font-medium text-slate-500 font-mono mt-0.5">
               Total: {metrics.pnlVal >= 0 ? '+' : ''}{formatCompactValue(metrics.pnlVal)}
             </span>
           </div>
@@ -746,22 +746,22 @@ export const ExecutiveOverview: React.FC = () => {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ sort: 'invested_value' }) }}
             title="Click to view holdings sorted by Investment Cost Basis"
-            className="group relative bg-[#fff7e9] border border-amber-100/90 hover:border-amber-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(217,119,6,0.05)] hover:shadow-md hover:ring-2 hover:ring-amber-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+            className="group relative bg-[#fff7e9] border border-amber-100/90 hover:border-amber-300 rounded-2xl p-4 sm:p-5 2xl:p-6 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(217,119,6,0.05)] hover:shadow-md hover:ring-2 hover:ring-amber-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
           >
-            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-amber-600">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-amber-600">
+              <ArrowRight className="w-4 h-4" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-amber-100/80 text-amber-700 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
-              <PiggyBank className="w-4 h-4" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100/80 text-amber-700 flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+              <PiggyBank className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Total Investment</span>
-            <span className="text-xl sm:text-2xl font-extrabold text-[#d97706] my-0.5 font-mono tracking-tight">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wide">Total Investment</span>
+            <span className="text-xl sm:text-2xl 2xl:text-3xl font-extrabold text-[#d97706] my-0.5 sm:my-1 font-mono tracking-tight">
               {formatCompactValue(metrics.investedVal)}
             </span>
-            <span className="text-xs font-bold text-emerald-700">
+            <span className="text-xs sm:text-sm font-bold text-emerald-700">
               {metrics.holdingsCount} Holding{metrics.holdingsCount !== 1 ? 's' : ''}
             </span>
-            <span className="text-[11px] font-medium text-slate-500">
+            <span className="text-[11px] sm:text-xs font-medium text-slate-500 mt-0.5 truncate max-w-full">
               {activeAssetClass === 'GOLD'
                 ? `${metrics.goldCount} SGB Tranche${metrics.goldCount !== 1 ? 's' : ''}`
                 : activeAssetClass === 'NPS'
@@ -783,23 +783,23 @@ export const ExecutiveOverview: React.FC = () => {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'EQUITY' }) }}
             title="Click to view Equity stock holdings in Holdings Ledger"
-            className="group relative bg-[#edf9f0] border border-emerald-100/90 hover:border-emerald-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(16,185,129,0.05)] hover:shadow-md hover:ring-2 hover:ring-emerald-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+            className="group relative bg-[#edf9f0] border border-emerald-100/90 hover:border-emerald-300 rounded-2xl p-4 sm:p-5 2xl:p-6 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(16,185,129,0.05)] hover:shadow-md hover:ring-2 hover:ring-emerald-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
           >
-            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-600">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-600">
+              <ArrowRight className="w-4 h-4" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-emerald-100/80 text-emerald-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
-              <TrendingUp className="w-4 h-4" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Equity Portfolio</span>
-            <span className="text-xl sm:text-2xl font-extrabold text-emerald-600 my-0.5 font-mono tracking-tight">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wide">Equity Portfolio</span>
+            <span className="text-xl sm:text-2xl 2xl:text-3xl font-extrabold text-emerald-600 my-0.5 sm:my-1 font-mono tracking-tight">
               {formatCompactValue(metrics.equityVal)}
             </span>
-            <span className={`text-xs font-bold ${metrics.equityPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className={`text-xs sm:text-sm font-bold ${metrics.equityPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.equityPnl >= 0 ? '+' : ''}
               {metrics.equityPnlPct.toFixed(2)}%
             </span>
-            <span className="text-[11px] font-medium text-slate-500 font-mono">
+            <span className="text-[11px] sm:text-xs font-medium text-slate-500 font-mono mt-0.5">
               Total: {metrics.equityPnl >= 0 ? '+' : ''}{formatCompactValue(metrics.equityPnl)}
             </span>
           </div>
@@ -811,30 +811,30 @@ export const ExecutiveOverview: React.FC = () => {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'MUTUAL_FUND' }) }}
             title="Click to view Mutual Fund holdings in Holdings Ledger"
-            className="group relative bg-[#f8effc] border border-purple-100/90 hover:border-purple-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(147,51,234,0.05)] hover:shadow-md hover:ring-2 hover:ring-purple-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+            className="group relative bg-[#f8effc] border border-purple-100/90 hover:border-purple-300 rounded-2xl p-4 sm:p-5 2xl:p-6 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(147,51,234,0.05)] hover:shadow-md hover:ring-2 hover:ring-purple-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
           >
-            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-purple-600">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-purple-600">
+              <ArrowRight className="w-4 h-4" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-purple-100/80 text-purple-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
-              <Landmark className="w-4 h-4" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-100/80 text-purple-600 flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+              <Landmark className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Mutual Funds</span>
-            <span className="text-xl sm:text-2xl font-extrabold text-purple-600 my-0.5 font-mono tracking-tight">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wide">Mutual Funds</span>
+            <span className="text-xl sm:text-2xl 2xl:text-3xl font-extrabold text-purple-600 my-0.5 sm:my-1 font-mono tracking-tight">
               {formatCompactValue(metrics.mfVal)}
             </span>
-            <span className={`text-xs font-bold ${metrics.mfPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className={`text-xs sm:text-sm font-bold ${metrics.mfPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.mfPnl >= 0 ? '+' : ''}
               {metrics.mfPnlPct.toFixed(2)}%
             </span>
-            <span className="text-[11px] font-medium text-slate-500 font-mono">
+            <span className="text-[11px] sm:text-xs font-medium text-slate-500 font-mono mt-0.5">
               {metrics.mfCount} Active Funds
             </span>
           </div>
         </div>
 
-        {/* ROW 2: Asset Class & Sovereign Intelligence (4 Compact Cards) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {/* ROW 2: Asset Class & Sovereign Intelligence (4 Cards) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 2xl:gap-5">
           {/* Card 5: US Stocks */}
           <div
             onClick={() => handleDrillDown({ assetClass: 'US_STOCKS' })}
@@ -842,23 +842,23 @@ export const ExecutiveOverview: React.FC = () => {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'US_STOCKS' }) }}
             title="Click to view US Stock holdings in Holdings Ledger"
-            className="group relative bg-[#eef2ff] border border-indigo-100/90 hover:border-indigo-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(99,102,241,0.05)] hover:shadow-md hover:ring-2 hover:ring-indigo-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+            className="group relative bg-[#eef2ff] border border-indigo-100/90 hover:border-indigo-300 rounded-2xl p-4 sm:p-5 2xl:p-6 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(99,102,241,0.05)] hover:shadow-md hover:ring-2 hover:ring-indigo-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
           >
-            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-indigo-600">
+              <ArrowRight className="w-4 h-4" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-indigo-100/80 text-indigo-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
-              <Globe className="w-4 h-4" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+              <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">US Stocks</span>
-            <span className="text-xl sm:text-2xl font-extrabold text-indigo-600 my-0.5 font-mono tracking-tight">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wide">US Stocks</span>
+            <span className="text-xl sm:text-2xl 2xl:text-3xl font-extrabold text-indigo-600 my-0.5 sm:my-1 font-mono tracking-tight">
               {formatCompactValue(metrics.usVal)}
             </span>
-            <span className={`text-xs font-bold ${metrics.usPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className={`text-xs sm:text-sm font-bold ${metrics.usPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.usPnl >= 0 ? '+' : ''}
               {metrics.usPnlPct.toFixed(2)}%
             </span>
-            <span className="text-[11px] font-medium text-slate-500 font-mono">
+            <span className="text-[11px] sm:text-xs font-medium text-slate-500 font-mono mt-0.5 truncate max-w-full">
               {metrics.usCount > 0 ? `${metrics.usCount} Global Assets` : 'INDmoney Tech Basket'}
             </span>
           </div>
@@ -870,23 +870,23 @@ export const ExecutiveOverview: React.FC = () => {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'GOLD', highlight: metrics.goldFirstSymbol || undefined }) }}
             title="Click to view Sovereign Gold Bond holdings in Holdings Ledger"
-            className="group relative bg-[#fffbeb] border border-amber-200/90 hover:border-amber-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(245,158,11,0.05)] hover:shadow-md hover:ring-2 hover:ring-amber-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+            className="group relative bg-[#fffbeb] border border-amber-200/90 hover:border-amber-300 rounded-2xl p-4 sm:p-5 2xl:p-6 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(245,158,11,0.05)] hover:shadow-md hover:ring-2 hover:ring-amber-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
           >
-            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-amber-600">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-amber-600">
+              <ArrowRight className="w-4 h-4" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-amber-100/80 text-amber-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
-              <Coins className="w-4 h-4" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-100/80 text-amber-600 flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+              <Coins className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">Sovereign Gold Bonds</span>
-            <span className="text-xl sm:text-2xl font-extrabold text-amber-600 my-0.5 font-mono tracking-tight">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wide">Sovereign Gold Bonds</span>
+            <span className="text-xl sm:text-2xl 2xl:text-3xl font-extrabold text-amber-600 my-0.5 sm:my-1 font-mono tracking-tight">
               {formatCompactValue(metrics.goldVal)}
             </span>
-            <span className={`text-xs font-bold ${metrics.goldPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className={`text-xs sm:text-sm font-bold ${metrics.goldPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.goldPnl >= 0 ? '+' : ''}
               {metrics.goldPnlPct.toFixed(2)}%
             </span>
-            <span className="text-[11px] font-medium text-slate-500 font-mono">
+            <span className="text-[11px] sm:text-xs font-medium text-slate-500 font-mono mt-0.5 truncate max-w-full">
               {metrics.goldCount === 0
                 ? 'No SGB Holdings'
                 : metrics.goldCount === 1
@@ -902,23 +902,23 @@ export const ExecutiveOverview: React.FC = () => {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ assetClass: 'NPS' }) }}
             title="Click to view NPS holdings in Holdings Ledger"
-            className="group relative bg-[#f0fdfa] border border-teal-100/90 hover:border-teal-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(20,184,166,0.05)] hover:shadow-md hover:ring-2 hover:ring-teal-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+            className="group relative bg-[#f0fdfa] border border-teal-100/90 hover:border-teal-300 rounded-2xl p-4 sm:p-5 2xl:p-6 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(20,184,166,0.05)] hover:shadow-md hover:ring-2 hover:ring-teal-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
           >
-            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-teal-600">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-teal-600">
+              <ArrowRight className="w-4 h-4" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-teal-100/80 text-teal-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
-              <ShieldCheck className="w-4 h-4" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-teal-100/80 text-teal-600 flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">NPS Retirement</span>
-            <span className="text-xl sm:text-2xl font-extrabold text-teal-600 my-0.5 font-mono tracking-tight">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wide">NPS Retirement</span>
+            <span className="text-xl sm:text-2xl 2xl:text-3xl font-extrabold text-teal-600 my-0.5 sm:my-1 font-mono tracking-tight">
               {formatCompactValue(metrics.npsVal)}
             </span>
-            <span className={`text-xs font-bold ${metrics.npsPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className={`text-xs sm:text-sm font-bold ${metrics.npsPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.npsPnl >= 0 ? '+' : ''}
               {metrics.npsPnlPct.toFixed(2)}%
             </span>
-            <span className="text-[11px] font-medium text-slate-500 font-mono">
+            <span className="text-[11px] sm:text-xs font-medium text-slate-500 font-mono mt-0.5">
               Sec 80CCD(1B) Tax Shield
             </span>
           </div>
@@ -930,22 +930,22 @@ export const ExecutiveOverview: React.FC = () => {
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleDrillDown({ pnl: metrics.dayPnlVal >= 0 ? 'gainers' : 'losers' }) }}
             title={`Click to view ${metrics.dayPnlVal >= 0 ? 'gainers' : 'losers'} in Holdings Ledger`}
-            className="group relative bg-[#edf9f0] border border-emerald-100/90 hover:border-emerald-300 rounded-xl p-3.5 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(16,185,129,0.05)] hover:shadow-md hover:ring-2 hover:ring-emerald-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
+            className="group relative bg-[#edf9f0] border border-emerald-100/90 hover:border-emerald-300 rounded-2xl p-4 sm:p-5 2xl:p-6 flex flex-col items-center justify-center text-center shadow-[0_2px_10px_-2px_rgba(16,185,129,0.05)] hover:shadow-md hover:ring-2 hover:ring-emerald-400/30 active:scale-[0.99] transition-all cursor-pointer select-none"
           >
-            <div className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-600">
-              <ArrowRight className="w-3.5 h-3.5" />
+            <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity text-emerald-600">
+              <ArrowRight className="w-4 h-4" />
             </div>
-            <div className="w-8 h-8 rounded-lg bg-emerald-100/80 text-emerald-600 flex items-center justify-center mb-1.5 shadow-2xs group-hover:scale-105 transition-transform">
-              <Sparkles className="w-4 h-4 text-emerald-600" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center mb-2 shadow-2xs group-hover:scale-105 transition-transform">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600" />
             </div>
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">1-Day P&amp;L</span>
-            <span className="text-xl sm:text-2xl font-extrabold text-emerald-600 my-0.5 font-mono tracking-tight">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wide">1-Day P&amp;L</span>
+            <span className="text-xl sm:text-2xl 2xl:text-3xl font-extrabold text-emerald-600 my-0.5 sm:my-1 font-mono tracking-tight">
               {metrics.dayPnlVal >= 0 ? '+' : ''}{formatCompactValue(metrics.dayPnlVal)}
             </span>
-            <span className={`text-xs font-bold ${metrics.dayPnlVal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className={`text-xs sm:text-sm font-bold ${metrics.dayPnlVal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {metrics.dayPnlVal >= 0 ? '+' : ''}{metrics.dayPnlPct.toFixed(2)}%
             </span>
-            <span className="text-[11px] font-medium text-slate-500 font-mono">
+            <span className="text-[11px] sm:text-xs font-medium text-slate-500 font-mono mt-0.5">
               Today's Portfolio Gain
             </span>
           </div>
@@ -970,15 +970,15 @@ export const ExecutiveOverview: React.FC = () => {
             </div>
 
             {/* Executive Donut Chart — hover each segment for rich class breakdown */}
-            <div className="relative my-2 flex items-center justify-center h-64 sm:h-72">
+            <div className="relative my-2 flex items-center justify-center h-64 sm:h-72 lg:h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart margin={{ top: 20, right: 35, bottom: 20, left: 35 }}>
                   <Pie
                     data={assetAllocationData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={54}
-                    outerRadius={86}
+                    innerRadius={56}
+                    outerRadius={90}
                     paddingAngle={3}
                     dataKey="value"
                     stroke="#ffffff"
@@ -1303,38 +1303,38 @@ export const ExecutiveOverview: React.FC = () => {
         </div>
 
         {/* 2 Broker Badges in Clean Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4 mt-1">
           {/* Zerodha */}
-          <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200/80 flex items-center gap-3.5">
-            <div className="w-9 h-9 rounded-full bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-emerald-700 shrink-0">
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/90 border border-slate-200/80 flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-full bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-emerald-700 shrink-0">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900 truncate">Zerodha Kite</span>
-                <span className="text-[10px] text-emerald-700 font-semibold px-2 py-0.5 bg-emerald-50 rounded-full border border-emerald-200/60">
+                <span className="text-sm font-bold text-slate-900 truncate">Zerodha Kite</span>
+                <span className="text-[10px] sm:text-xs text-emerald-700 font-semibold px-2.5 py-0.5 bg-emerald-50 rounded-full border border-emerald-200/60">
                   {zerodhaSession?.status === 'CONNECTED' ? 'Connected' : 'Connected'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5 truncate font-mono">
+              <p className="text-xs text-slate-500 mt-1 truncate font-mono">
                 {formatLastSync(zerodhaSession?.last_sync_time)}
               </p>
             </div>
           </div>
 
           {/* INDmoney */}
-          <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200/80 flex items-center gap-3.5">
-            <div className="w-9 h-9 rounded-full bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-emerald-700 shrink-0">
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/90 border border-slate-200/80 flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-full bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-emerald-700 shrink-0">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-900 truncate">INDmoney</span>
-                <span className="text-[10px] text-emerald-700 font-semibold px-2 py-0.5 bg-emerald-50 rounded-full border border-emerald-200/60">
+                <span className="text-sm font-bold text-slate-900 truncate">INDmoney</span>
+                <span className="text-[10px] sm:text-xs text-emerald-700 font-semibold px-2.5 py-0.5 bg-emerald-50 rounded-full border border-emerald-200/60">
                   {indmoneySession?.status === 'CONNECTED' ? 'Connected' : 'Connected'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 mt-0.5 truncate font-mono">
+              <p className="text-xs text-slate-500 mt-1 truncate font-mono">
                 {formatLastSync(indmoneySession?.last_sync_time)}
               </p>
             </div>
