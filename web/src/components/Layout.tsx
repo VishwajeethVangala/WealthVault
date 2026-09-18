@@ -87,7 +87,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
           isSidebarCollapsed ? 'md:left-20' : 'md:left-64'
         }`}
       >
-        <div className="h-16 px-3 sm:px-6 lg:px-8 flex items-center justify-between gap-3 sm:gap-4">
+        <div className="h-16 px-4 sm:px-6 lg:px-8 xl:px-10 flex items-center justify-between gap-3 sm:gap-4">
           {/* Left: Hamburger Trigger (Mobile) & Section Context */}
           <div className="flex items-center gap-2.5 sm:gap-6 min-w-0">
             <button
@@ -176,7 +176,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
 
       {/* 4. Main Content Area Offset by Sidebar Width (0 on mobile, 20/64 on md+) */}
       <main
-        className={`flex-1 transition-all duration-300 pb-16 px-3 sm:px-6 lg:px-8 max-w-7xl w-full mx-auto ml-0 ${
+        className={`flex-1 transition-all duration-300 pb-16 px-4 sm:px-6 lg:px-8 xl:px-10 min-w-0 ${
           isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'
         } ${isBrokerSyncPage ? 'pt-20 sm:pt-24' : 'pt-32 sm:pt-36'}`}
       >
@@ -189,7 +189,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
           isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs text-slate-500">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 flex items-center justify-between text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <span className="font-serif font-medium text-slate-800">WealthVault</span>
             <span>&bull; Sovereign Institutional Portfolio Engine</span>
