@@ -1,4 +1,4 @@
-import type { AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User } from '../types'
+import type { AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, SwingStrategyOptions, SwingStrategyResult, User } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -175,4 +175,12 @@ export async function deleteBrokerConnection(connectionIdOrBroker: string, wipeB
 // Market Analytics API Calls
 export async function fetchMomentum(symbol: string): Promise<MomentumAnalysis> {
   return fetchApi<MomentumAnalysis>(`/api/v1/analytics/momentum?symbol=${encodeURIComponent(symbol)}`)
+}
+
+export async function fetchSwingStrategy(symbol: string, options: SwingStrategyOptions = {}): Promise<SwingStrategyResult> {
+  const params = new URLSearchParams({ symbol })
+  Object.entries(options).forEach(([key, value]) => {
+    if (value !== undefined) params.set(key, String(value))
+  })
+  return fetchApi<SwingStrategyResult>(`/api/v1/analytics/strategy/swing-v21?${params.toString()}`)
 }

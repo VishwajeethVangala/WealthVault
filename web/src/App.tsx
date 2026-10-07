@@ -6,6 +6,7 @@ import { ExecutiveOverview } from './pages/ExecutiveOverview'
 import { HoldingsTable } from './pages/HoldingsTable'
 import { BrokerSync } from './pages/BrokerSync'
 import { MomentumAnalyzer } from './pages/MomentumAnalyzer'
+import { SwingStrategy } from './pages/SwingStrategy'
 import { Login } from './pages/Login'
 import { getToken, getStoredUser, verifySession } from './utils/api'
 import type { User } from './types'
@@ -69,6 +70,7 @@ export const App: React.FC = () => {
             <Route path="/" element={<ExecutiveOverview />} />
             <Route path="/holdings" element={<HoldingsTable />} />
             <Route path="/momentum" element={<MomentumAnalyzer />} />
+            <Route path="/strategy" element={<SwingStrategy />} />
             <Route path="/brokers" element={<BrokerSync />} />
             <Route path="/sync" element={<Navigate to="/brokers" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -20,7 +20,12 @@ NIFTY_50_SYMBOL = "NSE:NIFTY 50"
 
 # ~400 calendar days covers 252 trading days for 12M momentum plus 200-DMA slope history
 DEFAULT_LOOKBACK_DAYS = 400
+# Kite caps a single daily-candle request at 2000 days
+MAX_LOOKBACK_DAYS = 2000
 CANDLE_CACHE_TTL_SECONDS = 600.0
+
+IST = timezone(timedelta(hours=5, minutes=30))
+MARKET_CLOSE_IST = (15, 30)
 
 CASH_SEGMENTS = {"NSE", "BSE", "INDICES"}
 
@@ -85,12 +90,25 @@ def parse_candles(raw: Any) -> List[Dict[str, Any]]:
     return candles
 
 
+def drop_incomplete_today(candles: List[Dict[str, Any]], now: Optional[datetime] = None) -> Tuple[List[Dict[str, Any]], bool]:
+    """Drop today's still-forming daily candle while the NSE session is open (before 15:30 IST).
+
+    Returns the candles to use and whether a candle was dropped.
+    """
+    now_ist = (now or datetime.now(IST)).astimezone(IST)
+    if not candles or (now_ist.hour, now_ist.minute) >= MARKET_CLOSE_IST:
+        return candles, False
+    if str(candles[-1]["date"])[:10] == now_ist.strftime("%Y-%m-%d"):
+        return candles[:-1], True
+    return candles, False
+
+
 class HistoricalDataService:
     """Resolves instruments and serves cached daily candles from Kite MCP."""
 
     def __init__(self, cache_ttl_seconds: float = CANDLE_CACHE_TTL_SECONDS) -> None:
         self.cache_ttl = cache_ttl_seconds
-        self._candle_cache: Dict[int, Tuple[float, List[Dict[str, Any]]]] = {}
+        self._candle_cache: Dict[Tuple[int, int], Tuple[float, List[Dict[str, Any]]]] = {}
         self._instrument_cache: Dict[str, Dict[str, Any]] = {}
 
     async def resolve_instrument(self, client: KiteMCPClient, symbol: str) -> Dict[str, Any]:
@@ -121,17 +139,19 @@ class HistoricalDataService:
         lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     ) -> List[Dict[str, Any]]:
         """Fetch daily candles for the lookback window, served from cache when fresh."""
-        cached = self._candle_cache.get(instrument_token)
+        lookback_days = min(lookback_days, MAX_LOOKBACK_DAYS)
+        cache_key = (instrument_token, lookback_days)
+        cached = self._candle_cache.get(cache_key)
         if cached and time.monotonic() - cached[0] < self.cache_ttl:
             return cached[1]
 
-        now = datetime.now(timezone(timedelta(hours=5, minutes=30)))
+        now = datetime.now(IST)
         from_date = (now - timedelta(days=lookback_days)).strftime("%Y-%m-%d 00:00:00")
         to_date = now.strftime("%Y-%m-%d %H:%M:%S")
         raw = await client.get_historical_data(instrument_token, from_date, to_date, interval="day")
         candles = parse_candles(raw)
         if candles:
-            self._candle_cache[instrument_token] = (time.monotonic(), candles)
+            self._candle_cache[cache_key] = (time.monotonic(), candles)
         else:
             logger.warning("Kite returned no daily candles for token %s: %s", instrument_token, str(raw)[:200])
         return candles

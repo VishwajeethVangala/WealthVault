@@ -2,6 +2,7 @@ import React from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   Activity,
+  CandlestickChart,
   Shield,
   LayoutDashboard,
   Layers,
@@ -57,6 +58,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       path: '/momentum',
       icon: Activity,
       badge: 'New',
+    },
+    {
+      id: 'strategy',
+      name: 'Swing Strategy',
+      shortName: 'Strategy',
+      path: '/strategy',
+      icon: CandlestickChart,
+      badge: 'V2.1',
     },
     {
       id: 'brokers',
