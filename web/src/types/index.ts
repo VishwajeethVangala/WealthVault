@@ -159,5 +159,58 @@ export interface BrokerDeleteResponse {
   new_total_valuation: number
 }
 
+export interface TrendCheck {
+  key: string
+  label: string
+  passed: boolean
+  detail: string
+}
+
+export interface MomentumSeriesPoint {
+  date: string
+  close: number
+  sma50: number | null
+  sma200: number | null
+}
+
+export type ReturnWindow = '1M' | '3M' | '6M' | '12M' | '12-1'
+
+// Percent fields are percent values (12.5 = 12.5%)
+export interface MomentumAnalysis {
+  instrument: string
+  name: string | null
+  as_of: string
+  last_price: number
+  candles_used: number
+  trend_score: number
+  trend_max_score: number
+  trend_verdict: string
+  trend_checks: TrendCheck[]
+  sma_20: number | null
+  sma_50: number | null
+  sma_200: number | null
+  pct_from_sma50: number | null
+  pct_from_sma200: number | null
+  sma200_slope_pct: number | null
+  cross_state: 'golden' | 'death' | null
+  days_since_cross: number | null
+  macd: number | null
+  macd_signal: number | null
+  macd_histogram: number | null
+  returns: Partial<Record<ReturnWindow, number | null>>
+  volatility_6m: number | null
+  volatility_12m: number | null
+  risk_adjusted_6m: number | null
+  risk_adjusted_12m: number | null
+  rsi_14: number | null
+  high_52w: number | null
+  low_52w: number | null
+  pct_from_52w_high: number | null
+  pct_from_52w_low: number | null
+  benchmark: string
+  relative_strength: Partial<Record<Exclude<ReturnWindow, '12-1'>, number | null>>
+  series: MomentumSeriesPoint[]
+}
+
 
 

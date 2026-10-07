@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from apps.api.routers import accounts_router, auth_router, health_router, portfolio_router
+from apps.api.routers import accounts_router, analytics_router, auth_router, health_router, portfolio_router
 from core.config import get_settings
 
 # Configure logging
@@ -148,6 +148,7 @@ def create_application() -> FastAPI:
     app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
     app.include_router(accounts_router, prefix=settings.API_V1_PREFIX)
     app.include_router(portfolio_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(analytics_router, prefix=settings.API_V1_PREFIX)
 
     # Native frontend serving attached after all API routers to prevent route swallowing
     app.frontend("/", directory="dist", fallback="index.html")

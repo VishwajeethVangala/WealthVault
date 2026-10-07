@@ -1,4 +1,4 @@
-import type { AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, PortfolioSummary, ReauthRequest, User } from '../types'
+import type { AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -24,6 +24,19 @@ export const setStoredUser = (user: User) => {
   localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
 
+// Error carrying HTTP status and the parsed FastAPI `detail` field
+export class ApiError extends Error {
+  status: number
+  detail: unknown
+
+  constructor(message: string, status: number, detail?: unknown) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+  }
+}
+
 export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
   const headers = new Headers(options.headers || {})
@@ -46,7 +59,13 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
       console.warn('Session unauthorized or expired')
     }
     const errorBody = await response.text()
-    throw new Error(`API Error ${response.status}: ${errorBody || response.statusText}`)
+    let detail: unknown = undefined
+    try {
+      detail = JSON.parse(errorBody)?.detail
+    } catch {
+      // Non-JSON error body
+    }
+    throw new ApiError(`API Error ${response.status}: ${errorBody || response.statusText}`, response.status, detail)
   }
 
   return response.json()
@@ -152,3 +171,8 @@ export async function deleteBrokerConnection(connectionIdOrBroker: string, wipeB
 }
 
 
+
+// Market Analytics API Calls
+export async function fetchMomentum(symbol: string): Promise<MomentumAnalysis> {
+  return fetchApi<MomentumAnalysis>(`/api/v1/analytics/momentum?symbol=${encodeURIComponent(symbol)}`)
+}
