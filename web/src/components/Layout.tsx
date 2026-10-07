@@ -41,6 +41,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   const [syncStatus, setSyncStatus] = useState<string | null>(null)
 
   const isBrokerSyncPage = location.pathname === '/brokers'
+  // Portfolio filters do not apply to single-stock pages
+  const hideGlobalFilters = isBrokerSyncPage || location.pathname === '/momentum'
 
   // Top-right global sync trigger
   const handleSync = async () => {
@@ -103,6 +105,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
                 ? 'Broker MCP Sync & Gateways'
                 : location.pathname === '/holdings'
                 ? 'Holdings Ledger'
+                : location.pathname === '/momentum'
+                ? 'Momentum Analyzer'
                 : 'Executive Portfolio'}
             </h2>
           </div>
@@ -171,14 +175,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
         </div>
 
         {/* 3. Sub-Header: Looker Studio Style Global Filters */}
-        {!isBrokerSyncPage && <GlobalFilters />}
+        {!hideGlobalFilters && <GlobalFilters />}
       </header>
 
       {/* 4. Main Content Area Offset by Sidebar Width (0 on mobile, 20/64 on md+) */}
       <main
         className={`flex-1 transition-all duration-300 pb-16 px-4 sm:px-6 lg:px-8 xl:px-10 min-w-0 ${
           isSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'
-        } ${isBrokerSyncPage ? 'pt-20 sm:pt-24' : 'pt-32 sm:pt-36'}`}
+        } ${hideGlobalFilters ? 'pt-20 sm:pt-24' : 'pt-32 sm:pt-36'}`}
       >
         {children}
       </main>

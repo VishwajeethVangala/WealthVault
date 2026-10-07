@@ -321,6 +321,34 @@ class KiteMCPClient:
         data = await self.call_tool("get_ltp", {"instruments": instruments})
         return data if isinstance(data, dict) else {}
 
+    async def search_instruments(self, query: str, filter_on: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Search the Kite instrument master (does not require an authenticated session)."""
+        args: Dict[str, Any] = {"query": query}
+        if filter_on:
+            args["filter_on"] = filter_on
+        data = await self.call_tool("search_instruments", args)
+        if isinstance(data, dict) and isinstance(data.get("data"), list):
+            return data["data"]
+        return data if isinstance(data, list) else []
+
+    async def get_historical_data(
+        self,
+        instrument_token: int,
+        from_date: str,
+        to_date: str,
+        interval: str = "day",
+    ) -> Any:
+        """Fetch historical candles (dates in 'YYYY-MM-DD HH:MM:SS' format)."""
+        return await self.call_tool(
+            "get_historical_data",
+            {
+                "instrument_token": instrument_token,
+                "from_date": from_date,
+                "to_date": to_date,
+                "interval": interval,
+            },
+        )
+
     async def get_profile(self) -> Dict[str, Any]:
         """Fetch active user profile and status from Kite MCP."""
         data = await self.call_tool("get_profile")

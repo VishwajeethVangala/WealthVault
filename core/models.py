@@ -290,4 +290,74 @@ class BrokerDeleteResponse(BaseModel):
     new_total_valuation: float = Field(default=0.0, description="Updated portfolio total valuation in INR")
 
 
+# --- Momentum Analytics Schemas ---
+
+class TrendCheck(BaseModel):
+    """Single pass/fail rule in the moving-average trend checklist."""
+
+    key: str = Field(..., description="Rule identifier (e.g. 'above_200dma')")
+    label: str = Field(..., description="Human-readable rule name")
+    passed: bool = Field(..., description="Whether the rule currently holds")
+    detail: str = Field(default="", description="Supporting value for the rule")
+
+
+class MomentumSeriesPoint(BaseModel):
+    """Daily close with moving averages for charting."""
+
+    date: str = Field(..., description="Trading date (YYYY-MM-DD)")
+    close: float = Field(..., description="Closing price")
+    sma50: Optional[float] = Field(default=None, description="50-day simple moving average")
+    sma200: Optional[float] = Field(default=None, description="200-day simple moving average")
+
+
+class MomentumAnalysis(BaseModel):
+    """Momentum report for a single instrument. Percent fields are percent values (12.5 = 12.5%)."""
+
+    instrument: str = Field(..., description="Exchange-qualified symbol (e.g. 'NSE:INFY')")
+    name: Optional[str] = Field(default=None, description="Instrument display name")
+    as_of: str = Field(..., description="Date of the latest candle (YYYY-MM-DD)")
+    last_price: float = Field(..., description="Latest close / last traded price")
+    candles_used: int = Field(..., description="Number of daily candles analysed")
+
+    # Trend / moving averages (primary verdict)
+    trend_score: int = Field(..., description="Number of trend rules passed")
+    trend_max_score: int = Field(..., description="Number of trend rules evaluated")
+    trend_verdict: str = Field(..., description="Overall trend classification")
+    trend_checks: List[TrendCheck] = Field(default_factory=list, description="Trend checklist results")
+    sma_20: Optional[float] = Field(default=None, description="20-day SMA")
+    sma_50: Optional[float] = Field(default=None, description="50-day SMA")
+    sma_200: Optional[float] = Field(default=None, description="200-day SMA")
+    pct_from_sma50: Optional[float] = Field(default=None, description="Price distance from 50-DMA (%)")
+    pct_from_sma200: Optional[float] = Field(default=None, description="Price distance from 200-DMA (%)")
+    sma200_slope_pct: Optional[float] = Field(default=None, description="200-DMA change over last 20 trading days (%)")
+    cross_state: Optional[str] = Field(default=None, description="'golden' if 50-DMA > 200-DMA, else 'death'")
+    days_since_cross: Optional[int] = Field(default=None, description="Trading days since the last 50/200 cross")
+    macd: Optional[float] = Field(default=None, description="MACD line (12, 26)")
+    macd_signal: Optional[float] = Field(default=None, description="MACD signal line (9)")
+    macd_histogram: Optional[float] = Field(default=None, description="MACD minus signal")
+
+    # Price momentum
+    returns: Dict[str, Optional[float]] = Field(default_factory=dict, description="Returns by window: 1M, 3M, 6M, 12M, 12-1 (%)")
+    volatility_6m: Optional[float] = Field(default=None, description="Annualized 6M volatility (%)")
+    volatility_12m: Optional[float] = Field(default=None, description="Annualized 12M volatility (%)")
+    risk_adjusted_6m: Optional[float] = Field(default=None, description="6M return / 6M volatility")
+    risk_adjusted_12m: Optional[float] = Field(default=None, description="12M return / 12M volatility")
+
+    # Oscillator & range
+    rsi_14: Optional[float] = Field(default=None, description="14-day RSI")
+    high_52w: Optional[float] = Field(default=None, description="52-week high")
+    low_52w: Optional[float] = Field(default=None, description="52-week low")
+    pct_from_52w_high: Optional[float] = Field(default=None, description="Distance from 52-week high (%)")
+    pct_from_52w_low: Optional[float] = Field(default=None, description="Distance from 52-week low (%)")
+
+    # Relative strength
+    benchmark: str = Field(default="NIFTY 50", description="Benchmark index for relative strength")
+    relative_strength: Dict[str, Optional[float]] = Field(
+        default_factory=dict,
+        description="Stock return minus benchmark return by window (percentage points)",
+    )
+
+    series: List[MomentumSeriesPoint] = Field(default_factory=list, description="Last year of closes with 50/200-DMA")
+
+
 
