@@ -15,6 +15,16 @@ from core.models import AssetClass, Holding, Transaction, TransactionType
 logger = logging.getLogger("wealthvault.portfolio.normalization")
 
 
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    """Safely convert a value to float, handling None, empty strings, and invalid values."""
+    if val is None or val == "":
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
 class NormalizationService:
     """Service normalizing raw broker responses into canonical financial models."""
 
@@ -81,15 +91,15 @@ class NormalizationService:
         # Check if Zerodha Coin Mutual Fund (has 'fund' key) or standard Kite Equity
         if "fund" in item:
             symbol = str(item.get("fund")).strip()
-            quantity = float(item.get("quantity", 0.0))
-            average_price = float(item.get("average_price", 0.0))
-            last_price = float(item.get("last_price", average_price))
+            quantity = _safe_float(item.get("quantity"), 0.0)
+            average_price = _safe_float(item.get("average_price"), 0.0)
+            last_price = _safe_float(item.get("last_price"), average_price)
 
             if "SGB" in symbol.upper():
                 asset_class = AssetClass.GOLD
                 broker_pnl = item.get("pnl")
-                if broker_pnl is not None and float(broker_pnl) != 0:
-                    pnl = round(float(broker_pnl), 2)
+                if broker_pnl is not None and _safe_float(broker_pnl) != 0:
+                    pnl = round(_safe_float(broker_pnl), 2)
                     invested_cost = round(quantity * average_price, 2)
                     current_value = round(invested_cost + pnl, 2)
                 else:
@@ -107,11 +117,11 @@ class NormalizationService:
         else:
             # Standard Zerodha Kite Equity schema
             symbol = str(item.get("tradingsymbol", "UNKNOWN")).upper()
-            quantity = float(item.get("quantity", 0))
-            average_price = float(item.get("average_price", 0.0))
-            last_price = float(item.get("last_price", average_price))
+            quantity = _safe_float(item.get("quantity"), 0.0)
+            average_price = _safe_float(item.get("average_price"), 0.0)
+            last_price = _safe_float(item.get("last_price"), average_price)
             current_value = round(quantity * last_price, 2)
-            pnl = float(item.get("pnl", round(current_value - (quantity * average_price), 2)))
+            pnl = _safe_float(item.get("pnl"), round(current_value - (quantity * average_price), 2))
 
             # Asset classification (Equities vs Sovereign Gold Bonds SGB)
             if "SGB" in symbol:
@@ -147,20 +157,23 @@ class NormalizationService:
         code = str(item.get("investment_code") or item.get("isin") or name).strip()
         symbol = f"{code} ({name})" if code and code != name and len(code) <= 12 else name
 
-        quantity = float(item.get("total_units") or item.get("holding_units") or item.get("units") or 1.0)
+        raw_units = item.get("total_units") if item.get("total_units") is not None else (item.get("holding_units") if item.get("holding_units") is not None else item.get("units"))
+        quantity = _safe_float(raw_units, 1.0)
+        if quantity <= 0:
+            quantity = 1.0
 
         # Current price and Current Value (quantity * current_price)
-        current_price = float(item.get("unit_price") or item.get("current_nav") or item.get("last_price") or 0.0)
-        current_value = float(item.get("market_value") or item.get("current_valuation") or item.get("current_value") or 0.0)
+        current_price = _safe_float(item.get("unit_price") or item.get("current_nav") or item.get("last_price"), 0.0)
+        current_value = _safe_float(item.get("market_value") or item.get("current_valuation") or item.get("current_value"), 0.0)
         if current_value == 0.0 and current_price > 0:
             current_value = round(quantity * current_price, 2)
         elif current_price == 0.0 and current_value > 0 and quantity > 0:
             current_price = round(current_value / quantity, 4)
 
         # Average price and Invested Amount (quantity * average_price)
-        invested_amount = float(item.get("invested_amount") or 0.0)
+        invested_amount = _safe_float(item.get("invested_amount"), 0.0)
         raw_avg_price = item.get("average_buy_nav") or item.get("buy_price") or item.get("average_price")
-        average_price = float(raw_avg_price) if raw_avg_price is not None else 0.0
+        average_price = _safe_float(raw_avg_price, 0.0)
 
         broker_pnl = item.get("total_pnl") or item.get("unrealized_gain_loss")
 
@@ -171,15 +184,14 @@ class NormalizationService:
         elif invested_amount == 0.0 and average_price == 0.0 and broker_pnl is not None and current_value > 0:
             # When INDmoney omits average_buy_nav & invested_amount, derive cost basis from PnL:
             # invested = current_value - pnl  ==>  average_price = invested / quantity
-            pnl_val = round(float(broker_pnl), 2)
+            pnl_val = round(_safe_float(broker_pnl), 2)
             invested_amount = round(current_value - pnl_val, 2)
             average_price = round(invested_amount / quantity, 4) if quantity > 0 else 0.0
         elif average_price == 0.0:
             average_price = current_price
             invested_amount = current_value
 
-        pnl = round(float(broker_pnl), 2) if broker_pnl is not None else round(current_value - invested_amount, 2)
-
+        pnl = round(_safe_float(broker_pnl), 2) if broker_pnl is not None else round(current_value - invested_amount, 2)
 
         # Asset classification
         raw_asset_type = str(item.get("asset_type", "")).upper()
@@ -227,9 +239,9 @@ class NormalizationService:
         connection_id: str,
     ) -> Holding:
         symbol = str(item.get("symbol") or item.get("instrument_symbol") or "GENERIC")
-        quantity = float(item.get("quantity", 0.0))
-        avg_price = float(item.get("average_price", 0.0))
-        current_val = float(item.get("current_value", round(quantity * avg_price, 2)))
+        quantity = _safe_float(item.get("quantity"), 0.0)
+        avg_price = _safe_float(item.get("average_price"), 0.0)
+        current_val = _safe_float(item.get("current_value"), round(quantity * avg_price, 2))
         holding_id = self._generate_id("hld", owner_id, connection_id, symbol)
 
         return Holding(
