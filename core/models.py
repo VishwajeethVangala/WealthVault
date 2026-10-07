@@ -473,3 +473,70 @@ class SwingStrategyResult(BaseModel):
     stats: StrategyStats
     trades: List[StrategyTrade] = Field(default_factory=list)
     series: List[StrategyBar] = Field(default_factory=list)
+
+
+# --- 200-DMA -> ATH Breakout Strategy Schemas ---
+
+class AthBreakoutParams(BaseModel):
+    """Inputs of the "Below 200DMA -> ATH Break -> Hold till 200DMA Break" strategy (Pine defaults)."""
+
+    dma_length: int = Field(default=200, ge=50, description="DMA length")
+    window_bars: int = Field(default=200, ge=1, description="Trading days after a close below the DMA in which an ATH break counts")
+    capital_per_trade: float = Field(default=50000.0, ge=1000, description="Capital deployed per trade in INR")
+    initial_capital: float = Field(default=50000.0, gt=0, description="Starting capital in INR")
+    start_date: str = Field(default="2015-01-01", description="No entries before this date (YYYY-MM-DD)")
+    commission_pct: float = Field(default=0.0, ge=0, description="Commission per side (% of trade value)")
+
+
+class AthBreakoutStatus(BaseModel):
+    """Where the strategy stands on the latest bar (orders fill at the signal bar's close)."""
+
+    state: str = Field(..., description="'IN_POSITION' or 'FLAT'")
+    headline: str
+    detail: str
+    last_signal: Optional[str] = Field(default=None, description="'BUY' or 'SELL' executed at the latest close")
+    close: float
+    dma: Optional[float] = None
+    prior_ath: Optional[float] = Field(default=None, description="Highest high before the latest bar")
+    pct_to_ath: Optional[float] = Field(default=None, description="Distance from the latest close up to the prior ATH (%)")
+    days_since_below_dma: Optional[int] = Field(default=None, description="Trading days since the last close below the DMA")
+    in_window: bool = False
+    window_days_left: Optional[int] = None
+    pct_above_dma: Optional[float] = None
+    entry_date: Optional[str] = None
+    entry_price: Optional[float] = None
+    unrealized_pct: Optional[float] = None
+    bars_held: Optional[int] = None
+
+
+class AthBreakoutBar(BaseModel):
+    """Per-bar values, setup window, signals, and equity for charting."""
+
+    date: str
+    high: float
+    close: float
+    dma: Optional[float] = None
+    ath: Optional[float] = Field(default=None, description="Running all-time high including this bar")
+    in_window: bool = Field(default=False, description="Within the window after a close below the DMA")
+    buy: bool = Field(default=False, description="ATH-break entry filled at this close")
+    sell: bool = Field(default=False, description="DMA-break exit filled at this close")
+    equity: float
+    buy_hold: float
+
+
+class AthBreakoutResult(BaseModel):
+    """Full 200-DMA ATH breakout report for one instrument."""
+
+    instrument: str
+    name: Optional[str] = None
+    as_of: str
+    params: AthBreakoutParams
+    history_start: str = Field(..., description="Earliest candle used; the ATH is the highest high since this date")
+    test_start: str
+    test_end: str
+    bars_tested: int
+    partial_bar_excluded: bool = False
+    status: AthBreakoutStatus
+    stats: StrategyStats
+    trades: List[StrategyTrade] = Field(default_factory=list)
+    series: List[AthBreakoutBar] = Field(default_factory=list)

@@ -22,13 +22,12 @@ over-sized fills).
 """
 
 import math
-from datetime import date
 from typing import Any, Dict, List, Optional, Sequence
 
+from core.analytics.backtest import buy_hold_curve, summarize_backtest
 from core.analytics.momentum import ema_series, sma_series
 from core.models import (
     StrategyBar,
-    StrategyStats,
     StrategyStatus,
     StrategyTrade,
     SwingStrategyParams,
@@ -247,45 +246,17 @@ def run_swing_strategy(
 
     # --- Statistics over the tradable window (after indicator warm-up) ---
     start = warmup
-    bh_shares_value = closes[start] * (1 + comm)
-    bh_curve = [p.initial_capital * closes[i] / bh_shares_value for i in range(n)]
-    buy_hold_return = (closes[last] * (1 - comm) / bh_shares_value - 1) * 100
-
-    final_equity = equity[last]
-    years = max((date.fromisoformat(_date(candles[last])) - date.fromisoformat(_date(candles[start]))).days / 365.25, 1e-9)
-    cagr = ((final_equity / p.initial_capital) ** (1 / years) - 1) * 100 if final_equity > 0 else -100.0
-
-    peak = equity[start]
-    max_dd = 0.0
-    for i in range(start, n):
-        peak = max(peak, equity[i])
-        if peak > 0:
-            max_dd = min(max_dd, (equity[i] / peak - 1) * 100)
-
-    closed = [t for t in trades if not t.is_open]
-    wins = [t for t in closed if t.pnl > 0]
-    losses = [t for t in closed if t.pnl <= 0]
-    gross_win = sum(t.pnl for t in wins)
-    gross_loss = -sum(t.pnl for t in losses)
-
-    stats = StrategyStats(
+    bh_curve, buy_hold_return = buy_hold_curve(closes, start, p.initial_capital, comm)
+    stats = summarize_backtest(
+        dates=[_date(c) for c in candles],
+        equity=equity,
+        in_position=in_position,
+        trades=trades,
+        start=start,
         initial_capital=p.initial_capital,
-        final_equity=round(final_equity, 2),
-        net_profit=round(final_equity - p.initial_capital, 2),
-        net_profit_pct=round((final_equity / p.initial_capital - 1) * 100, 2),
-        cagr_pct=round(cagr, 2),
-        max_drawdown_pct=round(max_dd, 2),
-        buy_hold_return_pct=round(buy_hold_return, 2),
-        total_trades=len(closed),
-        open_trade=bool(trades and trades[-1].is_open),
-        win_rate_pct=round(len(wins) / len(closed) * 100, 1) if closed else None,
-        avg_win_pct=round(sum(t.pnl_pct for t in wins) / len(wins), 2) if wins else None,
-        avg_loss_pct=round(sum(t.pnl_pct for t in losses) / len(losses), 2) if losses else None,
-        profit_factor=round(gross_win / gross_loss, 2) if gross_loss > 0 else None,
-        avg_bars_held=round(sum(t.bars_held for t in closed) / len(closed), 1) if closed else None,
-        exposure_pct=round(sum(in_position[start:]) / (n - start) * 100, 1),
-        signal_exits=sum(1 for t in closed if t.exit_reason == EXIT_SIGNAL),
-        stop_exits=sum(1 for t in closed if t.exit_reason == EXIT_STOP),
+        buy_hold_return_pct=buy_hold_return,
+        signal_exit_reason=EXIT_SIGNAL,
+        stop_exit_reason=EXIT_STOP,
     )
 
     # --- Current status on the latest bar ---

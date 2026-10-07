@@ -61,11 +61,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'strategy',
-      name: 'Swing Strategy',
+      name: 'Swing Strategies',
       shortName: 'Strategy',
       path: '/strategy',
       icon: CandlestickChart,
-      badge: 'V2.1',
+      badge: '2',
     },
     {
       id: 'brokers',

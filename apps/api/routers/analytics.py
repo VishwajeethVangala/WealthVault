@@ -5,6 +5,8 @@ Provides endpoints for:
   relative strength) for a single stock computed from Kite daily candles.
 - GET /api/v1/analytics/strategy/swing-v21: NSE Swing Momentum V2.1 strategy status,
   signals, and backtest for a single stock.
+- GET /api/v1/analytics/strategy/ath-breakout: "Below 200DMA -> ATH Break -> Hold till
+  200DMA Break" strategy status, signals, and backtest over the full price history.
 """
 
 import logging
@@ -14,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from apps.api.routers.accounts import get_current_user
 from core.analytics import analyze_momentum
+from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
 from core.analytics.swing_strategy import run_swing_strategy
 from core.market_data.history import (
     MAX_LOOKBACK_DAYS,
@@ -24,7 +27,14 @@ from core.market_data.history import (
     get_history_service,
 )
 from core.market_data.kite_client import KiteAuthRequiredError, KiteMCPClient, get_kite_mcp_client
-from core.models import BrokerStatus, MomentumAnalysis, SwingStrategyParams, SwingStrategyResult
+from core.models import (
+    AthBreakoutParams,
+    AthBreakoutResult,
+    BrokerStatus,
+    MomentumAnalysis,
+    SwingStrategyParams,
+    SwingStrategyResult,
+)
 from storage.tables.repositories import BrokerConnectionRepository
 
 logger = logging.getLogger("wealthvault.api.analytics")
@@ -62,15 +72,22 @@ async def _load_candles(
     symbol: str,
     lookback_days: int,
     with_benchmark: bool = False,
+    full_history: bool = False,
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Optional[List[Dict[str, Any]]]]:
-    """Resolve the symbol and fetch daily candles (and optionally NIFTY 50), mapping errors to HTTP."""
+    """Resolve the symbol and fetch daily candles (and optionally NIFTY 50), mapping errors to HTTP.
+
+    With `full_history`, pages back to the listing date instead of using `lookback_days`.
+    """
     history = get_history_service()
     client = await _get_user_kite_client(owner_id)
 
     try:
         instrument = await history.resolve_instrument(client, symbol)
         token = int(instrument["instrument_token"])
-        candles = await history.get_daily_candles(client, token, lookback_days)
+        if full_history:
+            candles = await history.get_full_daily_history(client, token, earliest=instrument.get("listing_date") or None)
+        else:
+            candles = await history.get_daily_candles(client, token, lookback_days)
 
         benchmark_candles: Optional[List[Dict[str, Any]]] = None
         if with_benchmark and token != NIFTY_50_TOKEN:
@@ -172,6 +189,49 @@ async def get_swing_strategy(
             candles=candles,
             params=params,
             tick_size=tick,
+            name=instrument.get("name"),
+            partial_bar_excluded=partial_dropped,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+
+@router.get(
+    "/strategy/ath-breakout",
+    response_model=AthBreakoutResult,
+    status_code=status.HTTP_200_OK,
+    summary="200-DMA -> ATH Breakout Strategy",
+    description=(
+        "Runs the 'Below 200DMA -> ATH Break -> Hold till 200DMA Break' strategy on the stock's full "
+        "Kite daily history: buy when the close breaks the prior all-time high within N trading days of "
+        "a close below the DMA, sell on a close below the DMA. Orders fill at the signal bar's close. "
+        "Today's unfinished candle is excluded during market hours."
+    ),
+)
+async def get_ath_breakout_strategy(
+    symbol: str = Query(..., min_length=1, max_length=40, description="Symbol, e.g. 'INFY' or 'NSE:INFY'"),
+    start_date: str = Query(default="2015-01-01", pattern=r"^\d{4}-\d{2}-\d{2}$", description="No entries before this date"),
+    dma_length: int = Query(default=200, ge=50, le=400, description="DMA length"),
+    window_bars: int = Query(default=200, ge=1, le=1000, description="Trading-day window after a close below the DMA"),
+    capital_per_trade: float = Query(default=50000.0, ge=1000, le=100000000, description="Capital per trade in INR"),
+    current_user_id: str = Depends(get_current_user),
+) -> AthBreakoutResult:
+    """Compute status, signals, and backtest for the ATH breakout strategy."""
+    params = AthBreakoutParams(
+        dma_length=dma_length,
+        window_bars=window_bars,
+        capital_per_trade=capital_per_trade,
+        initial_capital=capital_per_trade,
+        start_date=start_date,
+    )
+    instrument, candles, _ = await _load_candles(current_user_id, symbol, lookback_days=0, full_history=True)
+    candles, partial_dropped = drop_incomplete_today(candles)
+
+    try:
+        return run_ath_breakout_strategy(
+            instrument=_qualified_symbol(instrument),
+            candles=candles,
+            params=params,
             name=instrument.get("name"),
             partial_bar_excluded=partial_dropped,
         )
