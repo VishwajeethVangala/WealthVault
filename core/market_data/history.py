@@ -24,8 +24,13 @@ DEFAULT_LOOKBACK_DAYS = 400
 MAX_LOOKBACK_DAYS = 2000
 CANDLE_CACHE_TTL_SECONDS = 600.0
 
+# Full-history paging: 15 x 2000 days reaches back ~80 years; listing date usually stops it far sooner
+FULL_HISTORY_MAX_CHUNKS = 15
+FULL_HISTORY_CACHE_KEY = 0
+
 IST = timezone(timedelta(hours=5, minutes=30))
 MARKET_CLOSE_IST = (15, 30)
+FULL_HISTORY_FLOOR = datetime(1990, 1, 1, tzinfo=IST)
 
 CASH_SEGMENTS = {"NSE", "BSE", "INDICES"}
 
@@ -154,6 +159,51 @@ class HistoricalDataService:
             self._candle_cache[cache_key] = (time.monotonic(), candles)
         else:
             logger.warning("Kite returned no daily candles for token %s: %s", instrument_token, str(raw)[:200])
+        return candles
+
+    async def get_full_daily_history(
+        self,
+        client: KiteMCPClient,
+        instrument_token: int,
+        earliest: Optional[str] = None,
+        max_chunks: int = FULL_HISTORY_MAX_CHUNKS,
+    ) -> List[Dict[str, Any]]:
+        """Fetch all available daily candles by paging back in 2000-day chunks.
+
+        Stops at `earliest` (e.g. the listing date, YYYY-MM-DD), at the first empty
+        chunk, or after `max_chunks` requests. Needed where the whole history matters,
+        such as all-time highs.
+        """
+        cache_key = (instrument_token, FULL_HISTORY_CACHE_KEY)
+        cached = self._candle_cache.get(cache_key)
+        if cached and time.monotonic() - cached[0] < self.cache_ttl:
+            return cached[1]
+
+        floor = datetime.strptime(earliest[:10], "%Y-%m-%d").replace(tzinfo=IST) if earliest else FULL_HISTORY_FLOOR
+        end = datetime.now(IST)
+        by_date: Dict[str, Dict[str, Any]] = {}
+        for _ in range(max_chunks):
+            start = max(end - timedelta(days=MAX_LOOKBACK_DAYS - 1), floor)
+            raw = await client.get_historical_data(
+                instrument_token,
+                start.strftime("%Y-%m-%d 00:00:00"),
+                end.strftime("%Y-%m-%d %H:%M:%S"),
+                interval="day",
+            )
+            chunk = parse_candles(raw)
+            if not chunk:
+                break
+            for candle in chunk:
+                by_date[candle["date"][:10]] = candle
+            if start <= floor:
+                break
+            end = start.replace(hour=0, minute=0, second=0) - timedelta(seconds=1)
+
+        candles = [by_date[d] for d in sorted(by_date)]
+        if candles:
+            self._candle_cache[cache_key] = (time.monotonic(), candles)
+        else:
+            logger.warning("Kite returned no daily history for token %s", instrument_token)
         return candles
 
 

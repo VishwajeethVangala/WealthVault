@@ -29,3 +29,27 @@ export const createEndLabelStack = (order: string[], minGap = 12) => {
     )
   }
 }
+
+// Recharts Line dot renderers for signal markers; render nothing where the value is null
+export const triangleMarker = (direction: 'up' | 'down', color: string) => (props: any) => {
+  const { cx, cy, value, index } = props
+  if (value == null || cx == null || cy == null) return <g key={index} />
+  const s = 6
+  const points =
+    direction === 'up'
+      ? `${cx},${cy - s} ${cx - s},${cy + s} ${cx + s},${cy + s}`
+      : `${cx},${cy + s} ${cx - s},${cy - s} ${cx + s},${cy - s}`
+  return <polygon key={index} points={points} fill={color} stroke="#ffffff" strokeWidth={1.5} />
+}
+
+export const crossMarker = (color: string) => (props: any) => {
+  const { cx, cy, value, index } = props
+  if (value == null || cx == null || cy == null) return <g key={index} />
+  const s = 5
+  return (
+    <g key={index} stroke={color} strokeWidth={2.5} strokeLinecap="round">
+      <line x1={cx - s} y1={cy - s} x2={cx + s} y2={cy + s} />
+      <line x1={cx - s} y1={cy + s} x2={cx + s} y2={cy - s} />
+    </g>
+  )
+}

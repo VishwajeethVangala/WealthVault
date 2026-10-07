@@ -108,7 +108,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
                 : location.pathname === '/momentum'
                 ? 'Momentum Analyzer'
                 : location.pathname === '/strategy'
-                ? 'Swing Strategy V2.1'
+                ? 'Swing Strategies'
                 : 'Executive Portfolio'}
             </h2>
           </div>

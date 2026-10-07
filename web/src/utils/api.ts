@@ -1,4 +1,4 @@
-import type { AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, SwingStrategyOptions, SwingStrategyResult, User } from '../types'
+import type { AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, SwingStrategyOptions, SwingStrategyResult, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -183,4 +183,12 @@ export async function fetchSwingStrategy(symbol: string, options: SwingStrategyO
     if (value !== undefined) params.set(key, String(value))
   })
   return fetchApi<SwingStrategyResult>(`/api/v1/analytics/strategy/swing-v21?${params.toString()}`)
+}
+
+export async function fetchAthBreakoutStrategy(symbol: string, options: AthBreakoutOptions = {}): Promise<AthBreakoutResult> {
+  const params = new URLSearchParams({ symbol })
+  Object.entries(options).forEach(([key, value]) => {
+    if (value !== undefined) params.set(key, String(value))
+  })
+  return fetchApi<AthBreakoutResult>(`/api/v1/analytics/strategy/ath-breakout?${params.toString()}`)
 }

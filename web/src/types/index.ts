@@ -236,7 +236,7 @@ export interface StrategyTrade {
   entry_price: number
   exit_date: string | null
   exit_price: number | null
-  exit_reason: 'UT + EMA20 SELL' | 'ATR STOP' | 'OPEN'
+  exit_reason: 'UT + EMA20 SELL' | 'ATR STOP' | '200DMA BREAK' | 'OPEN'
   quantity: number
   pnl: number
   pnl_pct: number
@@ -320,4 +320,69 @@ export interface SwingStrategyOptions {
   ut_atr_period?: number
   use_stop?: boolean
   stop_atr_mult?: number
+}
+
+// "Below 200DMA -> ATH Break -> Hold till 200DMA Break" (see core/analytics/ath_breakout_strategy.py)
+export interface AthBreakoutParams {
+  dma_length: number
+  window_bars: number
+  capital_per_trade: number
+  initial_capital: number
+  start_date: string
+  commission_pct: number
+}
+
+export interface AthBreakoutStatus {
+  state: 'IN_POSITION' | 'FLAT'
+  headline: string
+  detail: string
+  last_signal: 'BUY' | 'SELL' | null
+  close: number
+  dma: number | null
+  prior_ath: number | null
+  pct_to_ath: number | null
+  days_since_below_dma: number | null
+  in_window: boolean
+  window_days_left: number | null
+  pct_above_dma: number | null
+  entry_date: string | null
+  entry_price: number | null
+  unrealized_pct: number | null
+  bars_held: number | null
+}
+
+export interface AthBreakoutBar {
+  date: string
+  high: number
+  close: number
+  dma: number | null
+  ath: number | null
+  in_window: boolean
+  buy: boolean
+  sell: boolean
+  equity: number
+  buy_hold: number
+}
+
+export interface AthBreakoutResult {
+  instrument: string
+  name: string | null
+  as_of: string
+  params: AthBreakoutParams
+  history_start: string
+  test_start: string
+  test_end: string
+  bars_tested: number
+  partial_bar_excluded: boolean
+  status: AthBreakoutStatus
+  stats: StrategyStats
+  trades: StrategyTrade[]
+  series: AthBreakoutBar[]
+}
+
+export interface AthBreakoutOptions {
+  start_date?: string
+  dma_length?: number
+  window_bars?: number
+  capital_per_trade?: number
 }
