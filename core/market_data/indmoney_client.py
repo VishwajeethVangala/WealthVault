@@ -102,7 +102,7 @@ class IndmoneyMCPClient:
                     data = json.load(f)
                     self.access_token = data.get("access_token")
                     self.refresh_token = data.get("refresh_token")
-                    self.expires_at = float(data.get("expires_at", 0.0))
+                    self.expires_at = float(data.get("expires_at") or 0.0)
                     logger.info("Loaded INDmoney tokens for %s from disk (expires in %ds)", self.connection_id, max(0, int(self.expires_at - time.time())))
             except Exception as exc:
                 logger.warning("Could not load INDmoney tokens for %s: %s", self.connection_id, exc)
@@ -249,7 +249,7 @@ class IndmoneyMCPClient:
                     self.access_token = data["access_token"]
                     if "refresh_token" in data:
                         self.refresh_token = data["refresh_token"]
-                    expires_in = int(data.get("expires_in", 86400))
+                    expires_in = int(data.get("expires_in") or 86400)
                     self.expires_at = time.time() + expires_in
                     self._save_tokens()
                     logger.info("Refreshed INDmoney access token successfully.")

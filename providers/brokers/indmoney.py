@@ -19,6 +19,16 @@ logger = logging.getLogger("wealthvault.providers.indmoney")
 SCHEMA_FILE = Path("storage/blobs/schemas/indmoney_raw.json")
 
 
+def _safe_float(val: Any, default: float = 0.0) -> float:
+    """Safely convert a value to float, handling None, empty strings, and invalid values."""
+    if val is None or val == "":
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
 class IndmoneyProvider(BrokerProvider):
     """INDmoney wealth provider using direct HTTP MCP client with OAuth PKCE."""
 
@@ -94,18 +104,28 @@ class IndmoneyProvider(BrokerProvider):
         }
 
         # Support both {"family_asset_holdings": [...]} and {"overall": {"family_asset_holdings": [...]}}
-        members = (
-            raw_overall.get("family_asset_holdings")
-            or raw_overall.get("overall", {}).get("family_asset_holdings", [])
-            or []
-        )
+        if isinstance(raw_overall, list):
+            members = raw_overall
+        elif isinstance(raw_overall, dict):
+            members = (
+                raw_overall.get("family_asset_holdings")
+                or (raw_overall.get("overall", {}).get("family_asset_holdings") if isinstance(raw_overall.get("overall"), dict) else None)
+                or (raw_overall.get("data", {}).get("family_asset_holdings") if isinstance(raw_overall.get("data"), dict) else None)
+                or []
+            )
+        else:
+            members = []
 
         for member in members:
+            if not isinstance(member, dict):
+                continue
             m_name = member.get("name")
-            m_asset = member.get("asset")
+            m_asset = str(member.get("asset") or "").lower()
 
-            for h in member.get("holdings", []):
-                brokers = h.get("brokers", [])
+            for h in member.get("holdings") or []:
+                if not isinstance(h, dict):
+                    continue
+                brokers = h.get("brokers") or []
                 # Avoid duplicating mutual funds managed directly by Zerodha Coin
                 if m_asset == "mutual_fund":
                     continue
@@ -121,22 +141,27 @@ class IndmoneyProvider(BrokerProvider):
                 if m_asset == "bond" and ("IN0020230069" in inv_code or "SGB" in str(h.get("name") or "").upper()):
                     continue
 
+                raw_units = h.get("quantity") if h.get("quantity") is not None else h.get("total_units")
+                total_units = _safe_float(raw_units, 1.0)
+                if total_units <= 0:
+                    total_units = 1.0
+
                 holding_item = {
-                    "investment_code": h.get("id") or h.get("investment_code"),
-                    "investment": h.get("name") or h.get("investment"),
-                    "asset_type": (h.get("asset_class") or h.get("investment_type", "")).upper(),
+                    "investment_code": h.get("id") or h.get("investment_code") or inv_code,
+                    "investment": h.get("name") or h.get("investment") or inv_code or "Unknown Investment",
+                    "asset_type": str(h.get("asset_class") or h.get("investment_type") or "").upper(),
                     "assetclass_l2": h.get("asset_class") or h.get("investment_type"),
-                    "invested_amount": float(h.get("invested_amount", 0.0)),
-                    "market_value": float(h.get("current_value", 0.0)),
-                    "holding_percent": float(h.get("holding_percentage", 0.0)),
-                    "total_pnl": float(h.get("absolute_change", 0.0)),
-                    "pnl_per": float(h.get("absolute_change_percentage", 0.0)),
-                    "total_units": float(h.get("quantity") or h.get("total_units") or 1.0),
-                    "unit_price": float(h.get("unit_price", 0.0)),
+                    "invested_amount": _safe_float(h.get("invested_amount"), 0.0),
+                    "market_value": _safe_float(h.get("current_value"), 0.0),
+                    "holding_percent": _safe_float(h.get("holding_percentage"), 0.0),
+                    "total_pnl": _safe_float(h.get("absolute_change"), 0.0),
+                    "pnl_per": _safe_float(h.get("absolute_change_percentage"), 0.0),
+                    "total_units": total_units,
+                    "unit_price": _safe_float(h.get("unit_price"), 0.0),
                     "broker": "INDmoney" if "INDmoney" in brokers else ("Alpaca" if "Alpaca" in brokers else (brokers[0] if brokers else "INDmoney")),
                     "market_cap": h.get("market_cap"),
-                    "one_day_change": float(h.get("one_day_change", 0.0)),
-                    "one_day_change_percentage": float(h.get("one_day_change_percentage", 0.0)),
+                    "one_day_change": _safe_float(h.get("one_day_change"), 0.0),
+                    "one_day_change_percentage": _safe_float(h.get("one_day_change_percentage"), 0.0),
                     "family_member": m_name,
                 }
 
