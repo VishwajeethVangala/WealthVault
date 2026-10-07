@@ -361,3 +361,115 @@ class MomentumAnalysis(BaseModel):
 
 
 
+
+
+# --- Swing Strategy (NSE Swing Momentum V2.1) Schemas ---
+
+class SwingStrategyParams(BaseModel):
+    """Inputs of the NSE Swing Momentum V2.1 strategy (defaults match the Pine script)."""
+
+    fast_sma: int = Field(default=50, ge=1, description="Fast SMA length")
+    slow_sma: int = Field(default=200, ge=1, description="Slow SMA length")
+    slope_lookback: int = Field(default=20, ge=1, description="Slow SMA slope lookback (bars)")
+    ut_key: float = Field(default=1.0, gt=0, description="UT Bot key value (ATR multiple)")
+    ut_atr_period: int = Field(default=10, ge=1, description="UT Bot ATR period")
+    exit_ema: int = Field(default=20, ge=1, description="Exit confirmation EMA length")
+    use_stop: bool = Field(default=True, description="Use the ATR protective stop")
+    stop_atr_period: int = Field(default=14, ge=1, description="Protective stop ATR period")
+    stop_atr_mult: float = Field(default=2.0, gt=0, description="Protective stop ATR multiplier")
+    initial_capital: float = Field(default=100000.0, gt=0, description="Starting capital in INR")
+    commission_pct: float = Field(default=0.10, ge=0, description="Commission per side (% of trade value)")
+    slippage_ticks: int = Field(default=1, ge=0, description="Slippage per fill in ticks")
+
+
+class StrategyTrade(BaseModel):
+    """One round-trip trade from the backtest (open trades are marked to the last close)."""
+
+    entry_date: str
+    entry_price: float
+    exit_date: Optional[str] = None
+    exit_price: Optional[float] = None
+    exit_reason: str = Field(..., description="'UT + EMA20 SELL', 'ATR STOP' or 'OPEN'")
+    quantity: int
+    pnl: float = Field(..., description="Net P&L in INR after commission")
+    pnl_pct: float = Field(..., description="Net P&L as % of entry cost")
+    bars_held: int
+    is_open: bool = False
+
+
+class StrategyStats(BaseModel):
+    """Backtest performance summary over the tradable window."""
+
+    initial_capital: float
+    final_equity: float
+    net_profit: float
+    net_profit_pct: float
+    cagr_pct: float
+    max_drawdown_pct: float = Field(..., description="Largest peak-to-trough equity decline (negative %)")
+    buy_hold_return_pct: float
+    total_trades: int = Field(..., description="Closed trades")
+    open_trade: bool
+    win_rate_pct: Optional[float] = None
+    avg_win_pct: Optional[float] = None
+    avg_loss_pct: Optional[float] = None
+    profit_factor: Optional[float] = Field(default=None, description="Gross profit / gross loss (None if no losses)")
+    avg_bars_held: Optional[float] = None
+    exposure_pct: float = Field(..., description="% of bars spent in a position")
+    signal_exits: int
+    stop_exits: int
+
+
+class StrategyStatus(BaseModel):
+    """Where the strategy stands on the latest bar."""
+
+    state: str = Field(..., description="'IN_POSITION' or 'FLAT'")
+    headline: str
+    detail: str
+    regime_bullish: bool
+    regime_checks: List[TrendCheck] = Field(default_factory=list)
+    pending_order: Optional[str] = Field(default=None, description="'BUY' or 'SELL' queued for the next open")
+    entry_date: Optional[str] = None
+    entry_price: Optional[float] = None
+    stop_price: Optional[float] = None
+    ut_stop: Optional[float] = None
+    exit_ema: Optional[float] = None
+    unrealized_pct: Optional[float] = None
+    bars_held: Optional[int] = None
+
+
+class StrategyBar(BaseModel):
+    """Per-bar indicator values, signals, and equity for charting."""
+
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    sma_fast: Optional[float] = None
+    sma_slow: Optional[float] = None
+    exit_ema: Optional[float] = None
+    ut_stop: Optional[float] = None
+    regime: bool = False
+    buy: bool = Field(default=False, description="BUY signal on this close (fills next open)")
+    sell: bool = Field(default=False, description="UT + EMA20 SELL signal on this close (fills next open)")
+    stop_exit: bool = Field(default=False, description="Protective stop filled during this bar")
+    stop_level: Optional[float] = None
+    equity: float
+    buy_hold: float
+
+
+class SwingStrategyResult(BaseModel):
+    """Full NSE Swing Momentum V2.1 report for one instrument."""
+
+    instrument: str
+    name: Optional[str] = None
+    as_of: str
+    params: SwingStrategyParams
+    test_start: str = Field(..., description="First bar after indicator warm-up")
+    test_end: str
+    bars_tested: int
+    partial_bar_excluded: bool = Field(default=False, description="Today's unfinished candle was dropped")
+    status: StrategyStatus
+    stats: StrategyStats
+    trades: List[StrategyTrade] = Field(default_factory=list)
+    series: List[StrategyBar] = Field(default_factory=list)

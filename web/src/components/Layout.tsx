@@ -42,7 +42,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
 
   const isBrokerSyncPage = location.pathname === '/brokers'
   // Portfolio filters do not apply to single-stock pages
-  const hideGlobalFilters = isBrokerSyncPage || location.pathname === '/momentum'
+  const hideGlobalFilters = isBrokerSyncPage || location.pathname === '/momentum' || location.pathname === '/strategy'
 
   // Top-right global sync trigger
   const handleSync = async () => {
@@ -107,6 +107,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
                 ? 'Holdings Ledger'
                 : location.pathname === '/momentum'
                 ? 'Momentum Analyzer'
+                : location.pathname === '/strategy'
+                ? 'Swing Strategy V2.1'
                 : 'Executive Portfolio'}
             </h2>
           </div>

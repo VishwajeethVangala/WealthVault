@@ -214,3 +214,110 @@ export interface MomentumAnalysis {
 
 
 
+
+// NSE Swing Momentum V2.1 strategy (see core/analytics/swing_strategy.py)
+export interface SwingStrategyParams {
+  fast_sma: number
+  slow_sma: number
+  slope_lookback: number
+  ut_key: number
+  ut_atr_period: number
+  exit_ema: number
+  use_stop: boolean
+  stop_atr_period: number
+  stop_atr_mult: number
+  initial_capital: number
+  commission_pct: number
+  slippage_ticks: number
+}
+
+export interface StrategyTrade {
+  entry_date: string
+  entry_price: number
+  exit_date: string | null
+  exit_price: number | null
+  exit_reason: 'UT + EMA20 SELL' | 'ATR STOP' | 'OPEN'
+  quantity: number
+  pnl: number
+  pnl_pct: number
+  bars_held: number
+  is_open: boolean
+}
+
+export interface StrategyStats {
+  initial_capital: number
+  final_equity: number
+  net_profit: number
+  net_profit_pct: number
+  cagr_pct: number
+  max_drawdown_pct: number
+  buy_hold_return_pct: number
+  total_trades: number
+  open_trade: boolean
+  win_rate_pct: number | null
+  avg_win_pct: number | null
+  avg_loss_pct: number | null
+  profit_factor: number | null
+  avg_bars_held: number | null
+  exposure_pct: number
+  signal_exits: number
+  stop_exits: number
+}
+
+export interface StrategyStatus {
+  state: 'IN_POSITION' | 'FLAT'
+  headline: string
+  detail: string
+  regime_bullish: boolean
+  regime_checks: TrendCheck[]
+  pending_order: 'BUY' | 'SELL' | null
+  entry_date: string | null
+  entry_price: number | null
+  stop_price: number | null
+  ut_stop: number | null
+  exit_ema: number | null
+  unrealized_pct: number | null
+  bars_held: number | null
+}
+
+export interface StrategyBar {
+  date: string
+  open: number
+  high: number
+  low: number
+  close: number
+  sma_fast: number | null
+  sma_slow: number | null
+  exit_ema: number | null
+  ut_stop: number | null
+  regime: boolean
+  buy: boolean
+  sell: boolean
+  stop_exit: boolean
+  stop_level: number | null
+  equity: number
+  buy_hold: number
+}
+
+export interface SwingStrategyResult {
+  instrument: string
+  name: string | null
+  as_of: string
+  params: SwingStrategyParams
+  test_start: string
+  test_end: string
+  bars_tested: number
+  partial_bar_excluded: boolean
+  status: StrategyStatus
+  stats: StrategyStats
+  trades: StrategyTrade[]
+  series: StrategyBar[]
+}
+
+export interface SwingStrategyOptions {
+  years?: number
+  ut_key?: number
+  ut_atr_period?: number
+  use_stop?: boolean
+  stop_atr_mult?: number
+}
