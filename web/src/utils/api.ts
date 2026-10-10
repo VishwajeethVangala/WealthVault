@@ -1,4 +1,4 @@
-import type { AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, SwingStrategyOptions, SwingStrategyResult, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
+import type { SignalsJob, SignalsResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, SwingStrategyOptions, SwingStrategyResult, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -191,4 +191,44 @@ export async function fetchAthBreakoutStrategy(symbol: string, options: AthBreak
     if (value !== undefined) params.set(key, String(value))
   })
   return fetchApi<AthBreakoutResult>(`/api/v1/analytics/strategy/ath-breakout?${params.toString()}`)
+}
+
+// Target allocation (stored per user in Azure Table Storage)
+export async function fetchTargets(): Promise<TargetAllocation> {
+  return fetchApi<TargetAllocation>('/api/v1/portfolio/targets')
+}
+
+export async function saveTargets(targets: Record<string, number>): Promise<TargetAllocation> {
+  return fetchApi<TargetAllocation>('/api/v1/portfolio/targets', {
+    method: 'PUT',
+    body: JSON.stringify({ targets }),
+  })
+}
+
+// Broker API credentials (Groww, Angel One). Values are write-only: the backend never returns them.
+export async function saveBrokerCredentials(connectionRef: string, fields: Record<string, string>): Promise<CredentialSaveResponse> {
+  return fetchApi<CredentialSaveResponse>(`/api/v1/portfolio/connections/${encodeURIComponent(connectionRef)}/credentials`, {
+    method: 'PUT',
+    body: JSON.stringify({ fields }),
+  })
+}
+
+// Daily portfolio value history (from the snapshots every sync stores)
+export interface HistoryPoint {
+  date: string
+  value: number
+  invested: number
+}
+
+export async function fetchHistory(days = 365): Promise<HistoryPoint[]> {
+  return fetchApi<HistoryPoint[]>(`/api/v1/portfolio/history?days=${days}`)
+}
+
+// Equity signals
+export async function fetchSignals(): Promise<SignalsResponse> {
+  return fetchApi<SignalsResponse>('/api/v1/analytics/signals')
+}
+
+export async function refreshSignals(): Promise<SignalsJob> {
+  return fetchApi<SignalsJob>('/api/v1/analytics/signals/refresh', { method: 'POST' })
 }

@@ -113,18 +113,34 @@ export interface BrokerSessionInfo {
   is_expired: boolean
   mcp_server_url: string
   mcp_protocol: string
-  tools_count: number
+  tools_count?: number | null
   holdings_count: number
   total_valuation: number
-  last_latency_ms: number
+  last_latency_ms?: number | null
   error_message?: string
   auth_url?: string
+  credentials_saved?: boolean
+}
+
+export interface CredentialSaveResponse {
+  saved_fields: string[]
+  login_ok: boolean
+  message: string
+  auth_url?: string | null
 }
 
 export interface ReauthRequest {
   api_key?: string
   totp_token?: string
   session_token?: string
+}
+
+export interface CredentialField {
+  key: string
+  label: string
+  secret: boolean
+  required: boolean
+  help: string
 }
 
 export interface BrokerCatalogItem {
@@ -138,6 +154,10 @@ export interface BrokerCatalogItem {
   supported: boolean
   is_connected: boolean
   connected_count?: number
+  coming_soon?: boolean
+  credential_fields: CredentialField[]
+  setup_url?: string | null
+  setup_steps: string[]
 }
 
 export interface CreateBrokerConnectionRequest {
@@ -385,4 +405,79 @@ export interface AthBreakoutOptions {
   dma_length?: number
   window_bars?: number
   capital_per_trade?: number
+}
+
+export interface TargetAllocation {
+  owner_id: string
+  targets: Record<string, number>
+  updated_at?: string
+}
+
+// Equity signals (momentum, Swing V2.1, 200-DMA ATH breakout), computed per stock by the backend
+export interface MomentumSignal {
+  verdict: string
+  score: number
+  max: number
+  last_price: number
+  high_52w: number | null
+  low_52w: number | null
+  pct_from_52w_high: number | null
+  range_pos: number | null
+}
+
+export interface SwingSignal {
+  state: 'IN_POSITION' | 'FLAT'
+  headline: string
+  detail: string
+  pending_order: 'BUY' | 'SELL' | null
+  entry_date: string | null
+  entry_price: number | null
+  stop_price: number | null
+  bars_held: number | null
+  regime_bullish: boolean
+  as_of: string
+}
+
+export interface AthSignal {
+  state: 'IN_POSITION' | 'FLAT'
+  headline: string
+  detail: string
+  last_signal: 'BUY' | 'SELL' | null
+  entry_date: string | null
+  entry_price: number | null
+  bars_held: number | null
+  in_window: boolean
+  window_days_left: number | null
+  pct_to_ath: number | null
+  pct_above_dma: number | null
+  as_of: string
+}
+
+export interface StockSignals {
+  instrument: string
+  name?: string | null
+  as_of?: string | null
+  history_days?: number
+  momentum: MomentumSignal | null
+  swing: SwingSignal | null
+  ath: AthSignal | null
+  errors: Record<string, string>
+  computed_at?: string
+}
+
+export interface SignalsJob {
+  state: 'idle' | 'running' | 'done' | 'error'
+  total: number
+  done: number
+  failed: number
+  started_at: string | null
+  finished_at: string | null
+  message: string | null
+  auth_url: string | null
+}
+
+export interface SignalsResponse {
+  job: SignalsJob
+  symbol_map: Record<string, string>
+  signals: Record<string, StockSignals>
 }

@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
 import type { Holding } from '../types'
 import { fetchPortfolioHoldings } from '../utils/api'
-import { classifyAssetClass, type CanonicalAssetClass } from '../utils/portfolioFilters'
+import { brokerKeyOf, classifyAssetClass, type CanonicalAssetClass } from '../utils/portfolioFilters'
 
 export interface PortfolioCounts {
   total: number
-  zerodha: number
-  indmoney: number
+  byBroker: Record<string, number>
   byAssetClass: Record<CanonicalAssetClass, number>
   gainers: number
   losers: number
@@ -24,8 +23,7 @@ interface PortfolioContextValue {
 
 const defaultCounts: PortfolioCounts = {
   total: 0,
-  zerodha: 0,
-  indmoney: 0,
+  byBroker: {},
   byAssetClass: {
     EQUITY: 0,
     MUTUAL_FUND: 0,
@@ -82,8 +80,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [load])
 
   const counts = useMemo<PortfolioCounts>(() => {
-    let zerodha = 0
-    let indmoney = 0
+    const byBroker: Record<string, number> = {}
     let gainers = 0
     let losers = 0
 
@@ -98,9 +95,8 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     holdings.forEach((h) => {
-      const conn = (h.connection_id || '').toLowerCase()
-      if (conn.includes('zerodha')) zerodha++
-      if (conn.includes('indmoney')) indmoney++
+      const broker = brokerKeyOf(h.connection_id)
+      if (broker) byBroker[broker] = (byBroker[broker] || 0) + 1
 
       const c = classifyAssetClass(h)
       byAssetClass[c] = (byAssetClass[c] || 0) + 1
@@ -113,8 +109,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     return {
       total: holdings.length,
-      zerodha,
-      indmoney,
+      byBroker,
       byAssetClass,
       gainers,
       losers,

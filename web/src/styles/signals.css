@@ -1,0 +1,135 @@
+/* Equity signals page */
+.stbl-wrap {
+  overflow-x: auto;
+  padding: 0;
+}
+.stbl {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+.stbl th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  font-weight: 600;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+.stbl th button {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.stbl th button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.stbl th.r,
+.stbl td.r {
+  text-align: right;
+}
+.stbl td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.stbl tr:last-child td {
+  border-bottom: 0;
+}
+.stbl tbody tr:hover td {
+  background: var(--surface-2);
+}
+.stbl th:first-child,
+.stbl td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 1;
+  min-width: 190px;
+}
+.stbl tbody tr:hover td:first-child {
+  background: var(--surface-2);
+}
+.sg-sym {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.sg-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.sg-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+  align-items: flex-start;
+}
+.sg-line {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.sg-line.dim {
+  color: var(--text-3);
+}
+.sg-na {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.rng {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  width: 110px;
+  margin-top: 6px;
+}
+.rng i {
+  position: absolute;
+  top: -3px;
+  width: 4px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--text);
+  transform: translateX(-2px);
+}
+.sg-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+  flex: 1 1 160px;
+  max-width: 280px;
+}
+.sg-progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+.sg-run {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sg-legend {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.6;
+}

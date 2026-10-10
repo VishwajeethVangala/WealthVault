@@ -11,6 +11,7 @@ import {
   Building2,
 } from 'lucide-react'
 import { usePortfolio } from '../context/PortfolioContext'
+import { brokerLabel } from '../utils/portfolioFilters'
 
 interface FilterOption {
   value: string
@@ -142,14 +143,14 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
         onClick={onToggle}
         className={`h-8 inline-flex items-center gap-2 px-3 rounded-xl text-xs font-semibold transition-all duration-150 select-none border shrink-0 ${
           isFiltered
-            ? 'bg-slate-950 text-white border-slate-950 shadow-sm'
-            : 'bg-white text-slate-700 hover:text-slate-950 hover:bg-slate-50 border-slate-200/90 shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
+            ? 'bg-wv-text text-wv-bg border-wv-text shadow-sm'
+            : 'bg-wv-surface text-wv-text-2 hover:text-wv-text hover:bg-wv-surface-2 border-wv-border shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
         }`}
       >
-        <Icon className={`w-3.5 h-3.5 ${isFiltered ? 'text-emerald-400' : 'text-slate-400'}`} />
+        <Icon className={`w-3.5 h-3.5 ${isFiltered ? 'text-wv-gain' : 'text-wv-text-3'}`} />
         <span
           className={`text-[10px] font-bold uppercase tracking-wider ${
-            isFiltered ? 'text-slate-300' : 'text-slate-400'
+            isFiltered ? 'text-wv-text-3' : 'text-wv-text-3'
           }`}
         >
           {labelPrefix}:
@@ -158,7 +159,7 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
         {displayCount !== undefined && (
           <span
             className={`px-1.5 py-0.5 rounded text-[10px] font-mono leading-tight ${
-              isFiltered ? 'bg-white/20 text-white font-bold' : 'bg-slate-100 text-slate-500'
+              isFiltered ? 'bg-wv-surface text-wv-text font-bold' : 'bg-wv-surface-2 text-wv-text-3'
             }`}
           >
             {displayCount}
@@ -166,23 +167,23 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
         )}
         <ChevronDown
           className={`w-3.5 h-3.5 transition-transform duration-150 ${
-            isFiltered ? 'text-slate-300' : 'text-slate-400'
+            isFiltered ? 'text-wv-text-3' : 'text-wv-text-3'
           } ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200/90 p-2 z-50 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute left-0 mt-2 w-72 bg-wv-surface rounded-2xl shadow-xl border border-wv-border p-2 z-50 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100">
           {/* Header */}
-          <div className="px-2.5 py-1.5 flex items-center justify-between border-b border-slate-100 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+          <div className="px-2.5 py-1.5 flex items-center justify-between border-b border-wv-border mb-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-wv-text-3">
               Filter by {labelPrefix}
             </span>
             {isFiltered && (
               <button
                 type="button"
                 onClick={() => onChange([])}
-                className="text-[10px] font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 transition-colors"
+                className="text-[10px] font-semibold text-wv-loss hover:text-wv-loss flex items-center gap-1 transition-colors"
               >
                 <span>Reset to All</span>
               </button>
@@ -192,20 +193,20 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
           {/* Optional Search Bar */}
           {searchable && actualOptions.length > 4 && (
             <div className="relative px-1 mb-1">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-wv-text-3 pointer-events-none" />
               <input
                 ref={inputRef}
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder={`Search ${labelPrefix.toLowerCase()}...`}
-                className="w-full h-8 pl-8 pr-7 text-xs bg-slate-50 rounded-xl border border-slate-200/70 focus:outline-none focus:border-slate-900 focus:bg-white transition-all text-slate-900 placeholder:text-slate-400 font-medium"
+                className="w-full h-8 pl-8 pr-7 text-xs bg-wv-surface-2 rounded-xl border border-wv-border focus:outline-none focus:border-wv-text focus:bg-wv-surface transition-all text-wv-text placeholder:text-wv-text-3 font-medium"
               />
               {searchTerm && (
                 <button
                   type="button"
                   onClick={() => setSearchTerm('')}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-2.5 text-wv-text-3 hover:text-wv-text-2"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -216,10 +217,10 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
           {/* "Select All" Option */}
           {!searchTerm && (
             <div
-              className={`group flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer border-b border-slate-100/80 mb-0.5 ${
+              className={`group flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer border-b border-wv-border mb-0.5 ${
                 isAllSelected
-                  ? 'bg-slate-50 text-slate-950 font-bold'
-                  : 'text-slate-700 hover:bg-slate-50 font-medium'
+                  ? 'bg-wv-surface-2 text-wv-text font-bold'
+                  : 'text-wv-text-2 hover:bg-wv-surface-2 font-medium'
               }`}
               onClick={handleToggleAll}
             >
@@ -227,15 +228,15 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
                 <div
                   className={`w-4 h-4 rounded-md flex items-center justify-center transition-colors border ${
                     isAllSelected
-                      ? 'bg-slate-950 border-slate-950 text-white'
-                      : 'border-slate-300 bg-white group-hover:border-slate-400'
+                      ? 'bg-wv-text border-wv-text text-wv-bg'
+                      : 'border-wv-border-strong bg-wv-surface group-hover:border-wv-border-strong'
                   }`}
                 >
-                  {isAllSelected && <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />}
+                  {isAllSelected && <Check className="w-3 h-3 text-wv-gain stroke-[3]" />}
                 </div>
                 <span className="font-semibold">Select All</span>
               </div>
-              <span className="font-mono text-[10px] text-slate-400">
+              <span className="font-mono text-[10px] text-wv-text-3">
                 {actualOptions.length} items
               </span>
             </div>
@@ -250,8 +251,8 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
                   key={opt.value}
                   className={`group flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer ${
                     isChecked && !isAllSelected
-                      ? 'bg-slate-100 text-slate-950 font-semibold'
-                      : 'text-slate-700 hover:bg-slate-50 font-medium'
+                      ? 'bg-wv-surface-2 text-wv-text font-semibold'
+                      : 'text-wv-text-2 hover:bg-wv-surface-2 font-medium'
                   }`}
                   onClick={() => handleToggleOption(opt.value)}
                 >
@@ -259,11 +260,11 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
                     <div
                       className={`w-4 h-4 rounded-md flex items-center justify-center transition-colors border shrink-0 ${
                         isChecked
-                          ? 'bg-slate-950 border-slate-950 text-white'
-                          : 'border-slate-300 bg-white group-hover:border-slate-400'
+                          ? 'bg-wv-text border-wv-text text-wv-bg'
+                          : 'border-wv-border-strong bg-wv-surface group-hover:border-wv-border-strong'
                       }`}
                     >
-                      {isChecked && <Check className="w-3 h-3 text-emerald-400 stroke-[3]" />}
+                      {isChecked && <Check className="w-3 h-3 text-wv-gain stroke-[3]" />}
                     </div>
 
                     {opt.colorDot && (
@@ -277,8 +278,8 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
                       <span
                         className={`font-mono text-[10px] px-1.5 py-0.5 rounded-md ${
                           isChecked && !isAllSelected
-                            ? 'bg-slate-200 text-slate-800 font-bold'
-                            : 'bg-slate-100 text-slate-500'
+                            ? 'bg-wv-border text-wv-text font-bold'
+                            : 'bg-wv-surface-2 text-wv-text-3'
                         }`}
                       >
                         {opt.count}
@@ -289,7 +290,7 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
                       <button
                         type="button"
                         onClick={(e) => handleSelectOnly(opt.value, e)}
-                        className="opacity-0 group-hover:opacity-100 text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-950 transition-opacity px-1"
+                        className="opacity-0 group-hover:opacity-100 text-[10px] font-bold uppercase tracking-wider text-wv-text-3 hover:text-wv-text transition-opacity px-1"
                         title={`Select only ${opt.label}`}
                       >
                         Only
@@ -300,7 +301,7 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
               )
             })}
             {filteredOptions.length === 0 && (
-              <div className="py-4 text-center text-xs text-slate-400">
+              <div className="py-4 text-center text-xs text-wv-text-3">
                 No matches found
               </div>
             )}
@@ -383,8 +384,7 @@ export const GlobalFilters: React.FC = () => {
   // 1. Custodian Options with live counts
   const brokerOptions: FilterOption[] = [
     { value: 'all', label: 'All Custodians', count: counts.total },
-    { value: 'zerodha', label: 'Zerodha (Kite & Coin)', count: counts.zerodha },
-    { value: 'indmoney', label: 'INDmoney (Equities, US & NPS)', count: counts.indmoney },
+    ...Object.entries(counts.byBroker).map(([key, count]) => ({ value: key, label: brokerLabel(key), count })),
   ]
 
   // 2. Asset Class Options with live counts & canonical theme dots
@@ -394,7 +394,7 @@ export const GlobalFilters: React.FC = () => {
       value: 'EQUITY',
       label: 'Indian Equities & ETFs',
       count: counts.byAssetClass.EQUITY,
-      colorDot: 'bg-slate-900',
+      colorDot: 'bg-wv-text',
     },
     {
       value: 'MUTUAL_FUND',
@@ -406,29 +406,29 @@ export const GlobalFilters: React.FC = () => {
       value: 'US_STOCKS',
       label: 'US Equities & Tech',
       count: counts.byAssetClass.US_STOCKS,
-      colorDot: 'bg-blue-600',
+      colorDot: 'bg-wv-accent',
     },
     {
       value: 'GOLD',
       label: 'Sovereign Gold (SGB)',
       count: counts.byAssetClass.GOLD,
-      colorDot: 'bg-amber-500',
+      colorDot: 'bg-wv-warn',
     },
     {
       value: 'NPS',
       label: 'NPS Retirement',
       count: counts.byAssetClass.NPS,
-      colorDot: 'bg-purple-600',
+      colorDot: 'bg-wv-accent',
     },
   ]
 
   return (
-    <div className="h-12 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] select-none">
+    <div className="h-12 w-full bg-wv-surface backdrop-blur-md border-b border-wv-border shadow-[0_1px_2px_rgba(0,0,0,0.02)] select-none">
       <div className="h-full w-full px-4 sm:px-6 lg:px-8 xl:px-10 flex items-center justify-between gap-3">
         {/* Left: Looker Studio Filter Dropdown Pills */}
         <div className="flex items-center gap-2 overflow-x-auto sm:overflow-visible py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-          <div className="hidden sm:flex items-center gap-1.5 text-slate-400 text-xs font-bold mr-1 shrink-0 uppercase tracking-wider">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
+          <div className="hidden sm:flex items-center gap-1.5 text-wv-text-3 text-xs font-bold mr-1 shrink-0 uppercase tracking-wider">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-wv-text-3" />
             <span className="text-[10px]">Controls</span>
           </div>
 
@@ -459,7 +459,7 @@ export const GlobalFilters: React.FC = () => {
             <button
               type="button"
               onClick={handleReset}
-              className="h-8 inline-flex items-center gap-1.5 px-3 bg-white hover:bg-rose-50 text-rose-600 rounded-xl text-xs font-semibold border border-rose-200/80 transition-all ml-1 shrink-0 group shadow-sm"
+              className="h-8 inline-flex items-center gap-1.5 px-3 bg-wv-surface hover:bg-wv-loss-weak text-wv-loss rounded-xl text-xs font-semibold border border-wv-loss transition-all ml-1 shrink-0 group shadow-sm"
               title="Reset all filters"
             >
               <RotateCcw className="w-3 h-3 group-hover:-rotate-90 transition-transform" />
@@ -475,13 +475,13 @@ export const GlobalFilters: React.FC = () => {
               {selectedBrokers.map((brokerVal) => (
                 <span
                   key={brokerVal}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-wv-surface-2 text-wv-text text-[11px] font-semibold border border-wv-border"
                 >
-                  <span>{brokerVal === 'zerodha' ? 'Zerodha' : 'INDmoney'}</span>
+                  <span>{brokerLabel(brokerVal)}</span>
                   <button
                     type="button"
                     onClick={() => removeBrokerValue(brokerVal)}
-                    className="text-slate-400 hover:text-rose-600 transition-colors ml-0.5"
+                    className="text-wv-text-3 hover:text-wv-loss transition-colors ml-0.5"
                     title={`Remove ${brokerVal}`}
                   >
                     <X className="w-3 h-3" />
@@ -494,14 +494,14 @@ export const GlobalFilters: React.FC = () => {
                 return (
                   <span
                     key={acVal}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 text-[11px] font-semibold border border-slate-200"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-wv-surface-2 text-wv-text text-[11px] font-semibold border border-wv-border"
                   >
                     {opt?.colorDot && <span className={`w-1.5 h-1.5 rounded-full ${opt.colorDot}`} />}
                     <span>{opt?.label || acVal}</span>
                     <button
                       type="button"
                       onClick={() => removeAssetClassValue(acVal)}
-                      className="text-slate-400 hover:text-rose-600 transition-colors ml-0.5"
+                      className="text-wv-text-3 hover:text-wv-loss transition-colors ml-0.5"
                       title={`Remove ${opt?.label || acVal}`}
                     >
                       <X className="w-3 h-3" />
@@ -511,8 +511,8 @@ export const GlobalFilters: React.FC = () => {
               })}
             </div>
           ) : (
-            <div className="hidden sm:flex items-center gap-2 text-slate-500 text-xs">
-              <span className="font-mono font-bold text-slate-900">{counts.total}</span>
+            <div className="hidden sm:flex items-center gap-2 text-wv-text-3 text-xs">
+              <span className="font-mono font-bold text-wv-text">{counts.total}</span>
               <span>total audited assets</span>
             </div>
           )}
@@ -523,14 +523,14 @@ export const GlobalFilters: React.FC = () => {
             onClick={() => setIsMobileDrawerOpen(!isMobileDrawerOpen)}
             className={`sm:hidden h-8 px-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${
               hasActiveFilters
-                ? 'bg-slate-950 text-white border-slate-950 shadow-sm'
-                : 'bg-white text-slate-700 border-slate-200'
+                ? 'bg-wv-text text-wv-bg border-wv-text shadow-sm'
+                : 'bg-wv-surface text-wv-text-2 border-wv-border'
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
             <span>Filters</span>
             {activeFilterCount > 0 && (
-              <span className="w-4 h-4 rounded-full bg-emerald-500 text-slate-950 text-[10px] font-bold flex items-center justify-center font-mono">
+              <span className="w-4 h-4 rounded-full bg-wv-gain text-wv-text text-[10px] font-bold flex items-center justify-center font-mono">
                 {activeFilterCount}
               </span>
             )}
@@ -540,19 +540,19 @@ export const GlobalFilters: React.FC = () => {
 
       {/* Mobile Modal / Touch Bottom Sheet with Checkbox Multi-Select */}
       {isMobileDrawerOpen && (
-        <div className="fixed inset-0 z-50 sm:hidden flex flex-col justify-end bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-t-3xl p-5 shadow-2xl border-t border-slate-200 flex flex-col gap-4 max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 sm:hidden flex flex-col justify-end bg-wv-text backdrop-blur-sm">
+          <div className="bg-wv-surface rounded-t-3xl p-5 shadow-2xl border-t border-wv-border flex flex-col gap-4 max-h-[80vh] overflow-y-auto animate-in slide-in-from-bottom duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-wv-border">
               <div className="flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4 text-slate-900" />
-                <span className="font-bold text-slate-950 text-sm">Portfolio Controls</span>
+                <SlidersHorizontal className="w-4 h-4 text-wv-text" />
+                <span className="font-bold text-wv-text text-sm">Portfolio Controls</span>
               </div>
               <div className="flex items-center gap-2">
                 {hasActiveFilters && (
                   <button
                     type="button"
                     onClick={handleReset}
-                    className="text-xs font-semibold text-rose-600 px-2 py-1 hover:bg-rose-50 rounded-lg transition-colors"
+                    className="text-xs font-semibold text-wv-loss px-2 py-1 hover:bg-wv-loss-weak rounded-lg transition-colors"
                   >
                     Reset All
                   </button>
@@ -560,7 +560,7 @@ export const GlobalFilters: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsMobileDrawerOpen(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                  className="p-1 rounded-lg text-wv-text-3 hover:text-wv-text-2 hover:bg-wv-surface-2"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -570,13 +570,13 @@ export const GlobalFilters: React.FC = () => {
             {/* Mobile Dimension 1: Custodian Multi-Select */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-wv-text-3">
                   Custodian
                 </span>
                 <button
                   type="button"
                   onClick={() => updateBrokers([])}
-                  className="text-[10px] font-semibold text-slate-500 hover:text-slate-900"
+                  className="text-[10px] font-semibold text-wv-text-3 hover:text-wv-text"
                 >
                   {selectedBrokers.length === 0 ? 'All Selected' : 'Reset to All'}
                 </button>
@@ -600,18 +600,18 @@ export const GlobalFilters: React.FC = () => {
                       }}
                       className={`h-9 px-3 rounded-xl text-xs flex items-center justify-between font-semibold border transition-all ${
                         isChecked && selectedBrokers.length > 0
-                          ? 'bg-slate-950 text-white border-slate-950'
+                          ? 'bg-wv-text text-wv-bg border-wv-text'
                           : isChecked
-                          ? 'bg-slate-100 text-slate-900 border-slate-200'
-                          : 'bg-slate-50 text-slate-500 border-slate-200/80 opacity-60'
+                          ? 'bg-wv-surface-2 text-wv-text border-wv-border'
+                          : 'bg-wv-surface-2 text-wv-text-3 border-wv-border opacity-60'
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         <div
                           className={`w-3.5 h-3.5 rounded flex items-center justify-center border ${
                             isChecked
-                              ? 'bg-emerald-500 border-emerald-500 text-slate-950'
-                              : 'border-slate-300 bg-white'
+                              ? 'bg-wv-gain border-wv-gain text-wv-text'
+                              : 'border-wv-border-strong bg-wv-surface'
                           }`}
                         >
                           {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
@@ -630,13 +630,13 @@ export const GlobalFilters: React.FC = () => {
             {/* Mobile Dimension 2: Asset Class Multi-Select */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-wv-text-3">
                   Asset Class
                 </span>
                 <button
                   type="button"
                   onClick={() => updateAssetClasses([])}
-                  className="text-[10px] font-semibold text-slate-500 hover:text-slate-900"
+                  className="text-[10px] font-semibold text-wv-text-3 hover:text-wv-text"
                 >
                   {selectedAssetClasses.length === 0 ? 'All Selected' : 'Reset to All'}
                 </button>
@@ -660,18 +660,18 @@ export const GlobalFilters: React.FC = () => {
                       }}
                       className={`h-9 px-2.5 rounded-xl text-xs flex items-center justify-between font-semibold border transition-all ${
                         isChecked && selectedAssetClasses.length > 0
-                          ? 'bg-slate-950 text-white border-slate-950'
+                          ? 'bg-wv-text text-wv-bg border-wv-text'
                           : isChecked
-                          ? 'bg-slate-100 text-slate-900 border-slate-200'
-                          : 'bg-slate-50 text-slate-500 border-slate-200/80 opacity-60'
+                          ? 'bg-wv-surface-2 text-wv-text border-wv-border'
+                          : 'bg-wv-surface-2 text-wv-text-3 border-wv-border opacity-60'
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <div
                           className={`w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0 ${
                             isChecked
-                              ? 'bg-emerald-500 border-emerald-500 text-slate-950'
-                              : 'border-slate-300 bg-white'
+                              ? 'bg-wv-gain border-wv-gain text-wv-text'
+                              : 'border-wv-border-strong bg-wv-surface'
                           }`}
                         >
                           {isChecked && <Check className="w-2.5 h-2.5 stroke-[3]" />}
@@ -693,7 +693,7 @@ export const GlobalFilters: React.FC = () => {
             <button
               type="button"
               onClick={() => setIsMobileDrawerOpen(false)}
-              className="mt-2 w-full h-11 bg-slate-950 text-white text-xs font-bold rounded-xl shadow-sm"
+              className="mt-2 w-full h-11 bg-wv-text text-wv-bg text-xs font-bold rounded-xl shadow-sm"
             >
               Apply &amp; View Results
             </button>

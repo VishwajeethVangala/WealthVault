@@ -8,6 +8,24 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Design tokens (theme-aware via CSS variables, see index.css)
+        "wv-bg": "var(--bg)",
+        "wv-surface": "var(--surface)",
+        "wv-surface-2": "var(--surface-2)",
+        "wv-border": "var(--border)",
+        "wv-border-strong": "var(--border-strong)",
+        "wv-text": "var(--text)",
+        "wv-text-2": "var(--text-2)",
+        "wv-text-3": "var(--text-3)",
+        "wv-accent": "var(--accent)",
+        "wv-accent-weak": "var(--accent-weak)",
+        "wv-gain": "var(--gain)",
+        "wv-gain-weak": "var(--gain-weak)",
+        "wv-loss": "var(--loss)",
+        "wv-loss-weak": "var(--loss-weak)",
+        "wv-warn": "var(--warn)",
+        "wv-warn-weak": "var(--warn-weak)",
+        // Legacy palette, used by pages not yet refitted
         "surface": "#f8f9ff",
         "surface-dim": "#cbdbf5",
         "surface-bright": "#f8f9ff",
@@ -57,8 +75,10 @@ export default {
         "surface-variant": "#d3e4fe",
       },
       fontFamily: {
-        serif: ['"Source Serif 4"', 'serif'],
-        sans: ['"Hanken Grotesk"', 'sans-serif'],
+        // One family across the app (Geist); serif utilities are kept so older pages still compile
+        serif: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['"Geist Mono"', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         DEFAULT: "0.25rem",

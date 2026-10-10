@@ -1,12 +1,27 @@
 import type { Holding } from '../types'
 
-export type CanonicalAssetClass = 'EQUITY' | 'MUTUAL_FUND' | 'US_STOCKS' | 'GOLD' | 'NPS' | 'DEBT' | 'OTHER'
+// Connection IDs follow conn_<broker>_<suffix>, so the custodian can be read off a holding
+const BROKER_LABELS: Record<string, string> = {
+  zerodha: 'Zerodha',
+  indmoney: 'INDmoney',
+  groww: 'Groww',
+  angelone: 'Angel One',
+}
 
-const US_TICKERS = ['SNDK', 'AMZN', 'SPCX', 'LITE', 'DELL', 'MU', 'CRWD', 'AAPL', 'TSLA', 'NVDA', 'MSFT', 'GOOGL', 'META']
+export const brokerKeyOf = (connectionId: string | undefined): string => {
+  const m = /^conn_([a-z0-9]+)_/.exec((connectionId || '').toLowerCase())
+  return m ? m[1] : ''
+}
+
+export const brokerLabel = (key: string): string => BROKER_LABELS[key] ?? (key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unknown')
+
+export const matchesBroker = (h: Holding, broker: string): boolean =>
+  brokerKeyOf(h.connection_id) === broker.toLowerCase() || (h.connection_id || '').toLowerCase().includes(broker.toLowerCase())
+
+export type CanonicalAssetClass = 'EQUITY' | 'MUTUAL_FUND' | 'US_STOCKS' | 'GOLD' | 'NPS' | 'DEBT' | 'OTHER'
 
 export function classifyAssetClass(h: Holding): CanonicalAssetClass {
   const sym = (h.instrument_symbol || '').toUpperCase()
-  const conn = (h.connection_id || '').toLowerCase()
   const assetClass = (h.asset_class || '').toUpperCase()
 
   if (sym.includes('SGB')) {
@@ -15,13 +30,8 @@ export function classifyAssetClass(h: Holding): CanonicalAssetClass {
   if (assetClass === 'NPS') {
     return 'NPS'
   }
-  if (
-    assetClass === 'US_STOCKS' ||
-    h.currency === 'USD' ||
-    conn.includes('us') ||
-    conn.includes('alpaca') ||
-    US_TICKERS.some((t) => sym.includes(t))
-  ) {
+  // The backend classifies US holdings (INDmoney reports them as US stocks); no ticker list is kept here
+  if (assetClass === 'US_STOCKS' || h.currency === 'USD') {
     return 'US_STOCKS'
   }
   if (assetClass === 'MUTUAL_FUND') {
@@ -65,12 +75,7 @@ export function filterHoldings(
   return holdings.filter((h) => {
     // 1. Custodian filter (multi-select)
     if (selectedBrokers.length > 0) {
-      const conn = (h.connection_id || '').toLowerCase()
-      const match = selectedBrokers.some((b) => {
-        if (b === 'zerodha') return conn.includes('zerodha')
-        if (b === 'indmoney') return conn.includes('indmoney')
-        return conn.includes(b.toLowerCase())
-      })
+      const match = selectedBrokers.some((b) => matchesBroker(h, b))
       if (!match) return false
     }
 

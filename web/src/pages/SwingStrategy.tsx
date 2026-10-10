@@ -47,23 +47,23 @@ export const SwingStrategy: React.FC = () => {
   const handleStatus = useCallback((status: { loading: boolean; instrument?: string }) => setPanelStatus(status), [])
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="page-in">
       {/* Header, strategy tabs & symbol */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col gap-4">
+      <div className="bg-wv-surface border border-wv-border rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col gap-4">
         <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-slate-950 flex items-center justify-center text-emerald-400 shrink-0 shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-wv-text flex items-center justify-center text-wv-gain shrink-0 shadow-sm">
             <CandlestickChart className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="font-serif text-xl sm:text-2xl text-slate-950 font-semibold tracking-tight">Swing Strategies</h1>
-            <p className="text-xs text-slate-500 mt-1">
+            <h1 className="font-serif text-xl sm:text-2xl text-wv-text font-semibold tracking-tight">Swing Strategies</h1>
+            <p className="text-xs text-wv-text-3 mt-1">
               Run a TradingView strategy on any NSE/BSE stock: today's signal, the chart with entries and exits, and a backtest
               of every past trade. Prices come from Zerodha Kite.
             </p>
           </div>
         </div>
 
-        <div role="tablist" aria-label="Strategy" className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200/70">
+        <div role="tablist" aria-label="Strategy" className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-wv-surface-2 border border-wv-border">
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -73,14 +73,14 @@ export const SwingStrategy: React.FC = () => {
               aria-controls={`panel-${t.id}`}
               onClick={() => selectTab(t.id)}
               className={`px-3 py-2 rounded-lg text-left transition-all ${
-                tab === t.id ? 'bg-white shadow-sm text-slate-950' : 'text-slate-500 hover:text-slate-900'
+                tab === t.id ? 'bg-wv-surface shadow-sm text-wv-text' : 'text-wv-text-3 hover:text-wv-text'
               }`}
             >
               <span className="block text-xs sm:text-sm font-bold truncate">
                 <span className="sm:hidden">{t.short}</span>
                 <span className="hidden sm:inline">{t.label}</span>
               </span>
-              <span className="block text-[10px] sm:text-[11px] font-medium text-slate-400 truncate">{t.sub}</span>
+              <span className="block text-[10px] sm:text-[11px] font-medium text-wv-text-3 truncate">{t.sub}</span>
             </button>
           ))}
         </div>
