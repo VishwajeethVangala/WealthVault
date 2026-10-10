@@ -75,6 +75,12 @@ class NormalizationService:
                 self._normalize_indmoney_holding(item, owner_id, connection_id)
                 for item in items
             ]
+        elif broker == "groww":
+            items = raw_data if isinstance(raw_data, list) else (raw_data.get("holdings", []) if isinstance(raw_data, dict) else [])
+            return [self._normalize_groww_holding(item, owner_id, connection_id) for item in items]
+        elif broker == "angelone":
+            items = raw_data if isinstance(raw_data, list) else (raw_data.get("holdings", []) if isinstance(raw_data, dict) else [])
+            return [self._normalize_angelone_holding(item, owner_id, connection_id) for item in items]
         else:
             items = raw_data if isinstance(raw_data, list) else []
             return [
@@ -114,6 +120,7 @@ class NormalizationService:
 
             isin = str(item.get("tradingsymbol") or symbol)
             holding_id = self._generate_id("hld_mf", owner_id, connection_id, isin)
+            day_pnl, day_pct = None, None
         else:
             # Standard Zerodha Kite Equity schema
             symbol = str(item.get("tradingsymbol", "UNKNOWN")).upper()
@@ -131,6 +138,12 @@ class NormalizationService:
 
             holding_id = self._generate_id("hld", owner_id, connection_id, symbol)
 
+            # Kite holdings report the per-share change versus the previous close
+            day_change = item.get("day_change")
+            day_pnl = round(quantity * _safe_float(day_change), 2) if day_change is not None else None
+            raw_day_pct = item.get("day_change_percentage")
+            day_pct = round(_safe_float(raw_day_pct), 2) if raw_day_pct is not None else None
+
         return Holding(
             holding_id=holding_id,
             owner_id=owner_id,
@@ -142,6 +155,8 @@ class NormalizationService:
             current_value=current_value,
             current_price=last_price,
             pnl=pnl,
+            day_pnl=day_pnl,
+            day_change_percentage=day_pct,
             currency="INR",
         )
 
@@ -216,6 +231,12 @@ class NormalizationService:
         unique_key = f"{code or name}_{broker}_{family_member}" if broker or family_member else (code or name)
         holding_id = self._generate_id("hld_ind", owner_id, connection_id, unique_key)
 
+        # INDmoney reports the holding's total 1-day change (amount) and its percentage
+        raw_day = item.get("one_day_change")
+        day_pnl = round(_safe_float(raw_day), 2) if raw_day is not None else None
+        raw_day_pct = item.get("one_day_change_percentage")
+        day_pct = round(_safe_float(raw_day_pct), 2) if raw_day_pct is not None else None
+
         return Holding(
             holding_id=holding_id,
             owner_id=owner_id,
@@ -227,6 +248,78 @@ class NormalizationService:
             current_value=round(current_value, 2),
             current_price=round(current_price, 2),
             pnl=round(pnl, 2),
+            day_pnl=day_pnl,
+            day_change_percentage=day_pct,
+            currency="INR",
+        )
+
+    # --- Groww ---
+
+    def _normalize_groww_holding(
+        self,
+        item: Dict[str, Any],
+        owner_id: str,
+        connection_id: str,
+    ) -> Holding:
+        """Groww holdings carry quantity and average price only; prices come from quote enrichment."""
+        symbol = str(item.get("trading_symbol") or item.get("isin") or "UNKNOWN").strip().upper()
+        quantity = _safe_float(item.get("quantity"), 0.0)
+        average_price = _safe_float(item.get("average_price"), 0.0)
+        asset_class = AssetClass.GOLD if "SGB" in symbol else AssetClass.EQUITY
+
+        return Holding(
+            holding_id=self._generate_id("hld_grw", owner_id, connection_id, str(item.get("isin") or symbol)),
+            owner_id=owner_id,
+            connection_id=connection_id,
+            instrument_symbol=symbol,
+            asset_class=asset_class,
+            quantity=quantity,
+            average_price=average_price,
+            # Valued at cost until a live quote arrives, and flagged as not live meanwhile
+            current_value=round(quantity * average_price, 2),
+            current_price=average_price,
+            pnl=0.0,
+            data_freshness="cached",
+            currency="INR",
+        )
+
+    # --- Angel One ---
+
+    def _normalize_angelone_holding(
+        self,
+        item: Dict[str, Any],
+        owner_id: str,
+        connection_id: str,
+    ) -> Holding:
+        """Angel One holdings include last traded price (ltp) and previous close."""
+        raw_symbol = str(item.get("tradingsymbol") or item.get("isin") or "UNKNOWN").strip().upper()
+        # Cash-segment series suffixes, e.g. RELIANCE-EQ
+        symbol = raw_symbol.rsplit("-", 1)[0] if raw_symbol.rsplit("-", 1)[-1] in ("EQ", "BE", "BZ", "SM", "GB") else raw_symbol
+        quantity = _safe_float(item.get("quantity"), 0.0)
+        average_price = _safe_float(item.get("averageprice"), 0.0)
+        ltp = _safe_float(item.get("ltp"), average_price)
+        close = _safe_float(item.get("close"), 0.0)
+        current_value = round(quantity * ltp, 2)
+        broker_pnl = item.get("profitandloss")
+        pnl = round(_safe_float(broker_pnl), 2) if broker_pnl is not None else round(current_value - quantity * average_price, 2)
+
+        day_pnl = round(quantity * (ltp - close), 2) if close > 0 else None
+        day_pct = round((ltp / close - 1) * 100, 2) if close > 0 else None
+
+        return Holding(
+            holding_id=self._generate_id("hld_ang", owner_id, connection_id, str(item.get("isin") or symbol)),
+            owner_id=owner_id,
+            connection_id=connection_id,
+            instrument_symbol=symbol,
+            asset_class=AssetClass.GOLD if "SGB" in symbol else AssetClass.EQUITY,
+            quantity=quantity,
+            average_price=average_price,
+            current_value=current_value,
+            current_price=ltp,
+            pnl=pnl,
+            day_pnl=day_pnl,
+            day_change_percentage=day_pct,
+            data_freshness="live",
             currency="INR",
         )
 

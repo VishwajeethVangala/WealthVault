@@ -24,7 +24,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from apps.api.routers import accounts_router, analytics_router, auth_router, health_router, portfolio_router
+from apps.api.routers import accounts_router, analytics_router, auth_router, health_router, history_router, portfolio_router, signals_router, targets_router
 from core.config import get_settings
 
 # Configure logging
@@ -116,6 +116,8 @@ async def lifespan(app: FastAPI):
         await ind_client.close()
     except Exception as exc:
         logger.debug("Error closing INDmoney MCP client: %s", exc)
+    from storage.tables.base import close_shared_table_clients
+    await close_shared_table_clients()
 
 
 def create_application() -> FastAPI:
@@ -149,6 +151,9 @@ def create_application() -> FastAPI:
     app.include_router(accounts_router, prefix=settings.API_V1_PREFIX)
     app.include_router(portfolio_router, prefix=settings.API_V1_PREFIX)
     app.include_router(analytics_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(targets_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(history_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(signals_router, prefix=settings.API_V1_PREFIX)
 
     # Native frontend serving attached after all API routers to prevent route swallowing
     app.frontend("/", directory="dist", fallback="index.html")

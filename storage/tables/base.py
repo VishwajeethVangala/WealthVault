@@ -7,8 +7,9 @@ Wraps azure.data.tables.aio.TableServiceClient and enforces strict multi-tenant 
 - Uses native async clients with proper resource cleanup.
 """
 
+import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError
 from azure.data.tables import UpdateMode
 from azure.data.tables.aio import TableClient, TableServiceClient
@@ -17,6 +18,33 @@ from core.config import get_settings
 from core.security import sanitize_key
 
 logger = logging.getLogger("wealthvault.storage.tables")
+
+
+# Process-wide shared Azure clients. Repositories are created per request; giving each its own
+# aiohttp-backed client leaked connections (never closed on most paths), which surfaced as
+# "SSL shutdown timed out" errors when they were garbage collected, plus a create_table
+# round-trip on every request.
+_shared_service_clients: Dict[Tuple[str, int], TableServiceClient] = {}
+_ready_tables: Set[Tuple[str, str]] = set()
+
+
+def _loop_key() -> int:
+    try:
+        return id(asyncio.get_running_loop())
+    except RuntimeError:
+        return 0
+
+
+async def close_shared_table_clients() -> None:
+    """Close all shared Azure Table clients (call on application shutdown)."""
+    clients = list(_shared_service_clients.values())
+    _shared_service_clients.clear()
+    _ready_tables.clear()
+    for client in clients:
+        try:
+            await client.close()
+        except Exception as exc:
+            logger.debug("Error closing shared table service client: %s", exc)
 
 
 class BaseTableStorage:
@@ -43,18 +71,21 @@ class BaseTableStorage:
     @property
     def service_client(self) -> TableServiceClient:
         """Return lazily initialized TableServiceClient."""
-        if self._service_client is None:
-            self._service_client = TableServiceClient.from_connection_string(
-                conn_str=self._connection_string
-            )
-        return self._service_client
+        key = (self._connection_string, _loop_key())
+        client = _shared_service_clients.get(key)
+        if client is None:
+            client = TableServiceClient.from_connection_string(conn_str=self._connection_string)
+            _shared_service_clients[key] = client
+        self._service_client = client
+        return client
 
     async def get_table_client(self) -> TableClient:
         """Return initialized TableClient, creating table if it does not already exist."""
         if self._table_client is None:
             self._table_client = self.service_client.get_table_client(self.table_name)
 
-        if not self._initialized:
+        ready_key = (self._connection_string, self.table_name)
+        if ready_key not in _ready_tables:
             try:
                 await self._table_client.create_table()
                 logger.info("Created table: %s", self.table_name)
@@ -62,7 +93,7 @@ class BaseTableStorage:
                 # 409 Conflict indicates the table already exists, which is expected
                 if exc.status_code != 409:
                     raise
-            self._initialized = True
+            _ready_tables.add(ready_key)
 
         return self._table_client
 
@@ -211,24 +242,13 @@ class BaseTableStorage:
             return False
 
     async def close(self) -> None:
-        """Gracefully release connections to Azure Table service."""
-        if self._table_client is not None:
-            try:
-                await self._table_client.close()
-            except Exception as exc:
-                logger.debug("Error closing table client: %s", exc)
-            finally:
-                self._table_client = None
+        """Detach from the shared Azure Table clients.
 
-        if self._service_client is not None:
-            try:
-                await self._service_client.close()
-            except Exception as exc:
-                logger.debug("Error closing service client: %s", exc)
-            finally:
-                self._service_client = None
-
-        self._initialized = False
+        The underlying connection pool is shared process-wide and is closed once on
+        application shutdown (see close_shared_table_clients), so this only drops references.
+        """
+        self._table_client = None
+        self._service_client = None
 
     async def __aenter__(self) -> "BaseTableStorage":
         """Async context manager entry."""

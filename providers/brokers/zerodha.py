@@ -176,23 +176,4 @@ class ZerodhaProvider(BrokerProvider):
         except Exception as exc:
             logger.debug("Kite MCP get_trades note: %s", exc)
 
-        return [
-            {
-                "trade_id": "tr_zk_101",
-                "tradingsymbol": "INFY",
-                "exchange": "NSE",
-                "transaction_type": "BUY",
-                "quantity": 50,
-                "average_price": 1420.50,
-                "fill_timestamp": "2026-06-15T09:45:23+05:30",
-            },
-            {
-                "trade_id": "tr_zk_102",
-                "tradingsymbol": "RELIANCE",
-                "exchange": "NSE",
-                "transaction_type": "BUY",
-                "quantity": 25,
-                "average_price": 2450.00,
-                "fill_timestamp": "2026-07-10T10:12:06+05:30",
-            },
-        ]
+        return []

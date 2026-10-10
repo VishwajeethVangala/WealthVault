@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from mcp import ClientSession
 from core.market_data.kite_client import get_kite_mcp_client
+from core.market_data.symbol_resolver import resolve_indmoney_symbols, split_indmoney_symbol
 from core.models import AssetClass, Holding, QuoteItem
 
 logger = logging.getLogger("wealthvault.market_data.service")
@@ -85,6 +86,12 @@ class MCPMarketDataService:
     @staticmethod
     def format_instrument(symbol: str, asset_class: Optional[Union[AssetClass, str]] = None) -> Optional[str]:
         """Normalize symbol into MCP exchange:symbol format (e.g. 'NSE:INFY')."""
+        # Only Indian-listed instruments have Kite quotes. US stocks, NPS and funds keep the broker's own price,
+        # and a US ticker like 'MU' or 'BE' must never be looked up as an NSE symbol.
+        if asset_class is not None and str(getattr(asset_class, "value", asset_class)) in ("US_STOCKS", "NPS", "MUTUAL_FUND", "DEBT"):
+            return None
+        if split_indmoney_symbol(symbol):
+            return None  # broker-specific code; resolved separately
         clean = symbol.strip().upper()
         if not clean or clean.startswith("MUTUAL_") or ("FUND" in clean and len(clean) > 30):
             return None
@@ -94,12 +101,13 @@ class MCPMarketDataService:
             return clean
 
         # Extract root ticker if there are extra descriptions
-        root = clean.split()[0].replace("-", "_")
+        root = clean.split()[0]  # keep series suffixes such as HFCL-BE as Kite lists them
         return f"NSE:{root}"
 
     async def fetch_live_quotes(
         self,
         instruments: List[str],
+        client: Optional[Any] = None,
     ) -> Tuple[Dict[str, QuoteItem], bool]:
         """Fetch quotes for instruments, utilizing TTL cache and batching to Kite MCP.
 
@@ -121,7 +129,7 @@ class MCPMarketDataService:
         # Batch query Kite MCP for missing instruments via persistent client (max 250 per batch)
         batch_size = 250
         batches = [missing[i : i + batch_size] for i in range(0, len(missing), batch_size)]
-        client = get_kite_mcp_client()
+        client = client or get_kite_mcp_client()
 
         for batch in batches:
             try:
@@ -177,6 +185,7 @@ class MCPMarketDataService:
     async def enrich_holdings_with_live_quotes(
         self,
         holdings: List[Holding],
+        client: Optional[Any] = None,
     ) -> Tuple[List[Holding], str]:
         """Enrich a list of holdings with live market prices, updating current value and P&L.
 
@@ -193,8 +202,17 @@ class MCPMarketDataService:
             if inst:
                 symbol_to_instrument[h.instrument_symbol] = inst
 
+        # INDmoney Indian stocks carry INDmoney codes; resolve them to exchange symbols via the Kite instrument search
+        indmoney_codes = [
+            h.instrument_symbol
+            for h in holdings
+            if h.instrument_symbol not in symbol_to_instrument and h.asset_class == AssetClass.EQUITY
+        ]
+        if indmoney_codes and client is not None:
+            symbol_to_instrument.update(await resolve_indmoney_symbols(indmoney_codes, client))
+
         instruments_to_query = list(set(symbol_to_instrument.values()))
-        quotes_map, live_succeeded = await self.fetch_live_quotes(instruments_to_query)
+        quotes_map, live_succeeded = await self.fetch_live_quotes(instruments_to_query, client=client)
 
         enriched: List[Holding] = []
         for h in holdings:
@@ -206,7 +224,17 @@ class MCPMarketDataService:
                 new_val = round(h.quantity * new_price, 2)
                 invested = round(h.quantity * h.average_price, 2)
                 new_pnl = round(new_val - invested, 2)
-                day_pnl = round(h.quantity * (quote.day_change or 0.0), 2) if quote.day_change is not None else None
+                # A zero quote change (e.g. market closed, weekend) must not erase the broker's
+                # own day change for the last session.
+                if quote.day_change and quote.day_change != 0:
+                    day_pnl = round(h.quantity * quote.day_change, 2)
+                    day_pct = quote.day_change_percentage
+                elif h.day_pnl is not None:
+                    day_pnl = h.day_pnl
+                    day_pct = h.day_change_percentage
+                else:
+                    day_pnl = round(h.quantity * (quote.day_change or 0.0), 2) if quote.day_change is not None else None
+                    day_pct = quote.day_change_percentage
 
                 updated_dict = h.model_dump()
                 updated_dict.update({
@@ -214,7 +242,7 @@ class MCPMarketDataService:
                     "current_value": new_val,
                     "pnl": new_pnl,
                     "day_pnl": day_pnl,
-                    "day_change_percentage": quote.day_change_percentage,
+                    "day_change_percentage": day_pct,
                     "data_freshness": "live",
                     "last_price_updated_at": quote.timestamp,
                 })

@@ -27,6 +27,7 @@ from core.market_data.history import (
     get_history_service,
 )
 from core.market_data.kite_client import KiteAuthRequiredError, KiteMCPClient, get_kite_mcp_client
+from core.market_data.user_client import get_user_kite_client
 from core.models import (
     AthBreakoutParams,
     AthBreakoutResult,
@@ -48,12 +49,7 @@ MIN_CANDLES = 50
 STRATEGY_WARMUP_DAYS = 330
 
 
-async def _get_user_kite_client(owner_id: str) -> KiteMCPClient:
-    """Use the caller's own Zerodha connection for market data, falling back to the default client."""
-    connections = await BrokerConnectionRepository().list_connections(owner_id=owner_id)
-    zerodha = [c for c in connections if c.broker_name.lower().strip() == "zerodha"]
-    preferred = next((c for c in zerodha if c.status == BrokerStatus.CONNECTED), None) or (zerodha[0] if zerodha else None)
-    return get_kite_mcp_client(preferred.connection_id) if preferred else get_kite_mcp_client()
+_get_user_kite_client = get_user_kite_client
 
 
 def _kite_auth_exception(exc: KiteAuthRequiredError) -> HTTPException:
