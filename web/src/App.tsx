@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { PortfolioProvider } from './context/PortfolioContext'
+import { ThemeProvider } from './context/ThemeContext'
+import { PrivacyProvider } from './context/PrivacyContext'
 import { ExecutiveOverview } from './pages/ExecutiveOverview'
+import { EquitySignals } from './pages/EquitySignals'
 import { HoldingsTable } from './pages/HoldingsTable'
 import { BrokerSync } from './pages/BrokerSync'
 import { MomentumAnalyzer } from './pages/MomentumAnalyzer'
@@ -63,12 +66,15 @@ export const App: React.FC = () => {
 
   // If authenticated, render full WealthVault Dashboard
   return (
+    <ThemeProvider>
+    <PrivacyProvider>
     <BrowserRouter>
       <PortfolioProvider>
         <Layout onLogout={handleLogout}>
           <Routes>
             <Route path="/" element={<ExecutiveOverview />} />
             <Route path="/holdings" element={<HoldingsTable />} />
+            <Route path="/signals" element={<EquitySignals />} />
             <Route path="/momentum" element={<MomentumAnalyzer />} />
             <Route path="/strategy" element={<SwingStrategy />} />
             <Route path="/brokers" element={<BrokerSync />} />
@@ -78,6 +84,8 @@ export const App: React.FC = () => {
         </Layout>
       </PortfolioProvider>
     </BrowserRouter>
+    </PrivacyProvider>
+    </ThemeProvider>
   )
 }
 

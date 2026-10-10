@@ -23,7 +23,7 @@ export const createEndLabelStack = (order: string[], minGap = 12) => {
     }
     placed.set(seriesKey, target)
     return (
-      <text key={seriesKey} x={x + 6} y={target} dy={4} fontSize={10} fontWeight={600} fill="#475569">
+      <text key={seriesKey} x={x + 6} y={target} dy={4} fontSize={10} fontWeight={600} fill="var(--text-2)">
         {text}
       </text>
     )
@@ -39,7 +39,7 @@ export const triangleMarker = (direction: 'up' | 'down', color: string) => (prop
     direction === 'up'
       ? `${cx},${cy - s} ${cx - s},${cy + s} ${cx + s},${cy + s}`
       : `${cx},${cy + s} ${cx - s},${cy - s} ${cx + s},${cy - s}`
-  return <polygon key={index} points={points} fill={color} stroke="#ffffff" strokeWidth={1.5} />
+  return <polygon key={index} points={points} fill={color} stroke="var(--surface)" strokeWidth={1.5} />
 }
 
 export const crossMarker = (color: string) => (props: any) => {

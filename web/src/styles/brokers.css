@@ -1,0 +1,415 @@
+/* Brokers page and dialogs. Built on the tokens and component kit in index.css. */
+
+.btn-sm {
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.spin {
+  animation: wv-spin 1s linear infinite;
+}
+@keyframes wv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pg-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* alerts */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  background: var(--warn-weak);
+  border: 1px solid var(--warn);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: var(--text);
+}
+.banner.bad {
+  background: var(--loss-weak);
+  border-color: var(--loss);
+}
+.banner .ic {
+  color: var(--warn);
+  flex: 0 0 auto;
+}
+.banner.bad .ic {
+  color: var(--loss);
+}
+.banner .tx {
+  flex: 1 1 280px;
+  font-size: 13px;
+  min-width: 0;
+}
+.banner b {
+  font-weight: 600;
+}
+
+/* summary */
+.bsum {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.bsum .card {
+  padding: 16px 18px;
+}
+.bsum .lbl {
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.bsum .val {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-top: 4px;
+}
+.bsum .foot {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+/* broker cards */
+.bgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.bc {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.bc.attn {
+  border-color: var(--warn);
+}
+.bc-h {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bc-h .grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.bc-h .nm {
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bc-h .acct {
+  font-size: 12px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+  flex: 0 0 auto;
+}
+.method {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.stats .k {
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.stats .v {
+  font-size: 15px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.sess {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.sess svg {
+  margin-top: 2px;
+}
+.sess.warn {
+  color: var(--warn);
+}
+.note {
+  font-size: 12px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.note.ok {
+  background: var(--gain-weak);
+  color: var(--gain);
+}
+.note.bad {
+  background: var(--loss-weak);
+  color: var(--loss);
+}
+.bc-f {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.bc-f .spacer {
+  flex: 1 1 auto;
+}
+
+/* add a source */
+.addgrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.addt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  padding: 14px;
+  min-width: 0;
+}
+.addt .tile {
+  width: 34px;
+  height: 34px;
+  font-size: 13px;
+}
+.addt .tile.plain {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+.addt .nm {
+  font-weight: 600;
+  font-size: 13px;
+}
+.addt .m {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.addt .grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* data handling */
+.sec ul {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+.sec li {
+  margin: 0 0 10px;
+  padding-left: 26px;
+  position: relative;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.sec li svg {
+  position: absolute;
+  left: 0;
+  top: 1px;
+  color: var(--gain);
+}
+
+/* dialogs */
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 20, 0.48);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 72px 16px;
+  z-index: 60;
+  overflow-y: auto;
+}
+.modal {
+  width: 100%;
+  max-width: 560px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+}
+.modal-h {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 20px 0;
+}
+.modal-b {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.modal-f {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+.modal-f .lock {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field label,
+.field .lab {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.field .lab em {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--text-3);
+  text-align: right;
+}
+.field .input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+}
+.hint {
+  font-size: 12px;
+  color: var(--text-3);
+  margin: 0;
+}
+.steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--text-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.check input {
+  margin-top: 3px;
+}
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.kv:first-child {
+  border-top: 0;
+}
+.kv span:first-child {
+  color: var(--text-3);
+}
+
+@media (max-width: 1180px) {
+  .addgrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1024px) {
+  .bgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 720px) {
+  .bsum {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .addgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .scrim {
+    padding: 24px 12px;
+  }
+  .btn,
+  .input {
+    min-height: 44px;
+  }
+}
+
+/* Content wrapper inside the shell main.page (which already provides padding) */
+.page-in {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
