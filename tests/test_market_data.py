@@ -31,7 +31,7 @@ class TestMarketData(unittest.TestCase):
         self.assertEqual(MCPMarketDataService.format_instrument("INFY"), "NSE:INFY")
         self.assertEqual(MCPMarketDataService.format_instrument("NSE:TCS"), "NSE:TCS")
         self.assertEqual(MCPMarketDataService.format_instrument("BSE:500325"), "BSE:500325")
-        self.assertEqual(MCPMarketDataService.format_instrument("TCS-EQ"), "NSE:TCS_EQ")
+        self.assertEqual(MCPMarketDataService.format_instrument("HFCL-BE"), "NSE:HFCL-BE")
 
     def test_enrich_holdings_with_live_quotes(self):
         service = MCPMarketDataService()

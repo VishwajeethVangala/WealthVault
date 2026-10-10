@@ -182,14 +182,5 @@ class IndmoneyProvider(BrokerProvider):
 
     async def get_transactions(self) -> List[Dict[str, Any]]:
         """Fetch mutual fund transactions."""
-        return [
-            {
-                "transaction_id": "tx_ind_2001",
-                "scheme_name": "Parag Parikh Flexi Cap Fund Direct Growth",
-                "type": "PURCHASE",
-                "amount": 5000.00,
-                "units": 58.14,
-                "nav": 86.00,
-                "transaction_date": "2026-07-05T10:00:00+05:30",
-            }
-        ]
+        # INDmoney's MCP exposes no transaction history
+        return []

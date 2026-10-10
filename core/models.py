@@ -7,7 +7,7 @@ canonical financial models (Holding, Transaction, PortfolioSnapshot), and relate
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class BrokerStatus(str, Enum):
@@ -212,12 +212,13 @@ class BrokerSessionInfo(BaseModel):
     is_expired: bool = Field(default=False, description="Whether session is expired")
     mcp_server_url: str = Field(..., description="MCP endpoint URL or stdio protocol")
     mcp_protocol: str = Field(default="MCP Stdio / JSON-RPC v2.0", description="Protocol format")
-    tools_count: int = Field(default=0, description="Available MCP tools count")
+    tools_count: Optional[int] = Field(default=None, description="Available MCP tools count, when known")
     holdings_count: int = Field(default=0, description="Holdings currently synced from this broker")
     total_valuation: float = Field(default=0.0, description="Total INR valuation from this broker")
-    last_latency_ms: int = Field(default=0, description="Roundtrip latency in milliseconds")
+    last_latency_ms: Optional[int] = Field(default=None, description="Roundtrip latency in milliseconds, when measured")
     error_message: Optional[str] = Field(default=None, description="Detailed error message if degraded")
     auth_url: Optional[str] = Field(default=None, description="Interactive login / OAuth authorization URL if AUTH_REQUIRED")
+    credentials_saved: bool = Field(default=False, description="Whether API credentials are stored for this connection")
 
 
 class CreateBrokerConnectionRequest(BaseModel):
@@ -228,6 +229,16 @@ class CreateBrokerConnectionRequest(BaseModel):
     account_label: Optional[str] = Field(default=None, description="Optional user-defined account label / alias")
     connection_id: Optional[str] = Field(default=None, description="Optional custom connection identifier")
     custom_mcp_url: Optional[str] = Field(default=None, description="Optional custom MCP endpoint URL")
+
+
+class CredentialField(BaseModel):
+    """One credential a broker integration needs from the user."""
+
+    key: str
+    label: str
+    secret: bool = True
+    required: bool = False
+    help: str = ""
 
 
 class BrokerCatalogItem(BaseModel):
@@ -241,8 +252,27 @@ class BrokerCatalogItem(BaseModel):
     mcp_protocol: str
     description: str
     supported: bool = True
+    coming_soon: bool = False
     is_connected: bool = False
     connected_count: int = 0
+    credential_fields: List[CredentialField] = Field(default_factory=list, description="Credentials the user must provide (empty for OAuth/MCP brokers)")
+    setup_url: Optional[str] = Field(default=None, description="Where the user creates API access with this broker")
+    setup_steps: List[str] = Field(default_factory=list, description="Short setup instructions shown in the connect dialog")
+
+
+class CredentialSaveRequest(BaseModel):
+    """Credentials for a broker that authenticates with user-supplied API keys."""
+
+    fields: Dict[str, str] = Field(..., description="Credential field key -> value")
+
+
+class CredentialSaveResponse(BaseModel):
+    """Result of saving credentials and testing the login."""
+
+    saved_fields: List[str] = Field(default_factory=list, description="Names of the stored fields (never values)")
+    login_ok: bool = Field(..., description="Whether the broker accepted the credentials")
+    message: str = Field(default="", description="Broker message, e.g. what to fix")
+    auth_url: Optional[str] = Field(default=None, description="Where to approve access, if required")
 
 
 class ReauthRequest(BaseModel):
@@ -288,6 +318,39 @@ class BrokerDeleteResponse(BaseModel):
     snapshot_updated: bool = Field(default=True, description="Whether daily snapshot was recomputed")
     remaining_holdings_count: int = Field(default=0, description="Count of remaining holdings across other brokers")
     new_total_valuation: float = Field(default=0.0, description="Updated portfolio total valuation in INR")
+
+
+# --- Target Allocation ---
+
+class TargetAllocation(BaseModel):
+    """A user's target portfolio mix: asset class -> target weight (percent of total value)."""
+
+    owner_id: str = Field(..., description="Tenant user ID")
+    targets: Dict[str, float] = Field(default_factory=dict, description="Asset class name -> target percentage (0-100)")
+    updated_at: Optional[str] = Field(default=None, description="ISO 8601 timestamp of the last change")
+
+
+class TargetAllocationUpdate(BaseModel):
+    """Payload replacing the user's target allocation. Classes left out have no target."""
+
+    targets: Dict[str, float] = Field(default_factory=dict, description="Asset class name -> target percentage (0-100)")
+
+    @field_validator("targets")
+    @classmethod
+    def _validate_targets(cls, value: Dict[str, float]) -> Dict[str, float]:
+        allowed = {c.value for c in AssetClass}
+        cleaned: Dict[str, float] = {}
+        for key, pct in value.items():
+            name = key.strip().upper()
+            if name not in allowed:
+                raise ValueError(f"Unknown asset class '{key}'. Allowed: {', '.join(sorted(allowed))}.")
+            if pct < 0 or pct > 100:
+                raise ValueError(f"Target for {name} must be between 0 and 100.")
+            if pct > 0:
+                cleaned[name] = round(float(pct), 2)
+        if sum(cleaned.values()) > 100.01:
+            raise ValueError("Targets add up to more than 100%.")
+        return cleaned
 
 
 # --- Momentum Analytics Schemas ---

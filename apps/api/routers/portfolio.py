@@ -17,12 +17,16 @@ from apps.api.routers.accounts import get_current_user
 from core.market_data import get_market_data_service
 from core.market_data.indmoney_client import IndmoneyAuthRequiredError, get_indmoney_mcp_client
 from core.market_data.kite_client import get_kite_mcp_client
+from core.market_data.user_client import get_user_kite_client
 from core.models import (
     BrokerCatalogItem,
     BrokerDeleteResponse,
     BrokerSessionInfo,
     BrokerStatus,
     CreateBrokerConnectionRequest,
+    CredentialField,
+    CredentialSaveRequest,
+    CredentialSaveResponse,
     Holding,
     MarketQuotesResponse,
     PortfolioSnapshot,
@@ -33,11 +37,15 @@ from core.models import (
 )
 from core.portfolio.aggregation import PortfolioAggregationService
 from core.portfolio.normalization import NormalizationService
+from core.credentials import CredentialStoreError
+from providers.brokers.angelone import AngelOneAuthRequiredError, AngelOneProvider
+from providers.brokers.groww import GrowwAuthRequiredError, GrowwProvider
 from providers.brokers.indmoney import IndmoneyProvider
 from providers.brokers.zerodha import KiteAuthRequiredError, ZerodhaProvider
 from storage.blobs.archive import archive_broker_payload, purge_broker_blobs
 from storage.tables.repositories import (
     BrokerConnectionRepository,
+    BrokerCredentialRepository,
     HoldingsRepository,
     SnapshotsRepository,
 )
@@ -51,8 +59,6 @@ BROKER_METADATA_CATALOG = {
         "auth_type": "Daily Kite OAuth / Enctoken",
         "mcp_server_url": "https://mcp.kite.trade/mcp",
         "mcp_protocol": "MCP Stdio / JSON-RPC v2.0",
-        "tools_count": 22,
-        "default_account_id": "SRK113",
         "color": "#e03a3c",
         "tag": "ZK",
         "supported": True,
@@ -63,59 +69,76 @@ BROKER_METADATA_CATALOG = {
         "auth_type": "Biometric OAuth2 Bearer",
         "mcp_server_url": "https://mcp.indmoney.com/mcp",
         "mcp_protocol": "MCP Stdio / JSON-RPC v2.0",
-        "tools_count": 21,
-        "default_account_id": "Vangala Vishwajeeth",
         "color": "#4f46e5",
         "tag": "IND",
         "supported": True,
         "description": "Unified US tech equities, Indian stocks, NPS Tier 1, and fixed income bonds.",
     },
     "groww": {
-        "display_name": "Groww Invest Tech",
-        "auth_type": "Groww Direct API / OAuth",
-        "mcp_server_url": "https://mcp.groww.in/mcp",
-        "mcp_protocol": "MCP JSON-RPC v2.0",
-        "tools_count": 18,
-        "default_account_id": "GRW-98214",
+        "display_name": "Groww",
+        "auth_type": "Trade API key + daily approval",
+        "mcp_server_url": "https://api.groww.in",
+        "mcp_protocol": "REST (Groww Trade API)",
+        "default_account_id": "",
         "color": "#00d09c",
         "tag": "GRW",
         "supported": True,
-        "description": "Indian equities, direct mutual fund portfolios, and IPO allocations.",
+        "description": "Demat stock holdings via the Groww Trade API. Prices come from your Kite session.",
+        "setup_url": "https://groww.in/trade-api/api-keys",
+        "setup_steps": [
+            "Subscribe to a Groww Trading API plan (the free plan is enough).",
+            "Generate an API key and secret at groww.in/trade-api/api-keys.",
+            "Approve the key there each day; Groww access tokens reset at 6 AM IST.",
+        ],
+        "credential_fields": [
+            {"key": "api_key", "label": "API key", "secret": True, "required": True, "help": "From the Groww API keys page."},
+            {"key": "api_secret", "label": "API secret", "secret": True, "required": False, "help": "Needed unless you give a TOTP secret."},
+            {"key": "totp_secret", "label": "TOTP secret", "secret": True, "required": False, "help": "Alternative to the API secret (the base32 seed of your authenticator)."},
+        ],
     },
     "upstox": {
         "display_name": "Upstox Pro",
         "auth_type": "Upstox API v2 OAuth",
         "mcp_server_url": "https://mcp.upstox.com/mcp",
         "mcp_protocol": "MCP Stdio / JSON-RPC v2.0",
-        "tools_count": 19,
-        "default_account_id": "UPX-44219",
         "color": "#7b2cbf",
         "tag": "UPX",
-        "supported": True,
+        "supported": False,
+        "coming_soon": True,
         "description": "Low-latency NSE/BSE equities, commodities, and derivatives.",
     },
     "angelone": {
-        "display_name": "Angel One SmartAPI",
-        "auth_type": "SmartAPI TOTP Gateway",
-        "mcp_server_url": "https://mcp.angelone.in/mcp",
-        "mcp_protocol": "MCP Stdio / JSON-RPC v2.0",
-        "tools_count": 20,
-        "default_account_id": "ANG-77103",
+        "display_name": "Angel One",
+        "auth_type": "SmartAPI key + PIN + TOTP",
+        "mcp_server_url": "https://apiconnect.angelone.in",
+        "mcp_protocol": "REST (SmartAPI)",
+        "default_account_id": "",
         "color": "#ff5722",
         "tag": "ANG",
         "supported": True,
-        "description": "Full-service Demat accounts, algorithmic trade feeds, and debt securities.",
+        "description": "Demat holdings with live prices via Angel One SmartAPI.",
+        "setup_url": "https://smartapi.angelone.in/",
+        "setup_steps": [
+            "Create a SmartAPI app at smartapi.angelone.in and copy its API key.",
+            "Enable TOTP on your Angel One account and keep the base32 secret shown at setup.",
+            "Enter your client code, PIN and TOTP secret below.",
+        ],
+        "credential_fields": [
+            {"key": "api_key", "label": "SmartAPI key", "secret": True, "required": True, "help": "From your SmartAPI app."},
+            {"key": "client_code", "label": "Client code", "secret": False, "required": True, "help": "Your Angel One login ID."},
+            {"key": "pin", "label": "PIN / MPIN", "secret": True, "required": True, "help": "Your 4-digit login PIN."},
+            {"key": "totp_secret", "label": "TOTP secret", "secret": True, "required": True, "help": "The base32 seed of your authenticator, not a 6-digit code."},
+        ],
     },
     "dhan": {
         "display_name": "Dhan HQ",
         "auth_type": "DhanHQ Access Token",
         "mcp_server_url": "https://mcp.dhan.co/mcp",
         "mcp_protocol": "MCP Stdio / JSON-RPC v2.0",
-        "tools_count": 16,
-        "default_account_id": "DHN-10552",
         "color": "#2563eb",
         "tag": "DHN",
-        "supported": True,
+        "supported": False,
+        "coming_soon": True,
         "description": "Lightning-fast equity investing and SuperFast trading ledger.",
     },
     "icicidirect": {
@@ -123,11 +146,10 @@ BROKER_METADATA_CATALOG = {
         "auth_type": "Breeze API Session Key",
         "mcp_server_url": "https://mcp.icicidirect.com/mcp",
         "mcp_protocol": "MCP Stdio / JSON-RPC v2.0",
-        "tools_count": 17,
-        "default_account_id": "ICI-88392",
         "color": "#ea580c",
         "tag": "ICI",
-        "supported": True,
+        "supported": False,
+        "coming_soon": True,
         "description": "ICICI Securities 3-in-1 banking, equity, and sovereign gold bond ledger.",
     },
     "hdfcsky": {
@@ -135,16 +157,64 @@ BROKER_METADATA_CATALOG = {
         "auth_type": "HDFC Securities OAuth",
         "mcp_server_url": "https://mcp.hdfcsky.com/mcp",
         "mcp_protocol": "MCP Stdio / JSON-RPC v2.0",
-        "tools_count": 15,
-        "default_account_id": "SKY-51209",
         "color": "#0ea5e9",
         "tag": "SKY",
-        "supported": True,
+        "supported": False,
+        "coming_soon": True,
         "description": "HDFC digital brokerage platform for multi-asset wealth management.",
     },
 }
 
 router = APIRouter(prefix="/portfolio", tags=["Portfolio"])
+
+# Brokers that authenticate with user-supplied API credentials stored (encrypted) in Azure
+CREDENTIAL_BROKERS = {
+    "groww": (GrowwProvider, GrowwAuthRequiredError),
+    "angelone": (AngelOneProvider, AngelOneAuthRequiredError),
+}
+
+
+async def _pull_credential_broker(
+    owner_id: str,
+    conn: Any,
+    sync_time: datetime,
+    normalizer: NormalizationService,
+    connections_repo: BrokerConnectionRepository,
+) -> Optional[tuple]:
+    """Fetch, archive and normalize holdings for a credential-based broker connection.
+
+    Returns (holdings, blob_path), or None when the pull failed. The connection status is updated
+    either way, so callers can keep the previously stored holdings on failure.
+    """
+    broker = conn.broker_name.lower().strip()
+    provider_cls, auth_error_cls = CREDENTIAL_BROKERS[broker]
+    provider = provider_cls(owner_id=owner_id, connection_id=conn.connection_id)
+    try:
+        raw = await provider.get_holdings()
+        blob = await archive_broker_payload(
+            owner_id=owner_id, connection_id=conn.connection_id, raw_data=raw, timestamp=sync_time
+        )
+        holdings = normalizer.normalize_holdings(
+            raw_data=raw, broker_name=broker, owner_id=owner_id, connection_id=conn.connection_id
+        )
+        await connections_repo.update_status(
+            owner_id=owner_id,
+            connection_id=conn.connection_id,
+            status=BrokerStatus.CONNECTED,
+            last_sync_time=sync_time.isoformat(),
+        )
+        return holdings, blob
+    except (auth_error_cls, CredentialStoreError) as exc:
+        logger.warning("%s connection %s needs attention: %s", broker, conn.connection_id, exc)
+        await connections_repo.update_status(
+            owner_id=owner_id, connection_id=conn.connection_id, status=BrokerStatus.AUTH_REQUIRED
+        )
+    except Exception as exc:
+        logger.error("%s connection %s sync failed: %s", broker, conn.connection_id, exc)
+        await connections_repo.update_status(
+            owner_id=owner_id, connection_id=conn.connection_id, status=BrokerStatus.PROVIDER_ERROR
+        )
+    return None
 
 
 @router.get(
@@ -188,7 +258,7 @@ async def get_portfolio_holdings(
 
         if refresh_live:
             try:
-                enriched, _ = await market_service.enrich_holdings_with_live_quotes(filtered)
+                enriched, _ = await market_service.enrich_holdings_with_live_quotes(filtered, client=await get_user_kite_client(current_user_id))
                 return enriched
             except Exception as quote_err:
                 logger.warning("Market quote enrichment note for persisted holdings: %s", quote_err)
@@ -230,7 +300,7 @@ async def get_portfolio_holdings(
     # 3. Enrich unified holdings with live market data quotes from MCP
     if refresh_live and unified_holdings:
         try:
-            enriched, _ = await market_service.enrich_holdings_with_live_quotes(unified_holdings)
+            enriched, _ = await market_service.enrich_holdings_with_live_quotes(unified_holdings, client=await get_user_kite_client(current_user_id))
             return enriched
         except Exception as quote_err:
             logger.warning("Market quote enrichment note for live holdings: %s", quote_err)
@@ -261,7 +331,7 @@ async def get_market_quotes(
     """Fetch live market data quotes from MCP with TTL cache protection."""
     market_service = get_market_data_service()
     inst_list = [i.strip().upper() for i in instruments.split(",") if i.strip()]
-    quotes_map, live_succeeded = await market_service.fetch_live_quotes(inst_list)
+    quotes_map, live_succeeded = await market_service.fetch_live_quotes(inst_list, client=await get_user_kite_client(current_user_id))
     freshness = "live" if live_succeeded else "cached"
 
     return MarketQuotesResponse(
@@ -344,8 +414,10 @@ async def sync_portfolio(
                     status=BrokerStatus.AUTH_REQUIRED,
                     last_sync_time=sync_time.isoformat(),
                 )
+                all_holdings.extend(h for h in persisted_all if h.connection_id == conn_id)
             except Exception as exc:
                 logger.error("Zerodha connection %s sync failed during orchestration: %s", conn_id, exc)
+                all_holdings.extend(h for h in persisted_all if h.connection_id == conn_id)
 
         elif b_name == "indmoney":
             ind_provider = IndmoneyProvider(connection_id=conn_id)
@@ -381,6 +453,7 @@ async def sync_portfolio(
                     status=BrokerStatus.AUTH_REQUIRED,
                     last_sync_time=sync_time.isoformat(),
                 )
+                all_holdings.extend(h for h in persisted_all if h.connection_id == conn_id)
             except Exception as exc:
                 logger.error("INDmoney connection %s sync failed during orchestration: %s", conn_id, exc)
                 await connections_repo.update_status(
@@ -389,6 +462,16 @@ async def sync_portfolio(
                     status=BrokerStatus.DISCONNECTED,
                     last_sync_time=sync_time.isoformat(),
                 )
+                all_holdings.extend(h for h in persisted_all if h.connection_id == conn_id)
+        elif b_name in CREDENTIAL_BROKERS:
+            pulled = await _pull_credential_broker(current_user_id, conn, sync_time, normalizer, connections_repo)
+            if pulled is None:
+                # Keep what we already had for this connection rather than dropping it
+                all_holdings.extend(h for h in persisted_all if h.connection_id == conn_id)
+            else:
+                cred_holdings, cred_blob = pulled
+                all_holdings.extend(cred_holdings)
+                archived_blob_paths.append(cred_blob)
         else:
             # Preserve persisted holdings for other linked connections
             other_holdings = [h for h in persisted_all if h.connection_id == conn_id]
@@ -404,16 +487,12 @@ async def sync_portfolio(
     market_service = get_market_data_service()
     if all_holdings:
         try:
-            all_holdings, _ = await market_service.enrich_holdings_with_live_quotes(all_holdings)
+            all_holdings, _ = await market_service.enrich_holdings_with_live_quotes(all_holdings, client=await get_user_kite_client(current_user_id))
         except Exception as q_err:
             logger.warning("Quote enrichment during sync note: %s", q_err)
 
     # --- 4. Idempotent Holdings Update: Purge Stale Records and Batch Upsert ---
-    await holdings_repo.clear_holdings(owner_id=current_user_id)
-    upserted_count = await holdings_repo.upsert_holdings(
-        owner_id=current_user_id,
-        holdings=all_holdings,
-    )
+    upserted_count = await holdings_repo.replace_holdings(owner_id=current_user_id, holdings=all_holdings)
 
     # --- 5. Compute Daily Portfolio Snapshot ---
     as_of_date = sync_time.strftime("%Y-%m-%d")
@@ -494,49 +573,15 @@ async def get_broker_sessions(
     """Return comprehensive telemetry for all connected broker MCP sessions."""
     connections_repo = BrokerConnectionRepository()
     holdings_repo = HoldingsRepository()
+    credentials_repo = BrokerCredentialRepository()
 
     # Query or seed connections (only on first-time onboarding for this tenant)
     existing = await connections_repo.list_connections(owner_id=current_user_id)
     now_iso = datetime.now(timezone.utc).isoformat()
 
     is_init = await connections_repo.is_tenant_initialized(owner_id=current_user_id)
-    if not is_init and not existing:
-        # First-time onboarding initialization for this tenant
-        await connections_repo.create_connection(
-            owner_id=current_user_id,
-            broker_name="zerodha",
-            connection_id="conn_zerodha_live",
-            account_id="SRK113",
-            account_label="Primary Demat",
-            status=BrokerStatus.CONNECTED,
-        )
-        await connections_repo.update_status(
-            owner_id=current_user_id,
-            connection_id="conn_zerodha_live",
-            status=BrokerStatus.CONNECTED,
-            last_sync_time=now_iso,
-            account_id="SRK113",
-            account_label="Primary Demat",
-        )
-        await connections_repo.create_connection(
-            owner_id=current_user_id,
-            broker_name="indmoney",
-            connection_id="conn_indmoney_live",
-            account_id="Vangala Vishwajeeth",
-            account_label="Primary Wealth",
-            status=BrokerStatus.CONNECTED,
-        )
-        await connections_repo.update_status(
-            owner_id=current_user_id,
-            connection_id="conn_indmoney_live",
-            status=BrokerStatus.CONNECTED,
-            last_sync_time=now_iso,
-            account_id="Vangala Vishwajeeth",
-            account_label="Primary Wealth",
-        )
-        await connections_repo.mark_tenant_initialized(owner_id=current_user_id)
-        existing = await connections_repo.list_connections(owner_id=current_user_id)
-    elif not is_init and existing:
+    if not is_init:
+        # New tenants start with no connections; brokers are added from the Brokers page
         await connections_repo.mark_tenant_initialized(owner_id=current_user_id)
 
     # Fetch holdings for metrics calculation
@@ -570,7 +615,7 @@ async def get_broker_sessions(
             zk_provider = ZerodhaProvider(connection_id=conn_id)
             zk_status = conn_obj.status
             zk_auth_url: Optional[str] = None
-            zk_account_id = conn_obj.account_id or "SRK113"
+            zk_account_id = conn_obj.account_id or ""
 
             if conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
                 try:
@@ -616,10 +661,8 @@ async def get_broker_sessions(
                     is_expired=zk_is_expired,
                     mcp_server_url="https://mcp.kite.trade/mcp",
                     mcp_protocol="MCP Stdio / JSON-RPC v2.0",
-                    tools_count=22,
                     holdings_count=len(c_holdings),
                     total_valuation=c_val,
-                    last_latency_ms=138,
                     auth_url=zk_auth_url,
                 )
             )
@@ -627,7 +670,7 @@ async def get_broker_sessions(
             ind_provider = IndmoneyProvider(connection_id=conn_id)
             ind_status = conn_obj.status
             ind_auth_url: Optional[str] = None
-            ind_account_id = conn_obj.account_id or "Vangala Vishwajeeth"
+            ind_account_id = conn_obj.account_id or ""
 
             if conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
                 try:
@@ -665,14 +708,11 @@ async def get_broker_sessions(
                     account_id=ind_account_id,
                     account_label=conn_obj.account_label,
                     auth_type="Biometric OAuth2 Bearer",
-                    session_expires_at=(now + timedelta(days=14)).isoformat(),
                     is_expired=ind_is_expired,
                     mcp_server_url="https://mcp.indmoney.com/mcp",
                     mcp_protocol="MCP Stdio / JSON-RPC v2.0",
-                    tools_count=21,
                     holdings_count=len(c_holdings),
                     total_valuation=c_val,
-                    last_latency_ms=172,
                     auth_url=ind_auth_url,
                 )
             )
@@ -684,14 +724,17 @@ async def get_broker_sessions(
                     "auth_type": "Custodian API / OAuth",
                     "mcp_server_url": f"https://mcp.{b_name}.com/mcp",
                     "mcp_protocol": "MCP JSON-RPC v2.0",
-                    "tools_count": 16,
-                    "default_account_id": f"{b_name.upper()}-LIVE",
-                    "color": "#6366f1",
+                                        "color": "#6366f1",
                     "tag": b_name[:3].upper(),
                 },
             )
             disp_name = f"{meta.get('display_name', b_name.capitalize())} — {conn_obj.account_label}" if conn_obj.account_label else meta.get('display_name', b_name.capitalize())
             b_status = conn_obj.status
+            saved_fields: List[str] = []
+            if b_name in CREDENTIAL_BROKERS:
+                saved_fields = await credentials_repo.get_fields_set(current_user_id, conn_id)
+                if not saved_fields:
+                    b_status = BrokerStatus.AUTH_REQUIRED
             b_is_expired = b_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
 
             sessions.append(
@@ -702,18 +745,16 @@ async def get_broker_sessions(
                     display_name=disp_name,
                     status=b_status,
                     last_sync_time=conn_obj.last_sync_time or now_iso,
-                    account_id=conn_obj.account_id or meta.get("default_account_id", f"{b_name.upper()}-LIVE"),
+                    account_id=conn_obj.account_id or "",
                     account_label=conn_obj.account_label,
                     auth_type=meta.get("auth_type", "OAuth2 / API Key"),
-                    session_expires_at=(now + timedelta(days=30)).isoformat(),
                     is_expired=b_is_expired,
                     mcp_server_url=meta.get("mcp_server_url", f"https://mcp.{b_name}.com/mcp"),
                     mcp_protocol=meta.get("mcp_protocol", "MCP JSON-RPC v2.0"),
-                    tools_count=meta.get("tools_count", 16),
                     holdings_count=len(c_holdings),
                     total_valuation=c_val,
-                    last_latency_ms=95,
-                    auth_url=None,
+                    auth_url=meta.get("setup_url") if b_name in CREDENTIAL_BROKERS and b_status != BrokerStatus.CONNECTED else None,
+                    credentials_saved=bool(saved_fields),
                 )
             )
 
@@ -832,7 +873,16 @@ async def sync_single_broker(
                 status_code=502,
                 detail=f"INDmoney server communication failure: {exc}",
             )
-    elif broker_clean in BROKER_METADATA_CATALOG:
+    elif broker_clean in CREDENTIAL_BROKERS:
+        pulled = await _pull_credential_broker(current_user_id, target_conn, sync_time, normalizer, connections_repo)
+        if pulled is None:
+            sessions = await get_broker_sessions(current_user_id=current_user_id)
+            target = next((s for s in sessions if s.connection_id == conn_id), None)
+            if not target:
+                raise HTTPException(status_code=404, detail=f"Broker {broker_name} not found.")
+            return target
+        new_broker_holdings, _blob = pulled
+    elif broker_clean in BROKER_METADATA_CATALOG and BROKER_METADATA_CATALOG[broker_clean].get("supported", True):
         await connections_repo.update_status(
             owner_id=current_user_id,
             connection_id=conn_id,
@@ -850,7 +900,7 @@ async def sync_single_broker(
     # 2. Enrich newly pulled holdings with live quotes
     if new_broker_holdings:
         try:
-            new_broker_holdings, _ = await market_service.enrich_holdings_with_live_quotes(new_broker_holdings)
+            new_broker_holdings, _ = await market_service.enrich_holdings_with_live_quotes(new_broker_holdings, client=await get_user_kite_client(current_user_id))
         except Exception as q_err:
             logger.warning("Single broker quote enrichment note: %s", q_err)
 
@@ -862,9 +912,7 @@ async def sync_single_broker(
     ]
     combined_holdings = other_holdings + new_broker_holdings
 
-    await holdings_repo.clear_holdings(owner_id=current_user_id)
-    if combined_holdings:
-        await holdings_repo.upsert_holdings(owner_id=current_user_id, holdings=combined_holdings)
+    await holdings_repo.replace_holdings(owner_id=current_user_id, holdings=combined_holdings)
 
     # 4. Compute and save updated daily snapshot
     as_of_date = sync_time.strftime("%Y-%m-%d")
@@ -1106,8 +1154,12 @@ async def get_broker_catalog(
                 mcp_protocol=meta["mcp_protocol"],
                 description=meta["description"],
                 supported=meta.get("supported", True),
+                coming_soon=meta.get("coming_soon", False),
                 is_connected=count > 0,
                 connected_count=count,
+                credential_fields=[CredentialField(**f) for f in meta.get("credential_fields", [])],
+                setup_url=meta.get("setup_url"),
+                setup_steps=meta.get("setup_steps", []),
             )
         )
     return catalog_items
@@ -1126,6 +1178,10 @@ async def create_broker_connection(
 ) -> BrokerSessionInfo:
     """Connect a new broker custodian for the authenticated user."""
     broker_clean = request.broker_name.lower().strip()
+    catalog_meta = BROKER_METADATA_CATALOG.get(broker_clean)
+    if not catalog_meta or not catalog_meta.get("supported", True):
+        raise HTTPException(status_code=400, detail=f"{broker_clean or 'This broker'} is not available yet.")
+    initial_status = BrokerStatus.AUTH_REQUIRED if broker_clean in CREDENTIAL_BROKERS else BrokerStatus.CONNECTED
     connections_repo = BrokerConnectionRepository()
 
     existing_all = await connections_repo.list_connections(owner_id=current_user_id)
@@ -1148,7 +1204,7 @@ async def create_broker_connection(
         account_label = f"Account {account_num}" if len(same_broker_conns) > 0 else "Primary Account"
 
     default_meta = BROKER_METADATA_CATALOG.get(broker_clean, {})
-    account_id = request.account_id or default_meta.get("default_account_id", f"{broker_clean.upper()}-{account_num}")
+    account_id = request.account_id or ""
 
     existing = await connections_repo.get_connection(owner_id=current_user_id, connection_id=conn_id)
     if not existing:
@@ -1156,7 +1212,7 @@ async def create_broker_connection(
             owner_id=current_user_id,
             broker_name=broker_clean,
             connection_id=conn_id,
-            status=BrokerStatus.CONNECTED,
+            status=initial_status,
             account_id=account_id,
             account_label=account_label,
         )
@@ -1164,7 +1220,7 @@ async def create_broker_connection(
         await connections_repo.update_status(
             owner_id=current_user_id,
             connection_id=conn_id,
-            status=BrokerStatus.CONNECTED,
+            status=initial_status,
             last_sync_time=now_iso,
             account_id=account_id,
             account_label=account_label,
@@ -1184,17 +1240,100 @@ async def create_broker_connection(
             account_id=account_id,
             account_label=account_label,
             auth_type=meta.get("auth_type", "OAuth2 / API Key"),
-            session_expires_at=(datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
             is_expired=False,
             mcp_server_url=meta.get("mcp_server_url", f"https://mcp.{broker_clean}.com/mcp"),
             mcp_protocol=meta.get("mcp_protocol", "MCP JSON-RPC v2.0"),
-            tools_count=meta.get("tools_count", 16),
             holdings_count=0,
             total_valuation=0.0,
-            last_latency_ms=100,
             auth_url=None,
         )
     return target
+
+
+async def _find_connection(owner_id: str, ref: str):
+    connections = await BrokerConnectionRepository().list_connections(owner_id=owner_id)
+    key = ref.lower().strip()
+    return next((c for c in connections if c.connection_id.lower() == key), None) or next(
+        (c for c in connections if c.broker_name.lower() == key), None
+    )
+
+
+@router.put(
+    "/connections/{connection_ref}/credentials",
+    response_model=CredentialSaveResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Save Broker API Credentials",
+    description=(
+        "Stores the user's API credentials for a Groww or Angel One connection, encrypted in Azure Table Storage, "
+        "then tests the login. Credentials are never returned."
+    ),
+)
+async def save_broker_credentials(
+    connection_ref: str,
+    payload: CredentialSaveRequest,
+    current_user_id: str = Depends(get_current_user),
+) -> CredentialSaveResponse:
+    conn = await _find_connection(current_user_id, connection_ref)
+    if not conn:
+        raise HTTPException(status_code=404, detail=f"Broker connection '{connection_ref}' not found.")
+    broker = conn.broker_name.lower().strip()
+    if broker not in CREDENTIAL_BROKERS:
+        raise HTTPException(status_code=400, detail=f"{broker} does not use API credentials.")
+
+    meta = BROKER_METADATA_CATALOG[broker]
+    allowed = {f["key"] for f in meta["credential_fields"]}
+    unknown = set(payload.fields) - allowed
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"Unknown credential fields: {', '.join(sorted(unknown))}.")
+    given = {k: v.strip() for k, v in payload.fields.items() if v and v.strip()}
+    missing = [f["label"] for f in meta["credential_fields"] if f["required"] and f["key"] not in given]
+    if missing:
+        raise HTTPException(status_code=422, detail=f"Missing required fields: {', '.join(missing)}.")
+    if broker == "groww" and not (given.get("api_secret") or given.get("totp_secret")):
+        raise HTTPException(status_code=422, detail="Groww needs either the API secret or a TOTP secret.")
+
+    repo = BrokerCredentialRepository()
+    try:
+        saved = await repo.save_credentials(current_user_id, conn.connection_id, given)
+    except CredentialStoreError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    provider_cls, _ = CREDENTIAL_BROKERS[broker]
+    result = await provider_cls(owner_id=current_user_id, connection_id=conn.connection_id).get_account_status()
+    ok = result.get("status") == "success"
+
+    connections_repo = BrokerConnectionRepository()
+    await connections_repo.update_status(
+        owner_id=current_user_id,
+        connection_id=conn.connection_id,
+        status=BrokerStatus.CONNECTED if ok else BrokerStatus.AUTH_REQUIRED,
+        account_id=given.get("client_code") if ok and given.get("client_code") else None,
+    )
+    return CredentialSaveResponse(
+        saved_fields=saved,
+        login_ok=ok,
+        message="" if ok else str(result.get("message") or "The broker did not accept these credentials."),
+        auth_url=result.get("auth_url"),
+    )
+
+
+@router.delete(
+    "/connections/{connection_ref}/credentials",
+    status_code=status.HTTP_200_OK,
+    summary="Remove Stored Broker Credentials",
+)
+async def delete_broker_credentials(
+    connection_ref: str,
+    current_user_id: str = Depends(get_current_user),
+) -> Dict[str, Any]:
+    conn = await _find_connection(current_user_id, connection_ref)
+    if not conn:
+        raise HTTPException(status_code=404, detail=f"Broker connection '{connection_ref}' not found.")
+    removed = await BrokerCredentialRepository().delete_credentials(current_user_id, conn.connection_id)
+    await BrokerConnectionRepository().update_status(
+        owner_id=current_user_id, connection_id=conn.connection_id, status=BrokerStatus.AUTH_REQUIRED
+    )
+    return {"status": "success", "removed": removed}
 
 
 @router.delete(
@@ -1227,6 +1366,8 @@ async def delete_broker_connection(
 
     # 1. Delete connection entity from Azure Table
     await connections_repo.delete_connection(owner_id=current_user_id, connection_id=conn_id)
+    if broker_clean in CREDENTIAL_BROKERS:
+        await BrokerCredentialRepository().delete_credentials(current_user_id, conn_id)
 
     # 2. Purge all holdings belonging strictly to this connection
     purged_holdings = await holdings_repo.delete_holdings_by_connection(

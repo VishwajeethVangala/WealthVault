@@ -6,6 +6,7 @@ cache so repeated momentum lookups do not re-query the broker.
 """
 
 from datetime import datetime, timedelta, timezone
+import asyncio
 import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -191,6 +192,18 @@ class HistoricalDataService:
                 interval="day",
             )
             chunk = parse_candles(raw)
+            # Kite sometimes answers empty under load; a listed stock has data, so retry the first page
+            for retry in range(2):
+                if chunk or by_date:
+                    break
+                await asyncio.sleep(1.5 * (retry + 1))
+                raw = await client.get_historical_data(
+                    instrument_token,
+                    start.strftime("%Y-%m-%d 00:00:00"),
+                    end.strftime("%Y-%m-%d %H:%M:%S"),
+                    interval="day",
+                )
+                chunk = parse_candles(raw)
             if not chunk:
                 break
             for candle in chunk:

@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 import uuid
 
 from azure.data.tables import UpdateMode
-from core.models import AssetClass, BrokerConnection, BrokerStatus, Holding, PortfolioSnapshot, User
+from core.models import AssetClass, BrokerConnection, BrokerStatus, Holding, PortfolioSnapshot, TargetAllocation, User
 from core.security import sanitize_key
 from storage.tables.base import BaseTableStorage
 
@@ -340,6 +340,12 @@ class HoldingsRepository(BaseTableStorage):
                         current_value=float(item["current_value"]),
                         current_price=float(item["current_price"]) if item.get("current_price") is not None else None,
                         pnl=float(item["pnl"]) if item.get("pnl") is not None else None,
+                        day_pnl=float(item["day_pnl"]) if item.get("day_pnl") is not None else None,
+                        day_change_percentage=(
+                            float(item["day_change_percentage"]) if item.get("day_change_percentage") is not None else None
+                        ),
+                        data_freshness=item.get("data_freshness") or "cached",
+                        last_price_updated_at=item.get("last_price_updated_at"),
                         currency=item.get("currency", "INR"),
                     )
                 )
@@ -350,6 +356,20 @@ class HoldingsRepository(BaseTableStorage):
     async def delete_holding(self, owner_id: str, holding_id: str) -> bool:
         """Delete a holding entity within tenant partition."""
         return await self.delete_entity(user_id=owner_id, entity_id=holding_id)
+
+    async def replace_holdings(self, owner_id: str, holdings: List[Holding]) -> int:
+        """Make the stored holdings equal `holdings` without ever emptying the table first.
+
+        New rows are written before anything is deleted, so a failure part-way leaves the old data
+        plus whatever was written, never an empty or half-empty portfolio. Rows that are no longer
+        present are deleted at the end.
+        """
+        existing_keys = {item["RowKey"] for item in await self.query_entities(user_id=owner_id)}
+        upserted = await self.upsert_holdings(owner_id=owner_id, holdings=holdings) if holdings else 0
+        keep = {sanitize_key(h.holding_id) for h in holdings}
+        for key in existing_keys - keep:
+            await self.delete_entity(user_id=owner_id, entity_id=key)
+        return upserted
 
     async def clear_holdings(self, owner_id: str) -> int:
         """Purge all holding entities for the given owner.
@@ -560,3 +580,181 @@ class SnapshotsRepository(BaseTableStorage):
             logger.warning("Error parsing portfolio snapshot record: %s", exc)
             return None
 
+
+
+class TargetAllocationRepository(BaseTableStorage):
+    """Azure Table repository holding each user's target asset allocation.
+
+    PartitionKey = owner_id
+    RowKey = 'default'
+    """
+
+    ROW_KEY = "default"
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="targetallocations", connection_string=connection_string)
+
+    async def get_targets(self, owner_id: str) -> TargetAllocation:
+        """Return the user's saved targets, or an empty allocation if none were set."""
+        data = await self.get_entity(user_id=owner_id, entity_id=self.ROW_KEY)
+        if not data:
+            return TargetAllocation(owner_id=owner_id)
+        try:
+            targets = json.loads(data.get("targets_json") or "{}")
+        except ValueError:
+            targets = {}
+        return TargetAllocation(
+            owner_id=owner_id,
+            targets={str(k): float(v) for k, v in targets.items()},
+            updated_at=data.get("updated_at"),
+        )
+
+    async def save_targets(self, owner_id: str, targets: Dict[str, float]) -> TargetAllocation:
+        """Replace the user's targets."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await self.upsert_entity(
+            user_id=owner_id,
+            entity_id=self.ROW_KEY,
+            data={"owner_id": owner_id, "targets_json": json.dumps(targets), "updated_at": now_iso},
+            mode="replace",
+        )
+        return TargetAllocation(owner_id=owner_id, targets=targets, updated_at=now_iso)
+
+
+class BrokerCredentialRepository(BaseTableStorage):
+    """Azure Table repository holding encrypted broker credentials and cached session tokens.
+
+    PartitionKey = owner_id
+    RowKey = connection_id
+
+    `secrets_enc` and `session_enc` are Fernet tokens (see core.credentials). `fields_set` is the
+    plaintext list of credential field NAMES (never values) so the UI can show what is saved.
+    """
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="brokercredentials", connection_string=connection_string)
+
+    async def save_credentials(self, owner_id: str, connection_id: str, secrets: Dict[str, str]) -> List[str]:
+        """Encrypt and store credentials (replacing any previous ones and clearing the cached session)."""
+        from core.credentials import encrypt_json
+
+        clean = {k: v.strip() for k, v in secrets.items() if isinstance(v, str) and v.strip()}
+        await self.upsert_entity(
+            user_id=owner_id,
+            entity_id=connection_id,
+            data={
+                "owner_id": owner_id,
+                "connection_id": connection_id,
+                "secrets_enc": encrypt_json(clean),
+                "session_enc": "",
+                "fields_set": ",".join(sorted(clean)),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            mode="replace",
+        )
+        return sorted(clean)
+
+    async def get_credentials(self, owner_id: str, connection_id: str) -> Optional[Dict[str, str]]:
+        """Return decrypted credentials, or None if none are stored."""
+        from core.credentials import decrypt_json
+
+        data = await self.get_entity(user_id=owner_id, entity_id=connection_id)
+        if not data or not data.get("secrets_enc"):
+            return None
+        return decrypt_json(data["secrets_enc"])
+
+    async def get_fields_set(self, owner_id: str, connection_id: str) -> List[str]:
+        """Names of the credential fields that are saved (no values)."""
+        data = await self.get_entity(user_id=owner_id, entity_id=connection_id, select=["fields_set"])
+        raw = (data or {}).get("fields_set") or ""
+        return [f for f in raw.split(",") if f]
+
+    async def get_session(self, owner_id: str, connection_id: str) -> Optional[Dict[str, Any]]:
+        """Return the cached decrypted session (tokens + expiry), or None."""
+        from core.credentials import CredentialStoreError, decrypt_json
+
+        data = await self.get_entity(user_id=owner_id, entity_id=connection_id, select=["session_enc"])
+        if not data or not data.get("session_enc"):
+            return None
+        try:
+            return decrypt_json(data["session_enc"])
+        except CredentialStoreError:
+            return None
+
+    async def save_session(self, owner_id: str, connection_id: str, session: Dict[str, Any]) -> None:
+        """Cache a broker session (tokens + expiry) alongside the credentials."""
+        from core.credentials import encrypt_json
+
+        await self.upsert_entity(
+            user_id=owner_id,
+            entity_id=connection_id,
+            data={"session_enc": encrypt_json(session)},
+            mode="merge",
+        )
+
+    async def delete_credentials(self, owner_id: str, connection_id: str) -> bool:
+        return await self.delete_entity(user_id=owner_id, entity_id=connection_id)
+
+
+class SymbolMapRepository(BaseTableStorage):
+    """Azure Table cache mapping broker-specific instrument codes (e.g. INDmoney's INDS03339) to exchange symbols.
+
+    PartitionKey = 'global' (the mapping is the same for every user)
+    RowKey = broker instrument code
+    `kite_id` is empty when the instrument could not be matched, so it is not searched again every sync.
+    """
+
+    PARTITION = "global"
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="symbolmap", connection_string=connection_string)
+
+    async def get_all(self) -> Dict[str, Dict[str, str]]:
+        rows = await self.query_entities(user_id=self.PARTITION)
+        return {
+            r["RowKey"]: {"kite_id": r.get("kite_id", ""), "resolved_at": r.get("resolved_at", "")}
+            for r in rows
+            if r.get("RowKey")
+        }
+
+    async def save(self, code: str, kite_id: str, name: str) -> None:
+        await self.upsert_entity(
+            user_id=self.PARTITION,
+            entity_id=code,
+            data={"kite_id": kite_id, "name": name, "resolved_at": datetime.now(timezone.utc).isoformat()},
+            mode="replace",
+        )
+
+
+class SignalCacheRepository(BaseTableStorage):
+    """Azure Table cache of per-stock analytics signals (momentum, swing, ATH breakout).
+
+    PartitionKey = 'global' (signals depend only on the stock, not the user)
+    RowKey = Kite instrument id, e.g. 'NSE:INFY'
+    """
+
+    PARTITION = "global"
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="signalcache", connection_string=connection_string)
+
+    async def get_many(self, instrument_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        wanted = set(instrument_ids)
+        out: Dict[str, Dict[str, Any]] = {}
+        for r in await self.query_entities(user_id=self.PARTITION):
+            if r.get("RowKey") in wanted:
+                try:
+                    row = json.loads(r.get("payload") or "{}")
+                except ValueError:
+                    continue
+                row["computed_at"] = r.get("computed_at", "")
+                out[r["RowKey"]] = row
+        return out
+
+    async def save(self, instrument_id: str, row: Dict[str, Any]) -> None:
+        await self.upsert_entity(
+            user_id=self.PARTITION,
+            entity_id=instrument_id,
+            data={"payload": json.dumps(row), "computed_at": datetime.now(timezone.utc).isoformat()},
+            mode="replace",
+        )

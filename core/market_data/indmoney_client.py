@@ -19,6 +19,8 @@ import urllib.parse
 
 import aiohttp
 
+from core.config import get_settings
+
 logger = logging.getLogger("wealthvault.mcp.indmoney")
 
 CLIENT_FILE = Path("storage/blobs/indmoney_client.json")
@@ -55,8 +57,8 @@ class IndmoneyMCPClient:
         if (connection_id == "conn_indmoney_live" or "default" in connection_id) and not self.tokens_file.exists() and TOKENS_FILE.exists():
             self.tokens_file = TOKENS_FILE
 
-        self.client_id: str = "dfed4e00-5c2a-4aec-ae9e-53afff3637a2"
-        self.client_secret: str = "6f392883326629bd269c7425981ea90d853c1e3275ce1c62c525706f255c9c41"
+        self.client_id: str = get_settings().INDMONEY_CLIENT_ID
+        self.client_secret: str = get_settings().INDMONEY_CLIENT_SECRET
         self.redirect_uri: str = "http://127.0.0.1:8000/api/v1/portfolio/oauth/indmoney/callback"
         self.scope: str = "portfolio:read"
 
