@@ -38,8 +38,10 @@ class IndmoneyProvider(BrokerProvider):
         server_url: str = "https://mcp.indmoney.com/mcp",
         timeout_seconds: float = 45.0,
         connection_id: str = "conn_indmoney_live",
+        owner_id: Optional[str] = None,
     ) -> None:
         super().__init__(credentials)
+        self.owner_id = owner_id
         self.server_url = server_url
         self.timeout = timeout_seconds
         self.connection_id = connection_id
@@ -47,7 +49,7 @@ class IndmoneyProvider(BrokerProvider):
 
     @property
     def client(self) -> Any:
-        return get_indmoney_mcp_client(connection_id=self.connection_id)
+        return get_indmoney_mcp_client(connection_id=self.connection_id, owner_id=self.owner_id)
 
     async def connect(self, credentials: Optional[Dict[str, Any]] = None) -> bool:
         """Verify broker connection."""
