@@ -109,6 +109,26 @@ def drop_incomplete_today(candles: List[Dict[str, Any]], now: Optional[datetime]
     return candles, False
 
 
+class _Throttle:
+    """Spaces Kite historical-data requests apart; Kite throttles bursts, and a burst of errors is easy to
+    mistake for an expired login."""
+
+    def __init__(self, min_interval: float) -> None:
+        self.min_interval = min_interval
+        self._lock = asyncio.Lock()
+        self._last = 0.0
+
+    async def wait(self) -> None:
+        async with self._lock:
+            delay = self.min_interval - (time.monotonic() - self._last)
+            if delay > 0:
+                await asyncio.sleep(delay)
+            self._last = time.monotonic()
+
+
+_historical_throttle = _Throttle(0.4)  # about 2.5 requests a second, under Kite's 3 a second limit
+
+
 class HistoricalDataService:
     """Resolves instruments and serves cached daily candles from Kite MCP."""
 
@@ -154,6 +174,7 @@ class HistoricalDataService:
         now = datetime.now(IST)
         from_date = (now - timedelta(days=lookback_days)).strftime("%Y-%m-%d 00:00:00")
         to_date = now.strftime("%Y-%m-%d %H:%M:%S")
+        await _historical_throttle.wait()
         raw = await client.get_historical_data(instrument_token, from_date, to_date, interval="day")
         candles = parse_candles(raw)
         if candles:
@@ -185,6 +206,7 @@ class HistoricalDataService:
         by_date: Dict[str, Dict[str, Any]] = {}
         for _ in range(max_chunks):
             start = max(end - timedelta(days=MAX_LOOKBACK_DAYS - 1), floor)
+            await _historical_throttle.wait()
             raw = await client.get_historical_data(
                 instrument_token,
                 start.strftime("%Y-%m-%d 00:00:00"),
@@ -197,6 +219,7 @@ class HistoricalDataService:
                 if chunk or by_date:
                     break
                 await asyncio.sleep(1.5 * (retry + 1))
+                await _historical_throttle.wait()
                 raw = await client.get_historical_data(
                     instrument_token,
                     start.strftime("%Y-%m-%d 00:00:00"),

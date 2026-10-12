@@ -6,6 +6,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import { PrivacyProvider } from './context/PrivacyContext'
 import { ExecutiveOverview } from './pages/ExecutiveOverview'
 import { EquitySignals } from './pages/EquitySignals'
+import { Stage2 } from './pages/Stage2'
 import { HoldingsTable } from './pages/HoldingsTable'
 import { BrokerSync } from './pages/BrokerSync'
 import { MomentumAnalyzer } from './pages/MomentumAnalyzer'
@@ -74,6 +75,7 @@ export const App: React.FC = () => {
           <Routes>
             <Route path="/" element={<ExecutiveOverview />} />
             <Route path="/holdings" element={<HoldingsTable />} />
+            <Route path="/stage2" element={<Stage2 />} />
             <Route path="/signals" element={<EquitySignals />} />
             <Route path="/momentum" element={<MomentumAnalyzer />} />
             <Route path="/strategy" element={<SwingStrategy />} />

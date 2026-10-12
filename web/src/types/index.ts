@@ -436,6 +436,7 @@ export interface SwingSignal {
   bars_held: number | null
   regime_bullish: boolean
   as_of: string
+  call?: SwingCall | null
 }
 
 export interface AthSignal {
@@ -451,6 +452,7 @@ export interface AthSignal {
   pct_to_ath: number | null
   pct_above_dma: number | null
   as_of: string
+  call?: AthCall | null
 }
 
 export interface StockSignals {
@@ -458,11 +460,17 @@ export interface StockSignals {
   name?: string | null
   as_of?: string | null
   history_days?: number
+  /** the two most recent completed sessions for this stock */
+  last_sessions?: string[]
   momentum: MomentumSignal | null
   swing: SwingSignal | null
   ath: AthSignal | null
   errors: Record<string, string>
   computed_at?: string
+  currency?: string
+  history_status?: 'complete' | 'partial'
+  history_note?: string
+  history_first?: string
 }
 
 export interface SignalsJob {
@@ -480,4 +488,85 @@ export interface SignalsResponse {
   job: SignalsJob
   symbol_map: Record<string, string>
   signals: Record<string, StockSignals>
+}
+
+export interface UsLiveQuote {
+  price: number
+  day_change: number | null
+  day_change_pct: number | null
+  prev_close: number | null
+  ext_price: number | null
+  ext_change_pct: number | null
+  updated: string | null
+}
+
+export interface UsLiveResponse {
+  quotes: Record<string, UsLiveQuote>
+  session_closed: boolean
+}
+
+// Stage 2 screener (stocks from a saved Chartink screener, with the same signals as Equity signals)
+export interface Stage2Row {
+  sr?: number
+  nsecode: string
+  name: string
+  bsecode?: string
+  close: number
+  per_chg: number
+  volume: number
+  held: boolean
+  is_new: boolean | null
+  [extra: string]: unknown
+}
+
+export interface Stage2Response {
+  job: SignalsJob
+  list: {
+    title: string
+    date: string
+    fetched_at: string
+    url: string
+    extra_columns: string[]
+    previous_date: string | null
+    rows: Stage2Row[]
+    dropped: { nsecode: string; name?: string }[]
+  } | null
+  signals: Record<string, StockSignals>
+}
+
+export interface Stage2LiveResponse {
+  quotes: Record<string, { price: number; day_change_pct: number | null }>
+}
+
+// The BUY call behind a strategy position, with the facts that justify it
+export interface SwingCall {
+  signal_date: string
+  signal_close: number
+  ut_stop: number | null
+  sma_fast: number | null
+  sma_slow: number | null
+  above_slow_pct: number | null
+  fast_over_slow_pct: number | null
+  slow_slope_pct: number | null
+  slope_lookback: number
+  /** signalled on the latest close, fills at the next open */
+  queued: boolean
+  entry_date: string | null
+  entry_price: number | null
+  stop: number | null
+  stop_pct?: number | null
+}
+
+export interface AthCall {
+  signal_date: string
+  entry_date: string
+  entry_price: number
+  close: number
+  prior_ath: number | null
+  above_ath_pct: number | null
+  days_since_below_dma: number | null
+  window_bars: number
+  dma: number | null
+  above_dma_pct: number | null
+  queued: boolean
 }

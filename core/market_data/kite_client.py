@@ -21,6 +21,10 @@ logger = logging.getLogger("wealthvault.mcp.kite")
 SESSION_FILE = Path("storage/blobs/kite_session.json")
 
 
+class KiteRateLimitError(RuntimeError):
+    """Kite throttled the request; the session is fine and the call can be retried after a pause."""
+
+
 class KiteAuthRequiredError(Exception):
     """Raised when Kite MCP session requires daily interactive OAuth login."""
 
@@ -167,7 +171,7 @@ class KiteMCPClient:
                 return
             await self._init_new_session()
 
-    async def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> Any:
+    async def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None, _retry_session_errors: bool = True) -> Any:
         """Invoke an MCP tool directly over HTTP JSON-RPC 2.0 with session persistence."""
         await self.ensure_connected()
 
@@ -196,6 +200,10 @@ class KiteMCPClient:
 
                 # Handle Invalid / Expired session from server
                 if resp.status in (400, 401, 403) or "Invalid session ID" in raw_text or "Session expired" in raw_text:
+                    if _retry_session_errors:
+                        # Resetting throws the logged-in session away, so give a one-off error a second try first
+                        await asyncio.sleep(1.5)
+                        return await self.call_tool(name, arguments, _retry_session_errors=False)
                     logger.warning("Kite MCP session is invalid or expired (%d: %s). Re-initializing fresh session...", resp.status, raw_text.strip())
                     await self.reset_session()
                     raise KiteAuthRequiredError(
@@ -218,6 +226,8 @@ class KiteMCPClient:
                         text = content[0].get("text", "")
 
                     lower_text = str(text).lower()
+                    if re.search(r"too many|rate.?limit|throttl|429", lower_text):
+                        raise KiteRateLimitError(f"Kite rate limit on '{name}': {text}")
                     if is_error or "log in first" in lower_text or (
                         lower_text.startswith("failed to ") and ("execute" in lower_text or "get" in lower_text)
                     ):
