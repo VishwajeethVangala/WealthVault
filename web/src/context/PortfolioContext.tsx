@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import type { Holding } from '../types'
 import { fetchPortfolioHoldings } from '../utils/api'
 import { brokerKeyOf, classifyAssetClass, type CanonicalAssetClass } from '../utils/portfolioFilters'
@@ -52,11 +53,14 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+  // Only the Holdings page asks for INDmoney's own live prices (US stocks, NPS); other pages keep the cheaper poll
+  const { pathname } = useLocation()
+  const onHoldings = useRef(pathname === '/holdings')
 
   const load = useCallback(async (silent = false) => {
     try {
       if (!silent) setLoading(true)
-      const data = await fetchPortfolioHoldings('all')
+      const data = await fetchPortfolioHoldings('all', { indmoneyLive: onHoldings.current })
       setHoldings(data)
       setLastRefreshedAt(new Date())
       setError(null)
@@ -70,13 +74,45 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [])
 
+  // Switching to or from Holdings changes what the poll asks for, so reload straight away
+  useEffect(() => {
+    const now = pathname === '/holdings'
+    if (onHoldings.current !== now) {
+      onHoldings.current = now
+      load(true)
+    }
+  }, [pathname, load])
+
   useEffect(() => {
     load()
-    // Periodic background sync every 60 seconds
-    const interval = setInterval(() => {
-      load(true)
-    }, 60000)
-    return () => clearInterval(interval)
+
+    // NSE cash session, Mon-Fri 09:15-15:30 IST: refresh prices every 20s then, every 5 min otherwise.
+    // Nothing runs while the tab is hidden, and returning to the tab refreshes straight away.
+    const marketOpen = () => {
+      const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+      const mins = ist.getHours() * 60 + ist.getMinutes()
+      return ist.getDay() >= 1 && ist.getDay() <= 5 && mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30
+    }
+    let timer: number | undefined
+    const schedule = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(async () => {
+        if (!document.hidden) await load(true)
+        schedule()
+      }, marketOpen() ? 20_000 : 300_000)
+    }
+    const onVisible = () => {
+      if (!document.hidden) {
+        load(true)
+        schedule()
+      }
+    }
+    schedule()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [load])
 
   const counts = useMemo<PortfolioCounts>(() => {

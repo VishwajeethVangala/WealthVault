@@ -17,6 +17,7 @@ from apps.api.routers.accounts import get_current_user
 from core.market_data import get_market_data_service
 from core.market_data.indmoney_client import IndmoneyAuthRequiredError, get_indmoney_mcp_client
 from core.market_data.kite_client import get_kite_mcp_client
+from core.market_data.indmoney_live import overlay_indmoney_live
 from core.market_data.user_client import get_user_kite_client
 from core.models import (
     BrokerCatalogItem,
@@ -237,6 +238,10 @@ async def get_portfolio_holdings(
         default=True,
         description="Whether to enrich holdings with real-time market data quotes from MCP",
     ),
+    indmoney_live: bool = Query(
+        default=False,
+        description="Also re-read INDmoney holdings' prices from INDmoney (US stocks, NPS), for pages that poll live",
+    ),
     current_user_id: str = Depends(get_current_user),
 ) -> List[Holding]:
     """Fetch and normalize unified holdings for the authenticated user, enriched with live MCP market quotes."""
@@ -257,6 +262,8 @@ async def get_portfolio_holdings(
             filtered = [h for h in persisted if "indmoney" in h.connection_id.lower() or h.holding_id.startswith("hld_ind")]
 
         if refresh_live:
+            if indmoney_live:
+                filtered = await overlay_indmoney_live(current_user_id, filtered)
             try:
                 enriched, _ = await market_service.enrich_holdings_with_live_quotes(filtered, client=await get_user_kite_client(current_user_id))
                 return enriched
