@@ -16,9 +16,6 @@ import re
 import shutil
 from typing import Any, Dict, List, Optional
 
-from mcp import ClientSession
-from mcp.client.stdio import StdioServerParameters, stdio_client
-
 from core.market_data.kite_client import KiteAuthRequiredError, get_kite_mcp_client
 from providers.brokers.base import BrokerProvider
 
@@ -162,18 +159,5 @@ class ZerodhaProvider(BrokerProvider):
             return {}
 
     async def get_transactions(self) -> List[Dict[str, Any]]:
-        """Fetch trades/transactions via Kite MCP 'get_trades'."""
-        server_params = self._get_server_params()
-        try:
-            async with asyncio.timeout(self.timeout):
-                async with stdio_client(server_params) as (read, write):
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        res = await session.call_tool("get_trades", arguments={})
-                        data = _extract_mcp_result(res)
-                        if isinstance(data, list):
-                            return data
-        except Exception as exc:
-            logger.debug("Kite MCP get_trades note: %s", exc)
-
+        """Trade history is not read from Kite; holdings are the source of truth."""
         return []

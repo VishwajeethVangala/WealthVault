@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import aiohttp
 
+from core.config import get_settings
 from core.totp import generate_totp
 from providers.brokers.base import BrokerProvider
 from storage.tables.repositories import BrokerCredentialRepository
@@ -67,7 +68,7 @@ class AngelOneProvider(BrokerProvider):
             "X-UserType": "USER",
             "X-SourceID": "WEB",
             "X-ClientLocalIP": local_ip,
-            "X-ClientPublicIP": local_ip,
+            "X-ClientPublicIP": get_settings().ANGELONE_PUBLIC_IP.strip() or local_ip,
             "X-MACAddress": _mac_address(),
             "X-PrivateKey": api_key,
         }

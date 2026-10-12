@@ -43,3 +43,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 *.sw?
+
+# local broker credentials and sessions
+storage/blobs/indmoney_client.json

@@ -16,9 +16,10 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
+from core.config import data_dir
+
 logger = logging.getLogger("wealthvault.mcp.kite")
 
-SESSION_FILE = Path("storage/blobs/kite_session.json")
 
 
 class KiteRateLimitError(RuntimeError):
@@ -46,10 +47,10 @@ class KiteMCPClient:
         self.server_url = server_url
         self.connection_id = connection_id
         safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_zerodha_live")
-        self.session_file = Path(f"storage/blobs/kite_session_{safe_id}.json")
+        self.session_file = data_dir() / f"kite_session_{safe_id}.json"
         # Backwards compatibility for original default session file
-        if (connection_id == "conn_zerodha_live" or "default" in connection_id) and not self.session_file.exists() and SESSION_FILE.exists():
-            self.session_file = SESSION_FILE
+        if (connection_id == "conn_zerodha_live" or "default" in connection_id) and not self.session_file.exists() and (data_dir() / "kite_session.json").exists():
+            self.session_file = data_dir() / "kite_session.json"
 
         self.session_id: Optional[str] = None
         self.auth_url: Optional[str] = None

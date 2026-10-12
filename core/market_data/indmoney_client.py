@@ -1,7 +1,7 @@
 """Persistent INDmoney Model Context Protocol (MCP) Client.
 
 Direct Streamable HTTP JSON-RPC client to https://mcp.indmoney.com/mcp.
-Implements OAuth 2.0 PKCE flow, persistent token storage on disk (storage/blobs/indmoney_tokens.json),
+Implements OAuth 2.0 PKCE flow, persistent token storage on disk (DATA_DIR/indmoney_tokens.json),
 and automatic token refreshing, eliminating child processes, port collisions, and unwanted browser popups.
 """
 
@@ -19,12 +19,10 @@ import urllib.parse
 
 import aiohttp
 
-from core.config import get_settings
+from core.config import data_dir, get_settings
 
 logger = logging.getLogger("wealthvault.mcp.indmoney")
 
-CLIENT_FILE = Path("storage/blobs/indmoney_client.json")
-TOKENS_FILE = Path("storage/blobs/indmoney_tokens.json")
 
 
 class IndmoneyAuthRequiredError(Exception):
@@ -52,10 +50,10 @@ class IndmoneyMCPClient:
         self.authorization_endpoint = authorization_endpoint
         self.connection_id = connection_id
         safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_indmoney_live")
-        self.tokens_file = Path(f"storage/blobs/indmoney_tokens_{safe_id}.json")
+        self.tokens_file = data_dir() / f"indmoney_tokens_{safe_id}.json"
         # Backwards compatibility for original default tokens file
-        if (connection_id == "conn_indmoney_live" or "default" in connection_id) and not self.tokens_file.exists() and TOKENS_FILE.exists():
-            self.tokens_file = TOKENS_FILE
+        if (connection_id == "conn_indmoney_live" or "default" in connection_id) and not self.tokens_file.exists() and (data_dir() / "indmoney_tokens.json").exists():
+            self.tokens_file = data_dir() / "indmoney_tokens.json"
 
         self.client_id: str = get_settings().INDMONEY_CLIENT_ID
         self.client_secret: str = get_settings().INDMONEY_CLIENT_SECRET
@@ -74,6 +72,9 @@ class IndmoneyMCPClient:
         self._request_counter: int = 0
 
         self._load_client_info()
+        base = get_settings().PUBLIC_BASE_URL.strip().rstrip("/")
+        if base:  # a deployed host always wins over a saved localhost redirect
+            self.redirect_uri = f"{base}/api/v1/portfolio/oauth/indmoney/callback"
         self._load_tokens()
 
     @classmethod
@@ -84,9 +85,10 @@ class IndmoneyMCPClient:
         return cls._instances[safe_id]
 
     def _load_client_info(self) -> None:
-        if CLIENT_FILE.exists():
+        client_file = data_dir() / "indmoney_client.json"
+        if client_file.exists():
             try:
-                with open(CLIENT_FILE, "r", encoding="utf-8") as f:
+                with open(client_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.client_id = data.get("client_id", self.client_id)
                     self.client_secret = data.get("client_secret", self.client_secret)
