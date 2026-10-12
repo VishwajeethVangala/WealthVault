@@ -31,8 +31,10 @@ class ZerodhaProvider(BrokerProvider):
         server_url: str = "https://mcp.kite.trade/mcp",
         timeout_seconds: float = 45.0,
         connection_id: str = "conn_zerodha_live",
+        owner_id: Optional[str] = None,
     ) -> None:
         super().__init__(credentials)
+        self.owner_id = owner_id
         self.server_url = server_url
         self.timeout = timeout_seconds
         self.connection_id = connection_id
@@ -41,7 +43,7 @@ class ZerodhaProvider(BrokerProvider):
 
     @property
     def client(self) -> Any:
-        return get_kite_mcp_client(connection_id=self.connection_id)
+        return get_kite_mcp_client(connection_id=self.connection_id, owner_id=self.owner_id)
 
     async def get_login_url(self) -> Optional[str]:
         """Get interactive session authorization URL from persistent Kite MCP bridge."""

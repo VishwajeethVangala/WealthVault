@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse
 
 from apps.api.routers.accounts import get_current_user
 from core.market_data import get_market_data_service
-from core.market_data.indmoney_client import IndmoneyAuthRequiredError, get_indmoney_mcp_client
+from core.market_data.indmoney_client import IndmoneyAuthRequiredError, IndmoneyMCPClient, get_indmoney_mcp_client
 from core.market_data.kite_client import get_kite_mcp_client
 from core.market_data.indmoney_live import overlay_indmoney_live
 from core.market_data.user_client import get_user_kite_client
@@ -276,7 +276,7 @@ async def get_portfolio_holdings(
 
     # 1. Fetch from Zerodha if requested
     if selected_broker in ("all", "zerodha"):
-        zk_provider = ZerodhaProvider(connection_id=conn_id or "conn_zerodha_live")
+        zk_provider = ZerodhaProvider(connection_id=conn_id or "conn_zerodha_live", owner_id=current_user_id)
         try:
             zk_raw = await zk_provider.get_holdings()
             zk_norm = normalizer.normalize_holdings(
@@ -291,7 +291,7 @@ async def get_portfolio_holdings(
 
     # 2. Fetch from INDmoney if requested
     if selected_broker in ("all", "indmoney"):
-        ind_provider = IndmoneyProvider(connection_id=conn_id or "conn_indmoney_live")
+        ind_provider = IndmoneyProvider(connection_id=conn_id or "conn_indmoney_live", owner_id=current_user_id)
         try:
             ind_raw = await ind_provider.get_holdings()
             ind_norm = normalizer.normalize_holdings(
@@ -388,7 +388,7 @@ async def sync_portfolio(
         conn_id = conn.connection_id
 
         if b_name == "zerodha":
-            zk_provider = ZerodhaProvider(connection_id=conn_id)
+            zk_provider = ZerodhaProvider(connection_id=conn_id, owner_id=current_user_id)
             try:
                 zk_raw = await zk_provider.get_holdings()
                 zk_blob = await archive_broker_payload(
@@ -427,7 +427,7 @@ async def sync_portfolio(
                 all_holdings.extend(h for h in persisted_all if h.connection_id == conn_id)
 
         elif b_name == "indmoney":
-            ind_provider = IndmoneyProvider(connection_id=conn_id)
+            ind_provider = IndmoneyProvider(connection_id=conn_id, owner_id=current_user_id)
             try:
                 ind_raw = await ind_provider.get_holdings()
                 ind_blob = await archive_broker_payload(
@@ -619,7 +619,7 @@ async def get_broker_sessions(
         c_val = sum(h.current_value for h in c_holdings)
 
         if b_name == "zerodha":
-            zk_provider = ZerodhaProvider(connection_id=conn_id)
+            zk_provider = ZerodhaProvider(connection_id=conn_id, owner_id=current_user_id)
             zk_status = conn_obj.status
             zk_auth_url: Optional[str] = None
             zk_account_id = conn_obj.account_id or ""
@@ -674,14 +674,14 @@ async def get_broker_sessions(
                 )
             )
         elif b_name == "indmoney":
-            ind_provider = IndmoneyProvider(connection_id=conn_id)
+            ind_provider = IndmoneyProvider(connection_id=conn_id, owner_id=current_user_id)
             ind_status = conn_obj.status
             ind_auth_url: Optional[str] = None
             ind_account_id = conn_obj.account_id or ""
 
             if conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
                 try:
-                    client = get_indmoney_mcp_client(connection_id=conn_id)
+                    client = get_indmoney_mcp_client(connection_id=conn_id, owner_id=current_user_id)
                     ind_auth_url = client.get_authorization_url()
                 except Exception as exc:
                     logger.warning("Could not fetch INDmoney auth URL for %s: %s", conn_id, exc)
@@ -699,7 +699,7 @@ async def get_broker_sessions(
                     ind_auth_url = ind_provider.client.get_authorization_url()
 
             if ind_status != BrokerStatus.CONNECTED and not ind_auth_url:
-                ind_auth_url = get_indmoney_mcp_client(connection_id=conn_id).get_authorization_url()
+                ind_auth_url = get_indmoney_mcp_client(connection_id=conn_id, owner_id=current_user_id).get_authorization_url()
 
             ind_is_expired = ind_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
             disp_name = f"INDmoney Private Wealth — {conn_obj.account_label}" if conn_obj.account_label else "INDmoney Private Wealth"
@@ -800,7 +800,7 @@ async def sync_single_broker(
 
     # 1. Targeted live pull from requested broker connection
     if broker_clean == "zerodha":
-        zk_provider = ZerodhaProvider(connection_id=conn_id)
+        zk_provider = ZerodhaProvider(connection_id=conn_id, owner_id=current_user_id)
         try:
             zk_raw = await zk_provider.get_holdings()
             await archive_broker_payload(
@@ -839,7 +839,7 @@ async def sync_single_broker(
             )
             raise HTTPException(status_code=502, detail=f"Zerodha sync failed for {conn_id}: {exc}")
     elif broker_clean == "indmoney":
-        ind_provider = IndmoneyProvider(connection_id=conn_id)
+        ind_provider = IndmoneyProvider(connection_id=conn_id, owner_id=current_user_id)
         try:
             ind_raw = await ind_provider.get_holdings()
             await archive_broker_payload(
@@ -1079,11 +1079,11 @@ async def indmoney_oauth_callback(
     if not code:
         raise HTTPException(status_code=400, detail="Missing authorization code from INDmoney.")
 
-    conn_id = "conn_indmoney_live"
-    if state and "::" in state:
-        conn_id = state.split("::")[0]
-
-    client = get_indmoney_mcp_client(connection_id=conn_id)
+    # The state names the client that issued it (owner and connection); nothing else can complete the login.
+    conn_id = state.split("::")[0] if state and "::" in state else ""
+    client = IndmoneyMCPClient.find(conn_id) if conn_id else None
+    if client is None or state not in client._pending_verifiers:
+        raise HTTPException(status_code=400, detail="This INDmoney login link has expired. Start the connection again from WealthVault.")
     try:
         await client.exchange_code(code=code, state=state)
     except Exception as exc:
@@ -1404,13 +1404,13 @@ async def delete_broker_connection(
     # 5. Invalidate client session / credentials in-memory for this specific connection
     if broker_clean == "zerodha":
         try:
-            zk_client = get_kite_mcp_client(connection_id=conn_id)
+            zk_client = get_kite_mcp_client(connection_id=conn_id, owner_id=current_user_id)
             await zk_client.reset_session()
         except Exception as z_err:
             logger.debug("Zerodha session reset note: %s", z_err)
     elif broker_clean == "indmoney":
         try:
-            ind_client = get_indmoney_mcp_client(connection_id=conn_id)
+            ind_client = get_indmoney_mcp_client(connection_id=conn_id, owner_id=current_user_id)
             ind_client.reset_tokens()
         except Exception as ind_err:
             logger.debug("INDmoney token reset note: %s", ind_err)

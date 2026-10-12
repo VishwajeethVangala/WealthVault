@@ -99,28 +99,14 @@ async def lifespan(app: FastAPI):
         if problems:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
 
-    # Initialize persistent Kite MCP bridge
-    from core.market_data.kite_client import get_kite_mcp_client
-    kite_client = get_kite_mcp_client()
-    try:
-        asyncio.create_task(kite_client.ensure_connected())
-    except Exception as exc:
-        logger.warning("Could not pre-initialize Kite MCP bridge: %s", exc)
-
-    from core.market_data.indmoney_client import get_indmoney_mcp_client
-    ind_client = get_indmoney_mcp_client()
-
     yield
 
     logger.info("Shutting down %s...", settings.APP_NAME)
-    try:
-        await kite_client.close()
-    except Exception as exc:
-        logger.debug("Error closing Kite MCP client: %s", exc)
-    try:
-        await ind_client.close()
-    except Exception as exc:
-        logger.debug("Error closing INDmoney MCP client: %s", exc)
+    from core.market_data.indmoney_client import IndmoneyMCPClient
+    from core.market_data.kite_client import KiteMCPClient
+
+    await KiteMCPClient.close_all()
+    await IndmoneyMCPClient.close_all()
     from storage.tables.base import close_shared_table_clients
     await close_shared_table_clients()
 

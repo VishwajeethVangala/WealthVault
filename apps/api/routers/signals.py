@@ -122,11 +122,11 @@ def _us_names(holdings: List[Holding]) -> Dict[str, str]:
     return names
 
 
-def _indmoney_client(holdings: List[Holding]) -> Any:
+def _indmoney_client(owner_id: str, holdings: List[Holding]) -> Any:
     conn_ids = sorted({h.connection_id for h in holdings if "indmoney" in (h.connection_id or "").lower()})
     if not conn_ids:
         raise HTTPException(status_code=409, detail="Connect INDmoney to analyse US stocks.")
-    return IndmoneyProvider(connection_id=conn_ids[0]).client
+    return IndmoneyProvider(connection_id=conn_ids[0], owner_id=owner_id).client
 
 
 # --- refresh jobs ----------------------------------------------------------------------------------------
@@ -217,7 +217,7 @@ async def _run_job_us(owner_id: str, job: Job) -> None:
     cache = SignalCacheRepository()
     try:
         holdings = await HoldingsRepository().get_holdings(owner_id=owner_id)
-        client = _indmoney_client(holdings)
+        client = _indmoney_client(owner_id, holdings)
         names = _us_names(holdings)
         tickers = sorted(names)
         job.total = len(tickers)
@@ -345,7 +345,7 @@ async def get_us_live(current_user_id: str = Depends(get_current_user)) -> Dict[
     if cached and time.monotonic() - cached[0] < US_LIVE_TTL_SECONDS:
         quotes = cached[1]
     else:
-        client = _indmoney_client(holdings)
+        client = _indmoney_client(owner_id, holdings)
         quotes: Dict[str, Any] = {}
         # INDmoney now and then drops part of a batch; anything missing gets one more try
         batches = [tickers[i : i + 10] for i in range(0, len(tickers), 10)]
@@ -395,7 +395,7 @@ async def build_us_history(
     """The process for any new US stock: full history is fetched, validated and stored on first request."""
     holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
     try:
-        info = await ensure_history(ticker, _indmoney_client(holdings), force_rebuild=rebuild)
+        info = await ensure_history(ticker, _indmoney_client(current_user_id, holdings), force_rebuild=rebuild)
     except UsHistoryError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except IndmoneyAuthRequiredError as exc:

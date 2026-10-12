@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 from core.config import data_dir
+from core.market_data.scope import scoped_key
 
 logger = logging.getLogger("wealthvault.mcp.kite")
 
@@ -43,13 +44,15 @@ class KiteMCPClient:
         self,
         server_url: str = "https://mcp.kite.trade/mcp",
         connection_id: str = "conn_zerodha_live",
+        owner_id: Optional[str] = None,
     ) -> None:
         self.server_url = server_url
         self.connection_id = connection_id
-        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_zerodha_live")
+        self.owner_id = owner_id
+        safe_id = scoped_key(connection_id, owner_id, "conn_zerodha_live")
         self.session_file = data_dir() / f"kite_session_{safe_id}.json"
-        # Backwards compatibility for original default session file
-        if (connection_id == "conn_zerodha_live" or "default" in connection_id) and not self.session_file.exists() and (data_dir() / "kite_session.json").exists():
+        # Backwards compatibility for the original single-user session file, never for an owned client
+        if owner_id is None and (connection_id == "conn_zerodha_live" or "default" in connection_id) and not self.session_file.exists() and (data_dir() / "kite_session.json").exists():
             self.session_file = data_dir() / "kite_session.json"
 
         self.session_id: Optional[str] = None
@@ -61,11 +64,19 @@ class KiteMCPClient:
         self._load_saved_session()
 
     @classmethod
-    def get_instance(cls, connection_id: str = "conn_zerodha_live") -> "KiteMCPClient":
-        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_zerodha_live")
+    def get_instance(cls, connection_id: str = "conn_zerodha_live", owner_id: Optional[str] = None) -> "KiteMCPClient":
+        safe_id = scoped_key(connection_id, owner_id, "conn_zerodha_live")
         if safe_id not in cls._instances:
-            cls._instances[safe_id] = KiteMCPClient(connection_id=connection_id)
+            cls._instances[safe_id] = KiteMCPClient(connection_id=connection_id, owner_id=owner_id)
         return cls._instances[safe_id]
+
+    @classmethod
+    async def close_all(cls) -> None:
+        for client in list(cls._instances.values()):
+            try:
+                await client.close()
+            except Exception as exc:
+                logger.debug("Error closing Kite client: %s", exc)
 
     def _load_saved_session(self) -> None:
         """Load persistent session ID and auth URL from disk."""
@@ -378,6 +389,10 @@ class KiteMCPClient:
         logger.info("Kite MCP HTTP client closed.")
 
 
-def get_kite_mcp_client(connection_id: str = "conn_zerodha_live") -> KiteMCPClient:
-    """Retrieve persistent instance of KiteMCPClient for the specified connection ID."""
-    return KiteMCPClient.get_instance(connection_id=connection_id)
+def get_kite_mcp_client(connection_id: str = "conn_zerodha_live", owner_id: Optional[str] = None) -> KiteMCPClient:
+    """Retrieve the persistent KiteMCPClient for one user's connection.
+
+    Always pass `owner_id` for anything serving a signed-in user; without it the client is the shared
+    single-user one used only by local tooling.
+    """
+    return KiteMCPClient.get_instance(connection_id=connection_id, owner_id=owner_id)

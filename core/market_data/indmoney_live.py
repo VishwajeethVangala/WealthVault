@@ -26,7 +26,7 @@ async def _fresh_for_connection(owner_id: str, connection_id: str) -> Dict[str, 
     cached = _cache.get(key)
     if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
         return cached[1]
-    raw = await IndmoneyProvider(connection_id=connection_id).get_holdings()
+    raw = await IndmoneyProvider(connection_id=connection_id, owner_id=owner_id).get_holdings()
     rows = NormalizationService().normalize_holdings(
         raw_data=raw, broker_name="indmoney", owner_id=owner_id, connection_id=connection_id
     )

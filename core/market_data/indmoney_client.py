@@ -20,6 +20,7 @@ import urllib.parse
 import aiohttp
 
 from core.config import data_dir, get_settings
+from core.market_data.scope import scoped_key
 
 logger = logging.getLogger("wealthvault.mcp.indmoney")
 
@@ -44,15 +45,18 @@ class IndmoneyMCPClient:
         token_endpoint: str = "https://mcp.indmoney.com/token",
         authorization_endpoint: str = "https://mcp.indmoney.com/authorize",
         connection_id: str = "conn_indmoney_live",
+        owner_id: Optional[str] = None,
     ) -> None:
         self.server_url = server_url
         self.token_endpoint = token_endpoint
         self.authorization_endpoint = authorization_endpoint
         self.connection_id = connection_id
-        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_indmoney_live")
+        self.owner_id = owner_id
+        safe_id = scoped_key(connection_id, owner_id, "conn_indmoney_live")
+        self.client_key = safe_id
         self.tokens_file = data_dir() / f"indmoney_tokens_{safe_id}.json"
-        # Backwards compatibility for original default tokens file
-        if (connection_id == "conn_indmoney_live" or "default" in connection_id) and not self.tokens_file.exists() and (data_dir() / "indmoney_tokens.json").exists():
+        # Backwards compatibility for the original single-user tokens file, never for an owned client
+        if owner_id is None and (connection_id == "conn_indmoney_live" or "default" in connection_id) and not self.tokens_file.exists() and (data_dir() / "indmoney_tokens.json").exists():
             self.tokens_file = data_dir() / "indmoney_tokens.json"
 
         self.client_id: str = get_settings().INDMONEY_CLIENT_ID
@@ -78,11 +82,24 @@ class IndmoneyMCPClient:
         self._load_tokens()
 
     @classmethod
-    def get_instance(cls, connection_id: str = "conn_indmoney_live") -> "IndmoneyMCPClient":
-        safe_id = re.sub(r"[^a-zA-Z0-9_-]", "_", connection_id or "conn_indmoney_live")
+    def get_instance(cls, connection_id: str = "conn_indmoney_live", owner_id: Optional[str] = None) -> "IndmoneyMCPClient":
+        safe_id = scoped_key(connection_id, owner_id, "conn_indmoney_live")
         if safe_id not in cls._instances:
-            cls._instances[safe_id] = IndmoneyMCPClient(connection_id=connection_id)
+            cls._instances[safe_id] = IndmoneyMCPClient(connection_id=connection_id, owner_id=owner_id)
         return cls._instances[safe_id]
+
+    @classmethod
+    def find(cls, client_key: str) -> Optional["IndmoneyMCPClient"]:
+        """The client that issued an OAuth state, or None. Never creates one."""
+        return cls._instances.get(re.sub(r"[^a-zA-Z0-9_-]", "_", client_key or ""))
+
+    @classmethod
+    async def close_all(cls) -> None:
+        for client in list(cls._instances.values()):
+            try:
+                await client.close()
+            except Exception as exc:
+                logger.debug("Error closing INDmoney client: %s", exc)
 
     def _load_client_info(self) -> None:
         client_file = data_dir() / "indmoney_client.json"
@@ -162,7 +179,7 @@ class IndmoneyMCPClient:
         code_challenge = base64.urlsafe_b64encode(challenge_bytes).rstrip(b"=").decode("ascii")
 
         nonce = base64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode("ascii")
-        state = f"{self.connection_id}::{nonce}"
+        state = f"{self.client_key}::{nonce}"
         self._pending_verifier = code_verifier
         self._pending_state = state
         self._pending_verifiers[state] = {
@@ -373,6 +390,6 @@ class IndmoneyMCPClient:
             self._http_session = None
 
 
-def get_indmoney_mcp_client(connection_id: str = "conn_indmoney_live") -> IndmoneyMCPClient:
+def get_indmoney_mcp_client(connection_id: str = "conn_indmoney_live", owner_id: Optional[str] = None) -> IndmoneyMCPClient:
     """Retrieve persistent instance of IndmoneyMCPClient for the specified connection ID."""
-    return IndmoneyMCPClient.get_instance(connection_id=connection_id)
+    return IndmoneyMCPClient.get_instance(connection_id=connection_id, owner_id=owner_id)
