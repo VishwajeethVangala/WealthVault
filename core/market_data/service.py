@@ -76,12 +76,24 @@ class MCPMarketDataService:
     def __init__(
         self,
         server_url: str = "https://mcp.kite.trade/mcp",
-        cache_ttl_seconds: float = 30.0,
+        cache_ttl_seconds: float = 15.0,
         request_timeout_seconds: float = 45.0,
     ) -> None:
         self.server_url = server_url
         self.cache = MarketQuoteCache(default_ttl_seconds=cache_ttl_seconds)
         self.timeout = request_timeout_seconds
+
+    @staticmethod
+    def _read_within(iso: Optional[str], seconds: float) -> bool:
+        if not iso:
+            return False
+        try:
+            when = datetime.fromisoformat(iso)
+        except ValueError:
+            return False
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - when).total_seconds() <= seconds
 
     @staticmethod
     def format_instrument(symbol: str, asset_class: Optional[Union[AssetClass, str]] = None) -> Optional[str]:
@@ -146,11 +158,13 @@ class MCPMarketDataService:
                     high_price = float(ohlc.get("high", 0.0) or 0.0)
                     low_price = float(ohlc.get("low", 0.0) or 0.0)
 
+                    # Kite's own `net_change` reads 0 through the MCP even while the price is moving, so the day
+                    # change is always last price minus the previous close; net_change is only a fallback.
                     net_change = data.get("net_change")
-                    if net_change is not None:
-                        day_change = float(net_change)
-                    elif close_price > 0:
+                    if close_price > 0:
                         day_change = round(last_price - close_price, 2)
+                    elif net_change is not None:
+                        day_change = float(net_change)
                     else:
                         day_change = 0.0
 
@@ -226,7 +240,8 @@ class MCPMarketDataService:
                 new_pnl = round(new_val - invested, 2)
                 # A zero quote change (e.g. market closed, weekend) must not erase the broker's
                 # own day change for the last session.
-                if quote.day_change and quote.day_change != 0:
+                if (quote.day_change and quote.day_change != 0) or (quote.close_price or 0) > 0:
+                    # A real previous close makes the quote authoritative, even when the change is exactly zero
                     day_pnl = round(h.quantity * quote.day_change, 2)
                     day_pct = quote.day_change_percentage
                 elif h.day_pnl is not None:
@@ -254,6 +269,9 @@ class MCPMarketDataService:
                 # Equities that failed to fetch live exchange quotes fall back to 'cached'.
                 updated_dict = h.model_dump()
                 if h.asset_class == AssetClass.MUTUAL_FUND and h.data_freshness == "live":
+                    updated_dict["data_freshness"] = "live"
+                elif self._read_within(h.last_price_updated_at, 120):
+                    # Priced by the broker itself moments ago (e.g. INDmoney's live read for US stocks / NPS)
                     updated_dict["data_freshness"] = "live"
                 else:
                     updated_dict["data_freshness"] = "cached"

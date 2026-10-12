@@ -107,8 +107,11 @@ export async function fetchPortfolioSummary(): Promise<PortfolioSummary> {
   return fetchApi<PortfolioSummary>('/api/v1/portfolio/summary')
 }
 
-export async function fetchPortfolioHoldings(broker = 'all'): Promise<Holding[]> {
-  const query = broker !== 'all' ? `?broker=${encodeURIComponent(broker)}` : ''
+export async function fetchPortfolioHoldings(broker = 'all', opts: { indmoneyLive?: boolean } = {}): Promise<Holding[]> {
+  const params = new URLSearchParams()
+  if (broker !== 'all') params.set('broker', broker)
+  if (opts.indmoneyLive) params.set('indmoney_live', 'true')
+  const query = params.toString() ? `?${params.toString()}` : ''
   return fetchApi<Holding[]>(`/api/v1/portfolio/holdings${query}`)
 }
 
