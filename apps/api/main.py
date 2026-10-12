@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from apps.api.routers import accounts_router, analytics_router, auth_router, health_router, history_router, portfolio_router, signals_router, stage2_router, targets_router
-from core.config import get_settings
+from core.config import get_settings, production_problems
 
 # Configure logging
 logging.basicConfig(
@@ -94,6 +94,11 @@ async def lifespan(app: FastAPI):
         settings.APP_VERSION,
     )
     
+    if settings.is_production:
+        problems = production_problems(settings)
+        if problems:
+            raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
+
     # Initialize persistent Kite MCP bridge
     from core.market_data.kite_client import get_kite_mcp_client
     kite_client = get_kite_mcp_client()

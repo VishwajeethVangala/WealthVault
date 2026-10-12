@@ -30,7 +30,9 @@ class TestIndmoneyClient(unittest.TestCase):
         self.assertFalse(self.client.is_authenticated())
 
         provider = IndmoneyProvider()
-        status = asyncio.run(provider.get_account_status())
+        # the provider uses the shared per-connection client, which may hold real tokens on a dev machine
+        with patch.object(IndmoneyMCPClient, "is_authenticated", return_value=False):
+            status = asyncio.run(provider.get_account_status())
         self.assertEqual(status["status"], "auth_required")
         self.assertIn("auth_url", status)
         self.assertIn("https://mcp.indmoney.com/authorize", status["auth_url"])

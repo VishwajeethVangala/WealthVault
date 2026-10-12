@@ -6,6 +6,7 @@ allowing zero-code transition from local ASGI to production Azure App Service.
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -65,6 +66,13 @@ class Settings(BaseSettings):
         description="Fernet key used to encrypt per-user broker credentials at rest",
     )
 
+    # Where broker sessions and tokens are written. Point at a persistent folder in Azure (e.g. /home/data).
+    DATA_DIR: str = Field(default="storage/blobs", description="Directory for broker session and token files")
+    # Public https origin of this deployment (no trailing slash); builds the INDmoney OAuth redirect. Blank keeps localhost.
+    PUBLIC_BASE_URL: str = Field(default="", description="Public base URL, e.g. https://wealthvault.azurewebsites.net")
+    # Fixed outbound public IP registered with Angel One SmartAPI; blank sends this machine's IP
+    ANGELONE_PUBLIC_IP: str = Field(default="", description="Static public IP registered with Angel One")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -81,6 +89,30 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Check if current environment is production."""
         return self.ENVIRONMENT.lower() in ("production", "prod")
+
+
+DEFAULT_JWT_SECRET = "wealthvault-dev-secret-key-replace-with-strong-key-in-prod"
+
+
+def data_dir() -> "Path":
+    """Folder for broker session/token files (created on first use)."""
+    path = Path(get_settings().DATA_DIR)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def production_problems(s: "Settings") -> List[str]:
+    """Settings that must not stay at their development defaults in production."""
+    problems: List[str] = []
+    if s.JWT_SECRET == DEFAULT_JWT_SECRET or len(s.JWT_SECRET) < 32:
+        problems.append("JWT_SECRET must be a random secret of at least 32 characters")
+    if not s.CREDENTIAL_ENCRYPTION_KEY:
+        problems.append("CREDENTIAL_ENCRYPTION_KEY is not set")
+    if not s.GOOGLE_CLIENT_ID:
+        problems.append("GOOGLE_CLIENT_ID is not set")
+    if "*" in s.ALLOWED_ORIGINS:
+        problems.append('ALLOWED_ORIGINS must list your site, not "*"')
+    return problems
 
 
 @lru_cache(maxsize=1)

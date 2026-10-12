@@ -16,7 +16,7 @@ from providers.brokers.base import BrokerProvider
 
 logger = logging.getLogger("wealthvault.providers.indmoney")
 
-SCHEMA_FILE = Path("storage/blobs/schemas/indmoney_raw.json")
+SCHEMA_FILE = Path(__file__).resolve().parents[2] / "storage" / "blobs" / "schemas" / "indmoney_raw.json"
 
 
 def _safe_float(val: Any, default: float = 0.0) -> float:
