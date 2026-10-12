@@ -19,7 +19,7 @@ import urllib.parse
 
 import aiohttp
 
-from core.config import data_dir, get_settings
+from core.config import data_dir, get_settings, public_base_url
 from core.market_data.scope import require_owner, scoped_key
 
 logger = logging.getLogger("wealthvault.mcp.indmoney")
@@ -76,7 +76,7 @@ class IndmoneyMCPClient:
         self._request_counter: int = 0
 
         self._load_client_info()
-        base = get_settings().PUBLIC_BASE_URL.strip().rstrip("/")
+        base = public_base_url()
         if base:  # a deployed host always wins over a saved localhost redirect
             self.redirect_uri = f"{base}/api/v1/portfolio/oauth/indmoney/callback"
         self._load_tokens()
