@@ -682,6 +682,7 @@ async def get_broker_sessions(
             if conn_obj.status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.DISCONNECTED):
                 try:
                     client = get_indmoney_mcp_client(connection_id=conn_id, owner_id=current_user_id)
+                    await client.ensure_client()
                     ind_auth_url = client.get_authorization_url()
                 except Exception as exc:
                     logger.warning("Could not fetch INDmoney auth URL for %s: %s", conn_id, exc)
@@ -696,10 +697,13 @@ async def get_broker_sessions(
                 except Exception as exc:
                     logger.warning("INDmoney status probe note for %s: %s", conn_id, exc)
                     ind_status = BrokerStatus.AUTH_REQUIRED
+                    await ind_provider.client.ensure_client()
                     ind_auth_url = ind_provider.client.get_authorization_url()
 
             if ind_status != BrokerStatus.CONNECTED and not ind_auth_url:
-                ind_auth_url = get_indmoney_mcp_client(connection_id=conn_id, owner_id=current_user_id).get_authorization_url()
+                _ind_client = get_indmoney_mcp_client(connection_id=conn_id, owner_id=current_user_id)
+                await _ind_client.ensure_client()
+                ind_auth_url = _ind_client.get_authorization_url()
 
             ind_is_expired = ind_status in (BrokerStatus.SESSION_EXPIRED, BrokerStatus.AUTH_REQUIRED, BrokerStatus.DISCONNECTED)
             disp_name = f"INDmoney Private Wealth — {conn_obj.account_label}" if conn_obj.account_label else "INDmoney Private Wealth"

@@ -71,6 +71,7 @@ class IndmoneyProvider(BrokerProvider):
                 },
             }
 
+        await client.ensure_client()
         auth_url = client.get_authorization_url()
         return {
             "status": "auth_required",
