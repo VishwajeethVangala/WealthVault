@@ -20,7 +20,7 @@ import urllib.parse
 import aiohttp
 
 from core.config import data_dir, get_settings
-from core.market_data.scope import scoped_key
+from core.market_data.scope import require_owner, scoped_key
 
 logger = logging.getLogger("wealthvault.mcp.indmoney")
 
@@ -392,4 +392,5 @@ class IndmoneyMCPClient:
 
 def get_indmoney_mcp_client(connection_id: str = "conn_indmoney_live", owner_id: Optional[str] = None) -> IndmoneyMCPClient:
     """Retrieve persistent instance of IndmoneyMCPClient for the specified connection ID."""
+    require_owner(owner_id)
     return IndmoneyMCPClient.get_instance(connection_id=connection_id, owner_id=owner_id)

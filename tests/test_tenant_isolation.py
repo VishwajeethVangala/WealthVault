@@ -73,3 +73,20 @@ def test_cleanup():
     config.get_settings.cache_clear()
     KiteMCPClient._instances.clear()
     IndmoneyMCPClient._instances.clear()
+
+
+def test_production_refuses_an_ownerless_broker_client(monkeypatch, tmp_path):
+    import pytest
+
+    _isolated(monkeypatch, tmp_path)
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    config.get_settings.cache_clear()
+    try:
+        with pytest.raises(RuntimeError):
+            get_kite_mcp_client()
+        with pytest.raises(RuntimeError):
+            get_indmoney_mcp_client()
+        get_kite_mcp_client(owner_id="google_A")  # an owned client is fine
+    finally:
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+        config.get_settings.cache_clear()

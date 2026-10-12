@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 import aiohttp
 
 from core.config import data_dir
-from core.market_data.scope import scoped_key
+from core.market_data.scope import require_owner, scoped_key
 
 logger = logging.getLogger("wealthvault.mcp.kite")
 
@@ -395,4 +395,5 @@ def get_kite_mcp_client(connection_id: str = "conn_zerodha_live", owner_id: Opti
     Always pass `owner_id` for anything serving a signed-in user; without it the client is the shared
     single-user one used only by local tooling.
     """
+    require_owner(owner_id)
     return KiteMCPClient.get_instance(connection_id=connection_id, owner_id=owner_id)
