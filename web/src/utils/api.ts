@@ -1,4 +1,4 @@
-import type { SignalsJob, SignalsResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, SwingStrategyOptions, SwingStrategyResult, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
+import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, SwingStrategyOptions, SwingStrategyResult, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -228,10 +228,27 @@ export async function fetchHistory(days = 365): Promise<HistoryPoint[]> {
 }
 
 // Equity signals
-export async function fetchSignals(): Promise<SignalsResponse> {
-  return fetchApi<SignalsResponse>('/api/v1/analytics/signals')
+export async function fetchSignals(market: 'in' | 'us' = 'in'): Promise<SignalsResponse> {
+  return fetchApi<SignalsResponse>(`/api/v1/analytics/signals?market=${market}`)
 }
 
-export async function refreshSignals(): Promise<SignalsJob> {
-  return fetchApi<SignalsJob>('/api/v1/analytics/signals/refresh', { method: 'POST' })
+export async function fetchUsLive(): Promise<UsLiveResponse> {
+  return fetchApi<UsLiveResponse>('/api/v1/analytics/signals/us-live')
+}
+
+export async function refreshSignals(market: 'in' | 'us' = 'in'): Promise<SignalsJob> {
+  return fetchApi<SignalsJob>(`/api/v1/analytics/signals/refresh?market=${market}`, { method: 'POST' })
+}
+
+// Stage 2 screener
+export async function fetchStage2(): Promise<Stage2Response> {
+  return fetchApi<Stage2Response>('/api/v1/analytics/stage2')
+}
+
+export async function refreshStage2(): Promise<SignalsJob> {
+  return fetchApi<SignalsJob>('/api/v1/analytics/stage2/refresh', { method: 'POST' })
+}
+
+export async function fetchStage2Live(): Promise<Stage2LiveResponse> {
+  return fetchApi<Stage2LiveResponse>('/api/v1/analytics/stage2/live')
 }

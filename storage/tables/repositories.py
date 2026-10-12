@@ -10,7 +10,7 @@ import asyncio
 from datetime import datetime, timezone
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 import uuid
 
 from azure.data.tables import UpdateMode
@@ -758,3 +758,91 @@ class SignalCacheRepository(BaseTableStorage):
             data={"payload": json.dumps(row), "computed_at": datetime.now(timezone.utc).isoformat()},
             mode="replace",
         )
+
+
+class UsCandleRepository(BaseTableStorage):
+    """Azure Table store of daily US candles, one row per ticker per year plus a 'meta' row.
+
+    PartitionKey = ticker (e.g. 'NVDA')
+    RowKey = 'y2025' (candles for that year) or 'meta'
+    Candles are [date, open, high, low, close, volume, source] with source 'i' (INDmoney) or 'y' (Yahoo backfill).
+    """
+
+    META = "meta"
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="uscandles", connection_string=connection_string)
+
+    async def load(self, ticker: str) -> Tuple[List[List[Any]], Dict[str, Any]]:
+        rows = await self.query_entities(user_id=ticker)
+        candles: List[List[Any]] = []
+        meta: Dict[str, Any] = {}
+        for r in rows:
+            key = r.get("RowKey", "")
+            if key == self.META:
+                try:
+                    meta = json.loads(r.get("meta_json") or "{}")
+                except ValueError:
+                    meta = {}
+            elif key.startswith("y"):
+                try:
+                    candles.extend(json.loads(r.get("candles_json") or "[]"))
+                except ValueError:
+                    continue
+        candles.sort(key=lambda c: c[0])
+        return candles, meta
+
+    async def save_years(self, ticker: str, candles: List[List[Any]], years: Iterable[str], meta: Dict[str, Any]) -> None:
+        by_year: Dict[str, List[List[Any]]] = {}
+        for c in candles:
+            by_year.setdefault(str(c[0])[:4], []).append(c)
+        for y in years:
+            await self.upsert_entity(
+                user_id=ticker,
+                entity_id=f"y{y}",
+                data={"candles_json": json.dumps(by_year.get(y, []), separators=(",", ":"))},
+                mode="replace",
+            )
+        await self.upsert_entity(user_id=ticker, entity_id=self.META, data={"meta_json": json.dumps(meta)}, mode="replace")
+
+    async def clear(self, ticker: str) -> None:
+        for r in await self.query_entities(user_id=ticker):
+            await self.delete_entity(user_id=ticker, entity_id=r["RowKey"])
+
+
+class ScreenerSnapshotRepository(BaseTableStorage):
+    """Azure Table store of what a screener returned on each day, so changes between days can be shown.
+
+    PartitionKey = screener slug
+    RowKey = YYYY-MM-DD (UTC date of the fetch; a second fetch the same day replaces the first)
+    The JSON is split across `part0..partN` properties because a table property holds at most ~32K characters.
+    """
+
+    CHUNK = 30000
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="screenersnapshots", connection_string=connection_string)
+
+    async def save(self, slug: str, day: str, payload: Dict[str, Any]) -> None:
+        text = json.dumps(payload, separators=(",", ":"))
+        parts = {f"part{i}": text[i * self.CHUNK : (i + 1) * self.CHUNK] for i in range(max(1, -(-len(text) // self.CHUNK)))}
+        await self.upsert_entity(user_id=slug, entity_id=day, data={"parts": len(parts), **parts}, mode="replace")
+
+    @staticmethod
+    def _decode(entity: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        try:
+            text = "".join(entity.get(f"part{i}", "") for i in range(int(entity.get("parts", 0))))
+            return json.loads(text)
+        except (ValueError, TypeError):
+            return None
+
+    async def latest_two(self, slug: str) -> Tuple[Optional[Tuple[str, Dict[str, Any]]], Optional[Tuple[str, Dict[str, Any]]]]:
+        """(most recent day, the day before it) as (date, payload) pairs; either may be None."""
+        rows = sorted(await self.query_entities(user_id=slug), key=lambda r: r.get("RowKey", ""), reverse=True)
+        out: List[Optional[Tuple[str, Dict[str, Any]]]] = []
+        for r in rows[:2]:
+            data = self._decode(r)
+            out.append((r["RowKey"], data) if data is not None else None)
+        while len(out) < 2:
+            out.append(None)
+        return out[0], out[1]

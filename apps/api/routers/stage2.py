@@ -1,0 +1,225 @@
+"""Stage 2 Router.
+
+Takes the stock list from a saved Chartink screener (the Stage 2 trend template) and runs every stock through
+the same momentum / Swing V2.1 / ATH-breakout signals as the Equity signals page.
+
+- GET  /api/v1/analytics/stage2          the stored list, what changed since the previous day, cached signals
+- POST /api/v1/analytics/stage2/refresh  re-read Chartink, then recompute signals in the background
+- GET  /api/v1/analytics/stage2/live     live Kite prices for the listed stocks
+
+Signals are cached per stock exactly like Equity signals, so a stock that is also in the portfolio is not computed twice.
+"""
+
+import asyncio
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from apps.api.routers.accounts import get_current_user
+from apps.api.routers.signals import Job, _equity_symbol_map, _job_dict, session_really_expired
+from core.analytics.equity_signals import MOMENTUM_LOOKBACK_DAYS, compute_stock_signals
+from core.market_data.history import NIFTY_50_TOKEN, get_history_service
+from core.market_data.kite_client import KiteAuthRequiredError
+from core.market_data.service import get_market_data_service
+from core.market_data.user_client import get_user_kite_client
+from core.screeners.chartink import ScreenerError, fetch_screener
+from storage.tables.repositories import HoldingsRepository, ScreenerSnapshotRepository, SignalCacheRepository
+
+logger = logging.getLogger("wealthvault.api.stage2")
+
+router = APIRouter(prefix="/analytics/stage2", tags=["Stage 2"])
+
+SLUG = "copy-stage-2-trend-template-949"
+CONCURRENCY = 2
+RESUME_MINUTES = 30
+
+_jobs: Dict[str, Job] = {}
+_tasks: set = set()
+
+
+def _code_key(nsecode: str) -> str:
+    return f"NSE:{nsecode.upper()}"
+
+
+async def _run_job(owner_id: str, job: Job) -> None:
+    cache = SignalCacheRepository()
+    snapshots = ScreenerSnapshotRepository()
+    try:
+        try:
+            result = await fetch_screener(SLUG)
+        except ScreenerError as exc:
+            job.state = "error"
+            job.message = str(exc)
+            return
+        if not result.rows:
+            job.state = "error"
+            job.message = "The Chartink screener returned no stocks right now."
+            return
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        await snapshots.save(
+            SLUG,
+            today,
+            {"title": result.title, "fetched_at": result.fetched_at, "extra_columns": result.extra_columns, "rows": result.rows},
+        )
+
+        client = await get_user_kite_client(owner_id)
+        codes = [r["nsecode"] for r in result.rows]
+        job.total = len(codes)
+
+        benchmark = None
+        try:
+            benchmark = await get_history_service().get_daily_candles(client, NIFTY_50_TOKEN, MOMENTUM_LOOKBACK_DAYS)
+        except KiteAuthRequiredError:
+            raise
+        except Exception as exc:
+            logger.warning("Benchmark unavailable for Stage 2 signals: %s", exc)
+
+        # A re-run shortly after an interrupted one resumes: rows computed in the last RESUME_MINUTES are kept
+        recent_cutoff = datetime.now(timezone.utc) - timedelta(minutes=RESUME_MINUTES)
+        fresh_codes = set()
+        for key, cached in (await cache.get_many([_code_key(c) for c in codes])).items():
+            try:
+                computed = datetime.fromisoformat(cached.get("computed_at", ""))
+            except ValueError:
+                continue
+            if computed >= recent_cutoff and not cached.get("errors", {}).get("all"):
+                fresh_codes.add(key.split(":", 1)[1])
+        job.done = len(fresh_codes)
+        codes = [c for c in codes if c.upper() not in fresh_codes]
+
+        sem = asyncio.Semaphore(CONCURRENCY)
+        auth_error: List[KiteAuthRequiredError] = []
+        retry: List[str] = []
+
+        async def attempt(code: str) -> bool:
+            try:
+                row = await compute_stock_signals(client, code, benchmark)
+                await cache.save(row["instrument"], row)
+                if row["instrument"] != _code_key(code):
+                    await cache.save(_code_key(code), row)  # alias, so lookups by Chartink code always hit
+                return True
+            except KiteAuthRequiredError as exc:
+                # Kite reports some per-stock failures like an expired login; confirm before stopping the run
+                if await session_really_expired(client):
+                    auth_error.append(exc)
+                return False
+            except Exception as exc:
+                logger.warning("Stage 2 signals failed for %s: %s", code, exc)
+                return False
+
+        async def one(code: str) -> None:
+            async with sem:
+                if auth_error:
+                    return
+                if await attempt(code):
+                    job.done += 1
+                else:
+                    retry.append(code)
+
+        await asyncio.gather(*(one(c) for c in codes))
+
+        for code in retry:
+            if auth_error:
+                break
+            await asyncio.sleep(1.0)
+            if not await attempt(code) and not auth_error:
+                job.failed += 1
+                await cache.save(
+                    _code_key(code),
+                    {"instrument": _code_key(code), "momentum": None, "swing": None, "ath": None, "errors": {"all": "Price history unavailable"}},
+                )
+            job.done += 1
+
+        if auth_error:
+            job.state = "error"
+            job.message = "Kite needs today's login to fetch price history."
+            job.auth_url = auth_error[0].auth_url
+        else:
+            job.state = "done"
+    except KiteAuthRequiredError as exc:
+        job.state = "error"
+        job.message = "Kite needs today's login to fetch price history."
+        job.auth_url = exc.auth_url
+    except Exception as exc:
+        logger.error("Stage 2 refresh failed: %s", exc, exc_info=True)
+        job.state = "error"
+        job.message = f"Refresh failed: {exc}"
+    finally:
+        job.finished_at = datetime.now(timezone.utc).isoformat()
+
+
+@router.post("/refresh", status_code=status.HTTP_202_ACCEPTED, summary="Re-read the Chartink screener and recompute signals")
+async def refresh_stage2(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
+    job = _jobs.get(current_user_id)
+    if job and job.state == "running":
+        return _job_dict(job)
+    job = Job(state="running", started_at=datetime.now(timezone.utc).isoformat())
+    _jobs[current_user_id] = job
+    task = asyncio.create_task(_run_job(current_user_id, job))
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+    return _job_dict(job)
+
+
+@router.get("", status_code=status.HTTP_200_OK, summary="Stage 2 list, daily changes and cached signals")
+async def get_stage2(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
+    latest, previous = await ScreenerSnapshotRepository().latest_two(SLUG)
+    job = _jobs.get(current_user_id) or Job()
+    if latest is None:
+        return {"job": _job_dict(job), "list": None, "signals": {}}
+
+    day, snap = latest
+    rows: List[Dict[str, Any]] = snap.get("rows", [])
+    prev_codes = {r["nsecode"] for r in previous[1].get("rows", [])} if previous else None
+    cur_codes = {r["nsecode"] for r in rows}
+
+    holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
+    held_ids = set((await _equity_symbol_map(holdings, None)).values())
+
+    for r in rows:
+        r["held"] = _code_key(r["nsecode"]) in held_ids
+        r["is_new"] = None if prev_codes is None else r["nsecode"] not in prev_codes
+
+    dropped = (
+        [{"nsecode": r["nsecode"], "name": r.get("name")} for r in previous[1].get("rows", []) if r["nsecode"] not in cur_codes]
+        if previous
+        else []
+    )
+    signals = await SignalCacheRepository().get_many([_code_key(r["nsecode"]) for r in rows])
+    return {
+        "job": _job_dict(job),
+        "list": {
+            "title": snap.get("title"),
+            "date": day,
+            "fetched_at": snap.get("fetched_at"),
+            "url": f"https://chartink.com/screener/{SLUG}",
+            "extra_columns": snap.get("extra_columns", []),
+            "previous_date": previous[0] if previous else None,
+            "rows": rows,
+            "dropped": dropped,
+        },
+        "signals": {k.split(":", 1)[1]: v for k, v in signals.items()},
+    }
+
+
+@router.get("/live", status_code=status.HTTP_200_OK, summary="Live Kite prices for the Stage 2 stocks")
+async def get_stage2_live(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
+    latest, _ = await ScreenerSnapshotRepository().latest_two(SLUG)
+    if latest is None:
+        return {"quotes": {}}
+    codes = [r["nsecode"] for r in latest[1].get("rows", [])]
+    # Stocks in the exchange's trade-for-trade series are listed as e.g. NSE:MTARTECH-BE, so prefer the id the
+    # signals run resolved for each stock and fall back to NSE:<code>
+    cached = await SignalCacheRepository().get_many([_code_key(c) for c in codes])
+    ids = {c: (cached.get(_code_key(c)) or {}).get("instrument") or _code_key(c) for c in codes}
+    client = await get_user_kite_client(current_user_id)
+    quotes_map, ok = await get_market_data_service().fetch_live_quotes(sorted(set(ids.values())), client=client)
+    out: Dict[str, Any] = {}
+    for c in codes:
+        q = quotes_map.get(ids[c].upper())
+        if q and q.last_price and q.last_price > 0:
+            out[c] = {"price": q.last_price, "day_change_pct": q.day_change_percentage}
+    return {"quotes": out, "live": ok}

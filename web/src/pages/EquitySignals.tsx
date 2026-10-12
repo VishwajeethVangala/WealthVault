@@ -1,61 +1,51 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, RefreshCw, Search } from 'lucide-react'
-import { fetchSignals, refreshSignals } from '../utils/api'
+import { useSearchParams } from 'react-router-dom'
+import { fetchSignals, fetchUsLive, refreshSignals } from '../utils/api'
 import { usePortfolio } from '../context/PortfolioContext'
 import { classifyAssetClass, brokerLabel } from '../utils/portfolioFilters'
-import { pct, signedMoney as fmtSigned, tone, weight } from '../utils/format'
+import { pct, signedMoney as fmtSigned, tone } from '../utils/format'
 import { useMoney } from '../utils/useMoney'
 import { buildInstruments, type Instrument } from '../components/holdings/holdingsModel'
-import type { AthSignal, MomentumSignal, SignalsResponse, StockSignals, SwingSignal } from '../types'
+import type { SignalsResponse, StockSignals, UsLiveQuote } from '../types'
+import {
+  ALIGN_ORDER,
+  AlignmentCell,
+  AthCell,
+  DASH,
+  MomentumCell,
+  momentumLean,
+  SwingCell,
+  readSignals,
+  type Alignment,
+  type Reading,
+} from '../components/signals/signalKit'
 
-type Lean = 'bull' | 'bear' | 'neutral'
-type Alignment = 'all-bull' | 'mixed' | 'all-bear' | 'none'
-
-interface Row {
+interface Row extends Reading {
   inst: Instrument
+  /** price per share in the stock's own currency (USD for US stocks, INR for Indian) */
+  ltp: number
+  live?: UsLiveQuote
   sig?: StockSignals
-  leans: Lean[]
-  alignment: Alignment
-  swingSince: { pct: number; abs: number } | null
-  athSince: { pct: number; abs: number } | null
 }
 
-const DASH = '—'
+type Market = 'in' | 'us'
 
-const dateFmt = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : DASH
+const usd = (v: number | null | undefined, hidden = false): string =>
+  v == null || !Number.isFinite(v) ? DASH : hidden ? '$ ••••' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-const momentumLean = (m: MomentumSignal): Lean =>
-  /uptrend/i.test(m.verdict) ? 'bull' : /downtrend/i.test(m.verdict) ? 'bear' : 'neutral'
+const signedUsd = (v: number): string => `${v < 0 ? '−' : '+'}$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-const swingLean = (s: SwingSignal): Lean =>
-  s.state === 'IN_POSITION' ? (s.pending_order === 'SELL' ? 'bear' : 'bull') : s.pending_order === 'BUY' ? 'bull' : s.regime_bullish ? 'neutral' : 'bear'
-
-const athLean = (a: AthSignal): Lean => (a.state === 'IN_POSITION' ? 'bull' : a.last_signal === 'SELL' ? 'bear' : 'neutral')
-
-const momentumBadge = (m: MomentumSignal) => {
-  const lean = momentumLean(m)
-  return { cls: lean === 'bull' ? 'ok' : lean === 'bear' ? 'bad' : 'off', text: m.verdict }
+/** US extended session (pre-market to after-hours): 04:00-20:00 ET on weekdays. */
+const usSessionActive = (): boolean => {
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
+  const mins = et.getHours() * 60 + et.getMinutes()
+  return et.getDay() >= 1 && et.getDay() <= 5 && mins >= 4 * 60 && mins <= 20 * 60
 }
 
-const swingBadge = (s: SwingSignal) => {
-  if (s.state === 'IN_POSITION') return s.pending_order === 'SELL' ? { cls: 'warn', text: 'Sell signal' } : { cls: 'ok', text: 'In position' }
-  if (s.pending_order === 'BUY') return { cls: 'info', text: 'Buy signal' }
-  return s.regime_bullish ? { cls: 'off', text: 'Waiting for entry' } : { cls: 'off', text: 'No trade' }
-}
-
-const athBadge = (a: AthSignal) => {
-  if (a.state === 'IN_POSITION') return { cls: 'ok', text: 'In position' }
-  if (a.last_signal === 'SELL') return { cls: 'warn', text: 'Exited' }
-  return a.in_window ? { cls: 'info', text: 'Setup active' } : { cls: 'off', text: 'No setup' }
-}
-
-const since = (entry: number | null | undefined, ltp: number): { pct: number; abs: number } | null =>
-  entry && entry > 0 && ltp > 0 ? { pct: ((ltp - entry) / entry) * 100, abs: ltp - entry } : null
+const tickerOf = (symbol: string): string => symbol.trim().split(/\s+/)[0].toUpperCase()
 
 type SortKey = 'sym' | 'inv' | 'cur' | 'pnlPct' | 'momentum' | 'swing' | 'ath' | 'align'
-const ALIGN_ORDER: Record<Alignment, number> = { 'all-bull': 3, mixed: 2, none: 1, 'all-bear': 0 }
-
 const sortValue = (r: Row, key: SortKey): string | number | null => {
   switch (key) {
     case 'sym':
@@ -79,8 +69,14 @@ const sortValue = (r: Row, key: SortKey): string | number | null => {
 
 export const EquitySignals: React.FC = () => {
   const { holdings, loading: portfolioLoading } = usePortfolio()
-  const { money, price, signedMoney, hidden } = useMoney()
-  const perShare = (v: number) => (hidden ? '₹ ••••' : fmtSigned(v, 2))
+  const { money, price: inr, signedMoney, hidden } = useMoney()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const market: Market = searchParams.get('market') === 'us' ? 'us' : 'in'
+  const isUs = market === 'us'
+  // price in the market's own currency
+  const price = (v: number | null | undefined) => (isUs ? usd(v, hidden) : inr(v))
+  const perShareFmt = (v: number) => (hidden ? (isUs ? '$ ••••' : '₹ ••••') : isUs ? signedUsd(v) : fmtSigned(v, 2))
+  const fmt = { price, perShare: perShareFmt }
 
   const [data, setData] = useState<SignalsResponse | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -88,11 +84,13 @@ export const EquitySignals: React.FC = () => {
   const [filter, setFilter] = useState<'all' | Alignment | 'trade'>('all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'cur', dir: -1 })
   const [starting, setStarting] = useState(false)
+  const [usLive, setUsLive] = useState<Record<string, UsLiveQuote>>({})
+  const [usClosed, setUsClosed] = useState(true)
   const timer = useRef<number | undefined>(undefined)
 
   const load = useCallback(async () => {
     try {
-      const res = await fetchSignals()
+      const res = await fetchSignals(market)
       setData(res)
       setLoadError(null)
       return res
@@ -100,11 +98,39 @@ export const EquitySignals: React.FC = () => {
       setLoadError(err?.message || 'Could not load signals')
       return null
     }
-  }, [])
+  }, [market])
 
+  // Each market has its own cache and refresh job, so start clean when switching
   useEffect(() => {
+    setData(null)
     load()
   }, [load])
+
+  // Live USD prices: every 20s while the US session is active, every 5 min otherwise; paused when the tab is hidden
+  useEffect(() => {
+    if (!isUs) return
+    let stop = false
+    let timer: number | undefined
+    const tick = async () => {
+      if (!document.hidden) {
+        try {
+          const res = await fetchUsLive()
+          if (!stop) {
+            setUsLive(res.quotes)
+            setUsClosed(res.session_closed)
+          }
+        } catch {
+          /* keep the last prices */
+        }
+      }
+      if (!stop) timer = window.setTimeout(tick, usSessionActive() ? 20_000 : 300_000)
+    }
+    tick()
+    return () => {
+      stop = true
+      window.clearTimeout(timer)
+    }
+  }, [isUs])
 
   // Poll while a refresh is running
   const running = data?.job.state === 'running'
@@ -117,7 +143,7 @@ export const EquitySignals: React.FC = () => {
   const startRefresh = async () => {
     setStarting(true)
     try {
-      await refreshSignals()
+      await refreshSignals(market)
       await load()
     } catch (err: any) {
       setLoadError(err?.message || 'Could not start the refresh')
@@ -126,7 +152,17 @@ export const EquitySignals: React.FC = () => {
     }
   }
 
-  const instruments = useMemo(() => buildInstruments(holdings.filter((h) => classifyAssetClass(h) === 'EQUITY')), [holdings])
+  const instruments = useMemo(
+    () => buildInstruments(holdings.filter((h) => classifyAssetClass(h) === (isUs ? 'US_STOCKS' : 'EQUITY'))),
+    [holdings, isUs],
+  )
+  const marketCounts = useMemo(
+    () => ({
+      in: new Set(holdings.filter((h) => classifyAssetClass(h) === 'EQUITY').map((h) => h.instrument_symbol)).size,
+      us: new Set(holdings.filter((h) => classifyAssetClass(h) === 'US_STOCKS').map((h) => tickerOf(h.instrument_symbol))).size,
+    }),
+    [holdings],
+  )
 
   const rows = useMemo<Row[]>(() => {
     const map = data?.symbol_map ?? {}
@@ -134,24 +170,11 @@ export const EquitySignals: React.FC = () => {
     return instruments.map((inst) => {
       const id = inst.lots.map((l) => map[l.holding.instrument_symbol]).find(Boolean)
       const sig = id ? sigs[id] : undefined
-      const leans: Lean[] = []
-      if (sig?.momentum) leans.push(momentumLean(sig.momentum))
-      if (sig?.swing) leans.push(swingLean(sig.swing))
-      if (sig?.ath) leans.push(athLean(sig.ath))
-      const bull = leans.filter((l) => l === 'bull').length
-      const bear = leans.filter((l) => l === 'bear').length
-      const alignment: Alignment =
-        leans.length < 2 ? 'none' : bull === leans.length ? 'all-bull' : bear === leans.length ? 'all-bear' : 'mixed'
-      return {
-        inst,
-        sig,
-        leans,
-        alignment,
-        swingSince: sig?.swing?.state === 'IN_POSITION' ? since(sig.swing.entry_price, inst.ltp) : null,
-        athSince: sig?.ath?.state === 'IN_POSITION' ? since(sig.ath.entry_price, inst.ltp) : null,
-      }
+      const live = isUs ? usLive[tickerOf(inst.sym)] : undefined
+      const ltp = isUs ? live?.price ?? sig?.momentum?.last_price ?? 0 : inst.ltp
+      return { inst, ltp, live, sig, ...readSignals(sig, ltp) }
     })
-  }, [instruments, data])
+  }, [instruments, data, isUs, usLive])
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -276,6 +299,20 @@ export const EquitySignals: React.FC = () => {
       </section>
 
       <section className="toolbar" aria-label="Filters">
+        <div className="seg" role="group" aria-label="Market">
+          {([['in', 'India'], ['us', 'US']] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={market === id ? 'on' : ''}
+              aria-pressed={market === id}
+              onClick={() => setSearchParams(id === 'us' ? { market: 'us' } : {}, { replace: true })}
+            >
+              {label}
+              <span className="cnt num">{marketCounts[id]}</span>
+            </button>
+          ))}
+        </div>
         <div className="search">
           <label className="sr" htmlFor="sig-q">
             Search stocks
@@ -310,6 +347,7 @@ export const EquitySignals: React.FC = () => {
               </span>
             </>
           )}
+          {isUs && <span className={`badge ${usClosed ? 'off' : 'ok'}`}>{usClosed ? 'US market closed' : 'US market open'}</span>}
           {!running && computedAt && (
             <span className="sub">
               Computed {new Date(computedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}
@@ -324,14 +362,14 @@ export const EquitySignals: React.FC = () => {
 
       {rows.length === 0 ? (
         <div className="card">
-          <p className="card-t">No stock holdings</p>
-          <p className="card-s">Signals cover Indian-listed stocks and ETFs. Mutual funds, US stocks, NPS and gold are not included.</p>
+          <p className="card-t">{isUs ? 'No US holdings' : 'No stock holdings'}</p>
+          <p className="card-s">{isUs ? 'No US stocks or ETFs in your portfolio.' : 'Indian-listed stocks and ETFs. Mutual funds, NPS and gold are not included.'}</p>
         </div>
       ) : summary.covered === 0 && !running ? (
         <div className="card">
           <p className="card-t">Signals have not been computed yet</p>
           <p className="card-s">
-            Press Refresh signals to analyse your {rows.length} stocks. The first run takes a minute or two; results are saved, so the page opens instantly after that.
+            Press Refresh signals to analyse your {rows.length} stocks. {isUs ? 'The first run builds each stock’s full price history and stores it; later runs only add the latest days.' : 'The first run takes a minute or two.'} Results are saved, so the page opens instantly after that.
           </p>
         </div>
       ) : (
@@ -352,19 +390,27 @@ export const EquitySignals: React.FC = () => {
             <tbody>
               {visible.map((r) => {
                 const { inst, sig } = r
-                const m = sig?.momentum
-                const s = sig?.swing
-                const a = sig?.ath
-                const bull = r.leans.filter((l) => l === 'bull').length
-                const bear = r.leans.filter((l) => l === 'bear').length
                 return (
                   <tr key={inst.key}>
                     <td>
                       <div className="sg-sym">{inst.sym}</div>
                       <div className="sg-sub">
-                        {inst.brokers.map(brokerLabel).join(' + ')} · {inst.qty.toLocaleString('en-IN')} @ {price(inst.avg)}
+                        {inst.brokers.map(brokerLabel).join(' + ')} · {inst.qty.toLocaleString('en-IN', { maximumFractionDigits: 4 })} @ {inr(inst.avg)}
                       </div>
-                      <div className="sg-sub num">LTP {price(inst.ltp)}</div>
+                      <div className="sg-sub num">
+                        LTP {price(r.ltp)}
+                        {r.live?.day_change_pct != null && (
+                          <span className={tone(r.live.day_change_pct)}> {pct(r.live.day_change_pct)}</span>
+                        )}
+                        {isUs && r.live?.ext_price != null && r.live.ext_price !== r.live.price && (
+                          <span> · extended {price(r.live.ext_price)}</span>
+                        )}
+                      </div>
+                      {sig?.history_status === 'partial' && (
+                        <div className="sg-sub" title={sig.history_note}>
+                          Partial price history
+                        </div>
+                      )}
                     </td>
                     <td className="r num">{money(inst.inv)}</td>
                     <td className="r num">{money(inst.cur)}</td>
@@ -374,100 +420,16 @@ export const EquitySignals: React.FC = () => {
                     </td>
 
                     <td>
-                      {m ? (
-                        <div className="sg-cell">
-                          <span className={`badge ${momentumBadge(m).cls}`}>{momentumBadge(m).text}</span>
-                          <span className="sg-line num">
-                            Score {m.score}/{m.max}
-                          </span>
-                          {m.range_pos !== null && (
-                            <>
-                              <div className="rng" title={`52-week range ${price(m.low_52w)} to ${price(m.high_52w)}`}>
-                                <i style={{ left: `${Math.min(100, Math.max(0, m.range_pos))}%` }} />
-                              </div>
-                              <span className="sg-line dim num">{pct(m.pct_from_52w_high, 1)} from 52W high</span>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="sg-na">{sig?.errors.momentum ?? sig?.errors.all ?? DASH}</span>
-                      )}
+                      <MomentumCell sig={sig} fmt={fmt} />
                     </td>
-
                     <td>
-                      {s ? (
-                        <div className="sg-cell" title={s.detail}>
-                          <span className={`badge ${swingBadge(s).cls}`}>{swingBadge(s).text}</span>
-                          {s.state === 'IN_POSITION' ? (
-                            <>
-                              <span className="sg-line">
-                                Entered {dateFmt(s.entry_date)}
-                                {s.bars_held != null ? ` · ${s.bars_held} days` : ''}
-                              </span>
-                              {r.swingSince && (
-                                <span className={`sg-line num ${tone(r.swingSince.abs)}`}>
-                                  {perShare(r.swingSince.abs)}/sh ({pct(r.swingSince.pct)}) since entry
-                                </span>
-                              )}
-                              {s.stop_price != null && inst.ltp > 0 && (
-                                <span className="sg-line dim num">
-                                  Stop {price(s.stop_price)} · {weight(((inst.ltp - s.stop_price) / inst.ltp) * 100, 1)} below
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="sg-line dim">{s.headline}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="sg-na">{sig?.errors.swing ?? sig?.errors.all ?? DASH}</span>
-                      )}
+                      <SwingCell sig={sig} ltp={r.ltp} reading={r} fmt={fmt} />
                     </td>
-
                     <td>
-                      {a ? (
-                        <div className="sg-cell" title={a.detail}>
-                          <span className={`badge ${athBadge(a).cls}`}>{athBadge(a).text}</span>
-                          {a.state === 'IN_POSITION' ? (
-                            <>
-                              <span className="sg-line">
-                                Entered {dateFmt(a.entry_date)}
-                                {a.bars_held != null ? ` · ${a.bars_held} days` : ''}
-                              </span>
-                              {r.athSince && (
-                                <span className={`sg-line num ${tone(r.athSince.abs)}`}>
-                                  {perShare(r.athSince.abs)}/sh ({pct(r.athSince.pct)}) since entry
-                                </span>
-                              )}
-                              {a.pct_above_dma != null && <span className="sg-line dim num">{weight(a.pct_above_dma, 1)} above 200-DMA</span>}
-                            </>
-                          ) : a.in_window ? (
-                            <span className="sg-line dim num">
-                              {a.window_days_left != null ? `${a.window_days_left} days left · ` : ''}
-                              {a.pct_to_ath != null ? `${weight(a.pct_to_ath, 1)} to ATH` : ''}
-                            </span>
-                          ) : (
-                            <span className="sg-line dim">{a.headline}</span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="sg-na">{sig?.errors.ath ?? sig?.errors.all ?? DASH}</span>
-                      )}
+                      <AthCell sig={sig} reading={r} fmt={fmt} />
                     </td>
-
                     <td>
-                      {r.alignment === 'none' ? (
-                        <span className="sg-na">{sig ? 'Too few signals' : DASH}</span>
-                      ) : (
-                        <div className="sg-cell">
-                          <span className={`badge ${r.alignment === 'all-bull' ? 'ok' : r.alignment === 'all-bear' ? 'bad' : 'off'}`}>
-                            {r.alignment === 'all-bull' ? 'All bullish' : r.alignment === 'all-bear' ? 'All bearish' : 'Mixed'}
-                          </span>
-                          <span className="sg-line dim num">
-                            {bull} bullish · {bear} bearish
-                          </span>
-                        </div>
-                      )}
+                      <AlignmentCell sig={sig} reading={r} />
                     </td>
                   </tr>
                 )
@@ -486,8 +448,12 @@ export const EquitySignals: React.FC = () => {
 
       <p className="sg-legend">
         Swing V2.1 and ATH entries are the strategies&apos; own signals on daily candles, not your actual buys. &quot;Since entry&quot; compares today&apos;s price with the
-        strategy entry price, per share. Bullish: uptrend, a strategy in position, or a buy signal. Bearish: downtrend, a failing Swing trend filter, a sell signal or an
-        exit. Mutual funds, US stocks, NPS and gold are not covered. This is a rules-based reading of past prices, not advice.
+        strategy entry price, per share{isUs ? ', in US dollars; invested, current and P&L stay in rupees' : ''}. Bullish: uptrend, a strategy in position, or a buy signal.
+        Bearish: downtrend, a failing Swing trend filter, a sell signal or an exit.
+        {isUs
+          ? ' US history is stored in Azure: INDmoney for the latest year and daily updates, with a validated backfill for earlier years. Momentum is measured against the S&P 500 (SPY). Prices update while the US session is open (about 19:00 to 01:30 IST).'
+          : ' Mutual funds, US stocks, NPS and gold are not covered here.'}{' '}
+        This is a rules-based reading of past prices, not advice.
       </p>
     </div>
   )

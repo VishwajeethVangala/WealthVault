@@ -45,7 +45,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   const path = location.pathname
   // Portfolio filters do not apply to single-stock or broker pages
   // (Holdings has its own toolbar, built on the same URL filters)
-  const hideGlobalFilters = path === '/brokers' || path === '/signals' || path === '/momentum' || path === '/strategy' || path === '/holdings'
+  const hideGlobalFilters = path === '/brokers' || path === '/signals' || path === '/stage2' || path === '/momentum' || path === '/strategy' || path === '/holdings'
 
   const connected = sessions.filter((s) => s.status === 'CONNECTED').length
   const lastSync = useMemo(
@@ -64,6 +64,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
       : ''
     if (path === '/holdings') return { title: 'Holdings', sub: `Merged across ${sessions.length} ${sessions.length === 1 ? 'broker' : 'brokers'} · ${syncLine}${priceLine}` }
     if (path === '/brokers') return { title: 'Brokers', sub: 'Connect, sync and manage your broker accounts' }
+    if (path === '/stage2') return { title: 'Stage 2', sub: 'Stocks passing your Chartink Stage 2 screener, with momentum, Swing and ATH signals' }
     if (path === '/signals') return { title: 'Equity signals', sub: 'Momentum, Swing V2.1 and 200-DMA ATH breakout for every stock you hold' }
     if (path === '/momentum') return { title: 'Momentum', sub: 'Trend, returns and relative strength for one stock' }
     if (path === '/strategy') return { title: 'Strategies', sub: 'Rule-based backtests on daily candles' }

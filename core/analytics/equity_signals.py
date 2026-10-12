@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from core.analytics import analyze_momentum
 from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
+from core.analytics.strategy_calls import ath_buy_call, swing_buy_call
 from core.analytics.swing_strategy import run_swing_strategy
 from core.market_data.history import (
     MAX_LOOKBACK_DAYS,
@@ -35,7 +36,12 @@ def _since(candles: List[Dict[str, Any]], days: int) -> List[Dict[str, Any]]:
     return [c for c in candles if str(c["date"])[:10] >= cutoff]
 
 
-def _momentum_section(instrument_id: str, instrument: Dict[str, Any], candles, benchmark) -> Dict[str, Any]:
+def _no_partial(candles: List[Dict[str, Any]]):
+    """US candles are only stored after the session closes, so nothing needs dropping."""
+    return candles, False
+
+
+def _momentum_section(instrument_id: str, instrument: Dict[str, Any], candles, benchmark, benchmark_name: str) -> Dict[str, Any]:
     recent = _since(candles, MOMENTUM_LOOKBACK_DAYS)
     if len(recent) < MIN_MOMENTUM_CANDLES:
         raise ValueError(f"Only {len(recent)} days of history")
@@ -43,7 +49,7 @@ def _momentum_section(instrument_id: str, instrument: Dict[str, Any], candles, b
         instrument=instrument_id,
         candles=recent,
         benchmark_candles=benchmark,
-        benchmark_name=NIFTY_50_SYMBOL.split(":", 1)[1],
+        benchmark_name=benchmark_name,
         name=instrument.get("name"),
     )
     hi, lo = m.high_52w, m.low_52w
@@ -61,13 +67,14 @@ def _momentum_section(instrument_id: str, instrument: Dict[str, Any], candles, b
     }
 
 
-def _swing_section(instrument_id: str, instrument: Dict[str, Any], candles) -> Dict[str, Any]:
+def _swing_section(instrument_id: str, instrument: Dict[str, Any], candles, drop_partial) -> Dict[str, Any]:
     lookback = min(MAX_LOOKBACK_DAYS, SWING_YEARS * 365 + STRATEGY_WARMUP_DAYS)
-    use, partial = drop_incomplete_today(_since(candles, lookback))
+    use, partial = drop_partial(_since(candles, lookback))
+    params = SwingStrategyParams()
     r = run_swing_strategy(
         instrument=instrument_id,
         candles=use,
-        params=SwingStrategyParams(),
+        params=params,
         tick_size=float(instrument.get("tick_size") or 0.05),
         name=instrument.get("name"),
         partial_bar_excluded=partial,
@@ -84,15 +91,17 @@ def _swing_section(instrument_id: str, instrument: Dict[str, Any], candles) -> D
         "bars_held": s.bars_held,
         "regime_bullish": s.regime_bullish,
         "as_of": r.as_of,
+        "call": swing_buy_call(r, params.slope_lookback),
     }
 
 
-def _ath_section(instrument_id: str, instrument: Dict[str, Any], candles) -> Dict[str, Any]:
-    use, partial = drop_incomplete_today(candles)
+def _ath_section(instrument_id: str, instrument: Dict[str, Any], candles, drop_partial) -> Dict[str, Any]:
+    use, partial = drop_partial(candles)
+    params = AthBreakoutParams()
     r = run_ath_breakout_strategy(
         instrument=instrument_id,
         candles=use,
-        params=AthBreakoutParams(),
+        params=params,
         name=instrument.get("name"),
         partial_bar_excluded=partial,
     )
@@ -110,11 +119,51 @@ def _ath_section(instrument_id: str, instrument: Dict[str, Any], candles) -> Dic
         "pct_to_ath": s.pct_to_ath,
         "pct_above_dma": s.pct_above_dma,
         "as_of": r.as_of,
+        "call": ath_buy_call(r, params.window_bars),
     }
 
 
+def build_signal_row(
+    instrument_id: str,
+    instrument: Dict[str, Any],
+    candles: List[Dict[str, Any]],
+    benchmark: Optional[List[Dict[str, Any]]],
+    benchmark_name: str = NIFTY_50_SYMBOL.split(":", 1)[1],
+    drop_partial=drop_incomplete_today,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Build the signal row for one stock from candles that are already loaded."""
+    row: Dict[str, Any] = {
+        "instrument": instrument_id,
+        "name": instrument.get("name"),
+        "as_of": str(candles[-1]["date"])[:10] if candles else None,
+        "history_days": len(candles),
+        # the two most recent completed sessions, so pages can ask "what happened in the last 2 sessions"
+        "last_sessions": [str(c["date"])[:10] for c in drop_partial(candles)[0][-2:]],
+        "momentum": None,
+        "swing": None,
+        "ath": None,
+        "errors": {},
+    }
+    if extra:
+        row.update(extra)
+    for key, build in (
+        ("momentum", lambda: _momentum_section(instrument_id, instrument, candles, benchmark, benchmark_name)),
+        ("swing", lambda: _swing_section(instrument_id, instrument, candles, drop_partial)),
+        ("ath", lambda: _ath_section(instrument_id, instrument, candles, drop_partial)),
+    ):
+        try:
+            row[key] = build()
+        except ValueError as exc:
+            row["errors"][key] = str(exc) or "Not enough history"
+        except Exception as exc:  # one broken section must not drop the others
+            logger.warning("%s signal failed for %s: %s", key, instrument_id, exc)
+            row["errors"][key] = "Could not compute"
+    return row
+
+
 async def compute_stock_signals(client: Any, symbol: str, benchmark: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
-    """Fetch history once and build the full signal row for one stock."""
+    """Indian stocks: fetch history from Kite once and build the full signal row."""
     history = get_history_service()
     instrument: Dict[str, Any] = {}
     for attempt in range(3):
@@ -129,27 +178,4 @@ async def compute_stock_signals(client: Any, symbol: str, benchmark: Optional[Li
     token = int(instrument["instrument_token"])
     instrument_id = str(instrument.get("id") or f"{instrument.get('exchange')}:{instrument.get('tradingsymbol')}")
     candles = await history.get_full_daily_history(client, token, earliest=instrument.get("listing_date") or None)
-
-    row: Dict[str, Any] = {
-        "instrument": instrument_id,
-        "name": instrument.get("name"),
-        "as_of": str(candles[-1]["date"])[:10] if candles else None,
-        "history_days": len(candles),
-        "momentum": None,
-        "swing": None,
-        "ath": None,
-        "errors": {},
-    }
-    for key, build in (
-        ("momentum", lambda: _momentum_section(instrument_id, instrument, candles, benchmark)),
-        ("swing", lambda: _swing_section(instrument_id, instrument, candles)),
-        ("ath", lambda: _ath_section(instrument_id, instrument, candles)),
-    ):
-        try:
-            row[key] = build()
-        except ValueError as exc:
-            row["errors"][key] = str(exc) or "Not enough history"
-        except Exception as exc:  # one broken section must not drop the others
-            logger.warning("%s signal failed for %s: %s", key, symbol, exc)
-            row["errors"][key] = "Could not compute"
-    return row
+    return build_signal_row(instrument_id, instrument, candles, benchmark)
