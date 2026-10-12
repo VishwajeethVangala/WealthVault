@@ -60,3 +60,52 @@ def test_a_bare_host_in_public_base_url_still_gives_a_valid_redirect(monkeypatch
         assert c.redirect_uri == "https://wealthvault-abc.centralindia-01.azurewebsites.net/api/v1/portfolio/oauth/indmoney/callback"
     finally:
         config.get_settings.cache_clear()
+
+
+def test_deployed_host_registers_its_own_indmoney_client_once(monkeypatch, tmp_path):
+    import asyncio
+
+    from core import config
+    from core.market_data import indmoney_client as mod
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://wv.example.net")
+    monkeypatch.setenv("INDMONEY_CLIENT_ID", "localhost-client")
+    config.get_settings.cache_clear()
+    mod.IndmoneyMCPClient._instances.clear()
+
+    calls = []
+
+    class _Resp:
+        status = 201
+
+        async def json(self, content_type=None):
+            return {"client_id": "new-id", "client_secret": "new-secret"}
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+    class _Http:
+        def post(self, url, json=None):
+            calls.append((url, json))
+            return _Resp()
+
+    try:
+        a = mod.IndmoneyMCPClient(connection_id="conn_a", owner_id="u1")
+        assert a.client_id == ""  # the localhost client is not used on a deployed host
+        monkeypatch.setattr(a, "_get_http_session", lambda: _Http())
+        asyncio.run(a.ensure_client())
+        assert a.client_id == "new-id" and a.client_secret == "new-secret"
+        assert calls[0][1]["redirect_uris"] == ["https://wv.example.net/api/v1/portfolio/oauth/indmoney/callback"]
+        assert "client_id=new-id" in a.get_authorization_url()
+
+        b = mod.IndmoneyMCPClient(connection_id="conn_b", owner_id="u2")  # another user reuses the saved client
+        assert b.client_id == "new-id"
+        asyncio.run(b.ensure_client())
+        assert len(calls) == 1
+    finally:
+        config.get_settings.cache_clear()
+        mod.IndmoneyMCPClient._instances.clear()

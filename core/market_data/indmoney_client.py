@@ -75,10 +75,12 @@ class IndmoneyMCPClient:
         self._http_session: Optional[aiohttp.ClientSession] = None
         self._request_counter: int = 0
 
+        self.registration_endpoint = "https://mcp.indmoney.com/register"
         self._load_client_info()
         base = public_base_url()
         if base:  # a deployed host always wins over a saved localhost redirect
             self.redirect_uri = f"{base}/api/v1/portfolio/oauth/indmoney/callback"
+        self._apply_registered_client()
         self._load_tokens()
 
     @classmethod
@@ -115,6 +117,70 @@ class IndmoneyMCPClient:
                     self.authorization_endpoint = data.get("authorization_endpoint", self.authorization_endpoint)
             except Exception as exc:
                 logger.warning("Could not load INDmoney client info: %s", exc)
+
+    # --- OAuth client registration ------------------------------------------------------------------
+    # INDmoney issues OAuth clients through open registration (RFC 7591) and binds each to the redirect
+    # addresses it was registered with. The localhost client from local setup cannot be used on a deployed
+    # host, so the app registers one for its own address once and keeps it in DATA_DIR.
+
+    _registry_lock = asyncio.Lock()
+
+    @staticmethod
+    def _is_local_redirect(uri: str) -> bool:
+        host = urllib.parse.urlparse(uri).hostname or ""
+        return host in ("127.0.0.1", "localhost", "::1")
+
+    @staticmethod
+    def _registry_file() -> Path:
+        return data_dir() / "indmoney_oauth_clients.json"
+
+    def _read_registry(self) -> Dict[str, Any]:
+        try:
+            return json.loads(self._registry_file().read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    def _apply_registered_client(self) -> None:
+        """Use the client registered for this redirect address, if the address is not a local one."""
+        if self._is_local_redirect(self.redirect_uri):
+            return
+        entry = self._read_registry().get(self.redirect_uri)
+        if entry and entry.get("client_id"):
+            self.client_id = entry["client_id"]
+            self.client_secret = entry.get("client_secret", "")
+        else:  # whatever is configured belongs to the localhost client and would be rejected here
+            self.client_id, self.client_secret = "", ""
+
+    async def ensure_client(self) -> None:
+        """Make sure an OAuth client exists for this redirect address, registering one if needed."""
+        if self.client_id or self._is_local_redirect(self.redirect_uri):
+            return
+        async with IndmoneyMCPClient._registry_lock:
+            self._apply_registered_client()  # another request may have registered it meanwhile
+            if self.client_id:
+                return
+            payload = {
+                "client_name": "WealthVault",
+                "redirect_uris": [self.redirect_uri],
+                "grant_types": ["authorization_code", "refresh_token"],
+                "response_types": ["code"],
+                "token_endpoint_auth_method": "client_secret_post",
+                "scope": self.scope,
+            }
+            async with self._get_http_session().post(self.registration_endpoint, json=payload) as resp:
+                data = await resp.json(content_type=None)
+                if resp.status >= 400 or not data.get("client_id"):
+                    raise RuntimeError(f"INDmoney client registration failed ({resp.status}): {data}")
+            registry = self._read_registry()
+            registry[self.redirect_uri] = {"client_id": data["client_id"], "client_secret": data.get("client_secret", "")}
+            path = self._registry_file()
+            path.write_text(json.dumps(registry, indent=2), encoding="utf-8")
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+            logger.info("Registered an INDmoney OAuth client for %s", self.redirect_uri)
+            self._apply_registered_client()
 
     def _load_tokens(self) -> None:
         if self.tokens_file.exists():
@@ -292,6 +358,7 @@ class IndmoneyMCPClient:
             if success and self.access_token:
                 return self.access_token
 
+        await self.ensure_client()
         auth_url = self.get_authorization_url()
         raise IndmoneyAuthRequiredError(
             "INDmoney authorization is required. Please authorize via the link.",
@@ -330,6 +397,7 @@ class IndmoneyMCPClient:
                             raw_text = await retry_resp.text()
                             content_type = retry_resp.headers.get("Content-Type", "")
                     else:
+                        await self.ensure_client()
                         raise IndmoneyAuthRequiredError(
                             "INDmoney session expired. Please re-authorize.",
                             auth_url=self.get_authorization_url(),
