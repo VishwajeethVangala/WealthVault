@@ -46,3 +46,17 @@ def test_public_base_url_sets_the_indmoney_redirect(monkeypatch, tmp_path):
         assert c.tokens_file.parent == tmp_path
     finally:
         config.get_settings.cache_clear()
+
+
+def test_a_bare_host_in_public_base_url_still_gives_a_valid_redirect(monkeypatch, tmp_path):
+    from core import config
+    from core.market_data.indmoney_client import IndmoneyMCPClient
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("PUBLIC_BASE_URL", "wealthvault-abc.centralindia-01.azurewebsites.net")
+    config.get_settings.cache_clear()
+    try:
+        c = IndmoneyMCPClient(connection_id="conn_y")
+        assert c.redirect_uri == "https://wealthvault-abc.centralindia-01.azurewebsites.net/api/v1/portfolio/oauth/indmoney/callback"
+    finally:
+        config.get_settings.cache_clear()

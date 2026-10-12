@@ -94,6 +94,14 @@ class Settings(BaseSettings):
 DEFAULT_JWT_SECRET = "wealthvault-dev-secret-key-replace-with-strong-key-in-prod"
 
 
+def public_base_url() -> str:
+    """PUBLIC_BASE_URL as a clean origin: https:// added when only a host was entered, no trailing slash."""
+    raw = get_settings().PUBLIC_BASE_URL.strip().rstrip("/")
+    if raw and "://" not in raw:
+        raw = "https://" + raw
+    return raw
+
+
 def data_dir() -> "Path":
     """Folder for broker session/token files (created on first use)."""
     path = Path(get_settings().DATA_DIR)
