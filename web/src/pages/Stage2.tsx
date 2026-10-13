@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { AlertTriangle, ArrowDown, ArrowUp, ExternalLink, RefreshCw, Search } from 'lucide-react'
 import { fetchStage2, fetchStage2Live, fetchStage2LiveSignals, refreshStage2 } from '../utils/api'
 import { useLiveSignals } from '../components/signals/useLiveSignals'
+import { FreshnessChip } from '../components/signals/FreshnessChip'
 import { pct, price, tone } from '../utils/format'
 import {
   ALIGN_ORDER,
@@ -354,9 +355,7 @@ export const Stage2: React.FC = () => {
               </span>
             </>
           )}
-          {!running && liveSignals.at && (
-            <span className="sub">Signals on the live price, {new Date(liveSignals.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
-          )}
+          {!running && <FreshnessChip status={liveSignals.status} broker="Kite" sessionOpen={sessionOpen} storedAt={data?.job.finished_at} />}
           {!running && list && (
             <span className="sub">
               Screener read {new Date(list.fetched_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}

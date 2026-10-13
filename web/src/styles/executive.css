@@ -880,3 +880,11 @@ a.bx-who-link {
 a.bx-who-link:hover {
   text-decoration: underline;
 }
+
+.bx-ph-r {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}

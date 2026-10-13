@@ -5,6 +5,8 @@ import { AlertTriangle, ArrowDown, ArrowUp, RefreshCw, Search } from 'lucide-rea
 import { useSearchParams } from 'react-router-dom'
 import { fetchLiveSignals, fetchSignals, fetchUsLive, refreshSignals } from '../utils/api'
 import { useLiveSignals } from '../components/signals/useLiveSignals'
+import { FreshnessChip } from '../components/signals/FreshnessChip'
+import { indiaSessionActive, usSessionActive } from '../utils/session'
 import { usePortfolio } from '../context/PortfolioContext'
 import { classifyAssetClass, brokerLabel } from '../utils/portfolioFilters'
 import { pct, signedMoney as fmtSigned, tone } from '../utils/format'
@@ -38,20 +40,6 @@ const usd = (v: number | null | undefined, hidden = false): string =>
   v == null || !Number.isFinite(v) ? DASH : hidden ? '$ ••••' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 const signedUsd = (v: number): string => `${v < 0 ? '−' : '+'}$${Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-/** US extended session (pre-market to after-hours): 04:00-20:00 ET on weekdays. */
-const usSessionActive = (): boolean => {
-  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
-  const mins = et.getHours() * 60 + et.getMinutes()
-  return et.getDay() >= 1 && et.getDay() <= 5 && mins >= 4 * 60 && mins <= 20 * 60
-}
-
-/** NSE session window used for polling cadence: Mon-Fri 09:15-15:30 IST. */
-const indiaSessionActive = (): boolean => {
-  const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
-  const mins = ist.getHours() * 60 + ist.getMinutes()
-  return ist.getDay() >= 1 && ist.getDay() <= 5 && mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30
-}
 
 const tickerOf = (symbol: string): string => symbol.trim().split(/\s+/)[0].toUpperCase()
 
@@ -389,14 +377,7 @@ export const EquitySignals: React.FC = () => {
             </>
           )}
           {isUs && <span className={`badge ${usClosed ? 'off' : 'ok'}`}>{usClosed ? 'US market closed' : 'US market open'}</span>}
-          {!running && live.at && (
-            <span className="sub">Signals on the live price, {new Date(live.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
-          )}
-          {!running && !live.at && computedAt && (
-            <span className="sub">
-              Computed {new Date(computedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}
-            </span>
-          )}
+          {!running && <FreshnessChip status={live.status} broker={isUs ? 'INDmoney' : 'Kite'} sessionOpen={sessionLive} storedAt={computedAt} />}
           <button className="btn btn-primary" onClick={startRefresh} disabled={running || starting}>
             <RefreshCw size={16} strokeWidth={1.75} className={running ? 'spin' : ''} />
             {running ? 'Refreshing…' : 'Refresh signals'}

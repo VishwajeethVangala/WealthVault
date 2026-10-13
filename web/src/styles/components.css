@@ -62,3 +62,52 @@
   color: var(--accent);
   text-decoration: underline;
 }
+
+/* freshness chip: live vs stored prices */
+.fresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-2, inherit);
+  background: var(--surface-2, rgba(127, 127, 127, 0.1));
+  white-space: nowrap;
+}
+.fresh.live {
+  color: var(--gain);
+  background: color-mix(in srgb, var(--gain) 12%, transparent);
+}
+.fresh.live svg {
+  animation: fresh-pulse 2s ease-in-out infinite;
+}
+.fresh.stale {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+.fresh a {
+  color: inherit;
+  text-decoration: underline;
+  font-weight: 600;
+}
+@keyframes fresh-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fresh.live svg {
+    animation: none;
+  }
+}
+@media (max-width: 640px) {
+  .fresh {
+    white-space: normal;
+  }
+}
+
+.fresh-act {
+  white-space: nowrap;
+}
