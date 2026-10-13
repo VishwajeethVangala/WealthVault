@@ -208,9 +208,14 @@ export const AthBreakoutPanel: React.FC<StrategyPanelProps> = (props) => {
                 <span className="text-sm font-semibold text-wv-text">{s.headline}</span>
               </div>
               <p className="text-xs text-wv-text-2 leading-relaxed">{s.detail}</p>
+              {result.live_bar && (
+                <p className="text-[11px] text-wv-warn bg-wv-warn-weak border border-wv-warn rounded-lg px-2.5 py-1.5 self-start">
+                  Today's bar uses the live price ({formatINR(result.live_price)}), so the signal can change until the 3:30 pm close.
+                </p>
+              )}
               {result.partial_bar_excluded && (
                 <p className="text-[11px] text-wv-warn bg-wv-warn-weak border border-wv-warn rounded-lg px-2.5 py-1.5 self-start">
-                  Today's candle is still forming, so it's excluded until the 3:30 pm close. Signals use completed days only.
+                  Live price unavailable, so today's forming candle is left out. Signals use completed days only.
                 </p>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6">

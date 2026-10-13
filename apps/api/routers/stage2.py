@@ -19,7 +19,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from apps.api.routers.accounts import get_current_user
 from apps.api.routers.signals import Job, _equity_symbol_map, _job_dict, session_really_expired
-from core.analytics.equity_signals import MOMENTUM_LOOKBACK_DAYS, compute_stock_signals
+from core.analytics.equity_signals import MOMENTUM_LOOKBACK_DAYS, compute_stock_signals, load_benchmark
+from core.analytics.live_signals import live_india_rows
 from core.market_data.history import NIFTY_50_TOKEN, get_history_service
 from core.market_data.kite_client import KiteAuthRequiredError
 from core.market_data.service import get_market_data_service
@@ -71,7 +72,7 @@ async def _run_job(owner_id: str, job: Job) -> None:
 
         benchmark = None
         try:
-            benchmark = await get_history_service().get_daily_candles(client, NIFTY_50_TOKEN, MOMENTUM_LOOKBACK_DAYS)
+            benchmark = await load_benchmark(client)
         except KiteAuthRequiredError:
             raise
         except Exception as exc:
@@ -203,6 +204,24 @@ async def get_stage2(current_user_id: str = Depends(get_current_user)) -> Dict[s
         },
         "signals": {k.split(":", 1)[1]: v for k, v in signals.items()},
     }
+
+
+@router.get("/live-signals", status_code=status.HTTP_200_OK, summary="Stage 2 signals recomputed on the live price")
+async def get_stage2_live_signals(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
+    latest, _ = await ScreenerSnapshotRepository().latest_two(SLUG)
+    if latest is None:
+        return {"signals": {}, "live": False}
+    codes = [r["nsecode"] for r in latest[1].get("rows", [])]
+    cached = await SignalCacheRepository().get_many([_code_key(c) for c in codes])
+    rows: Dict[str, Any] = {}
+    try:
+        live = await live_india_rows(await get_user_kite_client(current_user_id), cached)
+        rows = {k.split(":", 1)[1]: v for k, v in live.items()}
+    except KiteAuthRequiredError as exc:
+        logger.info("Live Stage 2 signals unavailable: %s", exc)
+    except Exception as exc:
+        logger.warning("Live Stage 2 signals failed: %s", exc, exc_info=True)
+    return {"signals": rows, "live": bool(rows), "at": datetime.now(timezone.utc).isoformat()}
 
 
 @router.get("/live", status_code=status.HTTP_200_OK, summary="Live Kite prices for the Stage 2 stocks")

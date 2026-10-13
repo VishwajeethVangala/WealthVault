@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertTriangle, ArrowDown, ArrowUp, ExternalLink, RefreshCw, Search } from 'lucide-react'
-import { fetchStage2, fetchStage2Live, refreshStage2 } from '../utils/api'
+import { fetchStage2, fetchStage2Live, fetchStage2LiveSignals, refreshStage2 } from '../utils/api'
+import { useLiveSignals } from '../components/signals/useLiveSignals'
 import { pct, price, tone } from '../utils/format'
 import {
   ALIGN_ORDER,
@@ -167,10 +168,15 @@ export const Stage2: React.FC = () => {
 
   const list = data?.list ?? null
 
+  // Signals rebuilt on the live price: from the 09:15 open (every minute while the session runs, once more after the close)
+  const sessionOpen = marketOpen()
+  const liveSignals = useLiveSignals(fetchStage2LiveSignals, hasList, () => (marketOpen() ? 60_000 : 600_000), 'stage2', data?.job.finished_at)
+
   const rows = useMemo<Row[]>(() => {
     if (!list) return []
     return list.rows.map((row) => {
-      const sig = data?.signals[row.nsecode.toUpperCase()]
+      const code = row.nsecode.toUpperCase()
+      const sig = liveSignals.signals[code] ?? data?.signals[code]
       const lv = live[row.nsecode]
       const ltp = lv?.price ?? row.close
       const reading = readSignals(sig, ltp)
@@ -179,7 +185,7 @@ export const Stage2: React.FC = () => {
         (sig?.ath?.state === 'IN_POSITION' && (sig.ath.bars_held ?? 999) <= FRESH_DAYS)
       return { row, sig, ltp, dayPct: lv?.day_change_pct ?? row.per_chg ?? null, fresh, ...reading }
     })
-  }, [list, data, live])
+  }, [list, data, live, liveSignals.signals])
 
   const counts = useMemo(
     () => ({
@@ -347,6 +353,9 @@ export const Stage2: React.FC = () => {
               </span>
             </>
           )}
+          {!running && liveSignals.at && (
+            <span className="sub">Signals on the live price, {new Date(liveSignals.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
+          )}
           {!running && list && (
             <span className="sub">
               Screener read {new Date(list.fetched_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}
@@ -360,7 +369,7 @@ export const Stage2: React.FC = () => {
         </section>
       )}
 
-      {list && view === 'calls' && <NewCalls sources={callSources} fmt={fmt} />}
+      {list && view === 'calls' && <NewCalls sources={callSources} fmt={fmt} sessionOpen={sessionOpen} />}
 
       {(!list || view === 'list') && (<section className="toolbar" aria-label="Filters">
         <div className="search">
@@ -514,7 +523,7 @@ export const Stage2: React.FC = () => {
 
           <p className="sg-legend">
             The list is Chartink&apos;s, read from the site as at its last end-of-day data. Prices and day change are live from Kite while the NSE session is open. Signals are computed
-            here from daily candles: Swing V2.1 and ATH entries are the strategies&apos; own signals, not buys you made, and &quot;since entry&quot; is per share. &quot;Fresh entries&quot; are
+            here from daily candles with today&apos;s bar built from the live price, so they can change until the 15:30 close. Swing V2.1 and ATH entries are the strategies&apos; own signals, not buys you made, and &quot;since entry&quot; is per share. &quot;Fresh entries&quot; are
             trades that opened within the last {FRESH_DAYS} trading days. This is a rules-based reading of past prices, not advice.
           </p>
         </>)

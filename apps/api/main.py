@@ -20,6 +20,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -124,6 +125,9 @@ def create_application() -> FastAPI:
         openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
         lifespan=lifespan,
     )
+
+    # Signal tables are large JSON; compress anything over 1 KB
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # Configure CORS Middleware
     app.add_middleware(

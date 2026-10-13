@@ -25,6 +25,8 @@ interface Call {
   /** the date the call counts under: the fill date, or the signal date while a Swing buy is still queued */
   date: string
   queued: boolean
+  /** fired on today's still-open session, so it can disappear before the close */
+  live: boolean
   entryPrice: number | null
   /** one line: what fired */
   trigger: string
@@ -45,7 +47,7 @@ export const latestSessions = (sources: CallSource[]): string[] => {
   return [...all].sort().slice(-2)
 }
 
-export const buildCalls = (sources: CallSource[], sessions: string[], fmt: Fmt): Call[] => {
+export const buildCalls = (sources: CallSource[], sessions: string[], fmt: Fmt, sessionOpen = false): Call[] => {
   const out: Call[] = []
   const p = (v: number | null | undefined) => fmt.price(v)
   const signed = (v: number | null | undefined) => (v == null ? DASH : `${v < 0 ? '−' : '+'}${Math.abs(v).toFixed(1)}%`)
@@ -65,6 +67,7 @@ export const buildCalls = (sources: CallSource[], sessions: string[], fmt: Fmt):
           kind: 'swing',
           date: queued ? sc.signal_date : (sc.entry_date as string),
           queued,
+          live: sessionOpen && queued && sc.signal_date === sig?.live_date,
           entryPrice: entry,
           trigger: `UT Bot buy at the ${short(sc.signal_date)} close, ${p(sc.signal_close)}`,
           setup: `Close ${signed(sc.above_slow_pct)} over the 200-SMA; 50-SMA ${signed(sc.fast_over_slow_pct)} over it; 200-SMA ${signed(sc.slow_slope_pct)} in ${sc.slope_lookback} bars`,
@@ -87,6 +90,7 @@ export const buildCalls = (sources: CallSource[], sessions: string[], fmt: Fmt):
         kind: 'ath',
         date: ac.entry_date,
         queued: false,
+        live: sessionOpen && ac.entry_date === sig?.live_date,
         entryPrice: ac.entry_price,
         trigger: `Closed ${p(ac.close)}, ${signed(ac.above_ath_pct)} over the prior all-time high ${p(ac.prior_ath)}`,
         setup:
@@ -173,6 +177,7 @@ const CallTable: React.FC<{ title: string; sub: string; accent: string; calls: C
                         </Link>
                         {c.src.isNew && <span className="badge info">New</span>}
                         {c.src.held && <span className="badge ok">Held</span>}
+                        {c.live && <span className="badge warn" title="Fired on today's live price; it can disappear before the 15:30 close">Live</span>}
                       </div>
                       <div className="sg-sub mono">
                         {c.src.code}
@@ -210,9 +215,10 @@ const CallTable: React.FC<{ title: string; sub: string; accent: string; calls: C
   )
 }
 
-export const NewCalls: React.FC<{ sources: CallSource[]; fmt: Fmt }> = ({ sources, fmt }) => {
+export const NewCalls: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?: boolean }> = ({ sources, fmt, sessionOpen = false }) => {
   const sessions = useMemo(() => latestSessions(sources), [sources])
-  const calls = useMemo(() => buildCalls(sources, sessions, fmt), [sources, sessions, fmt])
+  const calls = useMemo(() => buildCalls(sources, sessions, fmt, sessionOpen), [sources, sessions, fmt, sessionOpen])
+  const anyLive = calls.some((c) => c.live)
   const swing = useMemo(() => calls.filter((c) => c.kind === 'swing' && !c.queued), [calls])
   const ath = useMemo(() => calls.filter((c) => c.kind === 'ath'), [calls])
   const queued = useMemo(() => calls.filter((c) => c.queued), [calls])
@@ -230,7 +236,7 @@ export const NewCalls: React.FC<{ sources: CallSource[]; fmt: Fmt }> = ({ source
   return (
     <div className="calls">
       <p className="calls-intro">
-        Buys that filled in the last 2 sessions ({sessions.map((d) => `${weekday(d)} ${short(d)}`).join(', ')}). Entries are read from completed daily candles; Now and Since entry use the live price.
+        Buys that filled in the last 2 sessions ({sessions.map((d) => `${weekday(d)} ${short(d)}`).join(', ')}). Signals use today&apos;s live price as the latest bar. {anyLive ? 'Calls tagged Live fired in the session that is still open and can disappear before the 15:30 close.' : 'Now and Since entry use the live price.'}
       </p>
       <CallTable title="Swing V2.1" sub="UT Bot buy inside a 200-SMA uptrend, filled at the next open." accent="var(--accent)" calls={swing} fmt={fmt} empty="No Swing buys filled in the last 2 sessions." />
       <CallTable title="200-DMA ATH breakout" sub="Close above the all-time high shortly after a 200-DMA reclaim, bought at that close." accent="var(--gain)" calls={ath} fmt={fmt} empty="No ATH breakouts in the last 2 sessions." />

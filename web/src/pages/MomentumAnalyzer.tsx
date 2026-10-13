@@ -181,7 +181,7 @@ export const MomentumAnalyzer: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-wv-surface-2 text-wv-text-2">{report.instrument}</span>
-                <span className="text-[11px] text-wv-text-3">as of {report.as_of} · {report.candles_used} trading days</span>
+                <span className="text-[11px] text-wv-text-3">as of {report.as_of}{report.live_bar ? ' (live price)' : ''} · {report.candles_used} trading days</span>
               </div>
               <h2 className="font-serif text-2xl text-wv-text font-semibold tracking-tight mt-2">{report.name || report.instrument}</h2>
               <div className="flex items-baseline gap-3 mt-1">

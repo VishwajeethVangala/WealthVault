@@ -27,6 +27,8 @@ from core.market_data.history import (
     get_history_service,
 )
 from core.market_data.kite_client import KiteAuthRequiredError, KiteMCPClient, get_kite_mcp_client
+from core.market_data.live_bar import apply_live_quote, india_today
+from core.market_data.service import get_market_data_service
 from core.market_data.user_client import get_user_kite_client
 from core.models import (
     AthBreakoutParams,
@@ -107,6 +109,36 @@ async def _load_candles(
     return instrument, candles, benchmark_candles
 
 
+async def _apply_live(
+    owner_id: str,
+    instrument: Dict[str, Any],
+    candles: List[Dict[str, Any]],
+    benchmark: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[List[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[float]]:
+    """Fold the live Kite quote into today's candle (and the benchmark's). Returns the live price when applied."""
+    today = india_today()
+    if not today:
+        return candles, benchmark, None
+    own_id = _qualified_symbol(instrument).upper()
+    ids = [own_id] + ([NIFTY_50_SYMBOL.upper()] if benchmark else [])
+    try:
+        quotes, _ok = await get_market_data_service().fetch_live_quotes(ids, client=await _get_user_kite_client(owner_id))
+    except Exception as exc:
+        logger.warning("Live quote unavailable, using completed candles: %s", exc)
+        return candles, benchmark, None
+
+    def fold(series, key):
+        q = quotes.get(key)
+        if not q:
+            return series, False
+        return apply_live_quote(series, today, q.last_price, q.open_price, q.high_price, q.low_price)
+
+    candles, applied = fold(candles, own_id)
+    if benchmark:
+        benchmark, _ = fold(benchmark, NIFTY_50_SYMBOL.upper())
+    return candles, benchmark, (candles[-1]["close"] if applied else None)
+
+
 def _qualified_symbol(instrument: Dict[str, Any]) -> str:
     return str(instrument.get("id") or f"{instrument.get('exchange')}:{instrument.get('tradingsymbol')}")
 
@@ -137,13 +169,16 @@ async def get_momentum(
             detail=f"Only {len(candles)} days of price history available for {symbol}; at least {MIN_CANDLES} are needed.",
         )
 
-    return analyze_momentum(
+    candles, benchmark_candles, live_price = await _apply_live(current_user_id, instrument, candles, benchmark_candles)
+    report = analyze_momentum(
         instrument=_qualified_symbol(instrument),
         candles=candles,
         benchmark_candles=benchmark_candles,
         benchmark_name=NIFTY_50_SYMBOL.split(":", 1)[1],
         name=instrument.get("name"),
     )
+    report.live_bar = live_price is not None
+    return report
 
 
 @router.get(
@@ -176,11 +211,14 @@ async def get_swing_strategy(
     )
     lookback = min(MAX_LOOKBACK_DAYS, years * 365 + STRATEGY_WARMUP_DAYS)
     instrument, candles, _ = await _load_candles(current_user_id, symbol, lookback_days=lookback)
-    candles, partial_dropped = drop_incomplete_today(candles)
+    candles, _bench, live_price = await _apply_live(current_user_id, instrument, candles)
+    partial_dropped = False
+    if live_price is None:  # no live quote: fall back to completed candles only
+        candles, partial_dropped = drop_incomplete_today(candles)
 
     tick = float(instrument.get("tick_size") or 0.05)
     try:
-        return run_swing_strategy(
+        result = run_swing_strategy(
             instrument=_qualified_symbol(instrument),
             candles=candles,
             params=params,
@@ -188,6 +226,8 @@ async def get_swing_strategy(
             name=instrument.get("name"),
             partial_bar_excluded=partial_dropped,
         )
+        result.live_bar, result.live_price = live_price is not None, live_price
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
@@ -221,15 +261,20 @@ async def get_ath_breakout_strategy(
         start_date=start_date,
     )
     instrument, candles, _ = await _load_candles(current_user_id, symbol, lookback_days=0, full_history=True)
-    candles, partial_dropped = drop_incomplete_today(candles)
+    candles, _bench, live_price = await _apply_live(current_user_id, instrument, candles)
+    partial_dropped = False
+    if live_price is None:  # no live quote: fall back to completed candles only
+        candles, partial_dropped = drop_incomplete_today(candles)
 
     try:
-        return run_ath_breakout_strategy(
+        result = run_ath_breakout_strategy(
             instrument=_qualified_symbol(instrument),
             candles=candles,
             params=params,
             name=instrument.get("name"),
             partial_bar_excluded=partial_dropped,
         )
+        result.live_bar, result.live_price = live_price is not None, live_price
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))

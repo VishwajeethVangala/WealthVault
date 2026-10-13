@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, RefreshCw, Search } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
-import { fetchSignals, fetchUsLive, refreshSignals } from '../utils/api'
+import { fetchLiveSignals, fetchSignals, fetchUsLive, refreshSignals } from '../utils/api'
+import { useLiveSignals } from '../components/signals/useLiveSignals'
 import { usePortfolio } from '../context/PortfolioContext'
 import { classifyAssetClass, brokerLabel } from '../utils/portfolioFilters'
 import { pct, signedMoney as fmtSigned, tone } from '../utils/format'
@@ -41,6 +42,13 @@ const usSessionActive = (): boolean => {
   const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }))
   const mins = et.getHours() * 60 + et.getMinutes()
   return et.getDay() >= 1 && et.getDay() <= 5 && mins >= 4 * 60 && mins <= 20 * 60
+}
+
+/** NSE session window used for polling cadence: Mon-Fri 09:15-15:30 IST. */
+const indiaSessionActive = (): boolean => {
+  const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
+  const mins = ist.getHours() * 60 + ist.getMinutes()
+  return ist.getDay() >= 1 && ist.getDay() <= 5 && mins >= 9 * 60 + 15 && mins <= 15 * 60 + 30
 }
 
 const tickerOf = (symbol: string): string => symbol.trim().split(/\s+/)[0].toUpperCase()
@@ -132,6 +140,10 @@ export const EquitySignals: React.FC = () => {
     }
   }, [isUs])
 
+  // Signals rebuilt on the live price: India from 09:15 IST, US from the 09:30 ET open; once more after the close
+  const sessionLive = isUs ? usSessionActive() : indiaSessionActive()
+  const live = useLiveSignals(() => fetchLiveSignals(market), !!data?.signals && Object.keys(data.signals).length > 0, () => (sessionLive ? 60_000 : 600_000), market, data?.job.finished_at)
+
   // Poll while a refresh is running
   const running = data?.job.state === 'running'
   useEffect(() => {
@@ -166,7 +178,7 @@ export const EquitySignals: React.FC = () => {
 
   const rows = useMemo<Row[]>(() => {
     const map = data?.symbol_map ?? {}
-    const sigs = data?.signals ?? {}
+    const sigs = { ...(data?.signals ?? {}), ...live.signals }
     return instruments.map((inst) => {
       const id = inst.lots.map((l) => map[l.holding.instrument_symbol]).find(Boolean)
       const sig = id ? sigs[id] : undefined
@@ -174,7 +186,7 @@ export const EquitySignals: React.FC = () => {
       const ltp = isUs ? live?.price ?? sig?.momentum?.last_price ?? 0 : inst.ltp
       return { inst, ltp, live, sig, ...readSignals(sig, ltp) }
     })
-  }, [instruments, data, isUs, usLive])
+  }, [instruments, data, isUs, usLive, live.signals])
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -348,7 +360,10 @@ export const EquitySignals: React.FC = () => {
             </>
           )}
           {isUs && <span className={`badge ${usClosed ? 'off' : 'ok'}`}>{usClosed ? 'US market closed' : 'US market open'}</span>}
-          {!running && computedAt && (
+          {!running && live.at && (
+            <span className="sub">Signals on the live price, {new Date(live.at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
+          )}
+          {!running && !live.at && computedAt && (
             <span className="sub">
               Computed {new Date(computedAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}
             </span>
