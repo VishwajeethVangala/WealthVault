@@ -149,7 +149,7 @@ export const MultiSelectDropdownPill: React.FC<MultiSelectDropdownPillProps> = (
       >
         <Icon className={`w-3.5 h-3.5 ${isFiltered ? 'text-wv-gain' : 'text-wv-text-3'}`} />
         <span
-          className={`text-[10px] font-bold uppercase tracking-wider ${
+          className={`whitespace-nowrap text-[10px] font-bold uppercase tracking-wider ${
             isFiltered ? 'text-wv-text-3' : 'text-wv-text-3'
           }`}
         >

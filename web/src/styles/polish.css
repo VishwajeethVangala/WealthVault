@@ -321,3 +321,19 @@ body {
 .ctbl td.r {
   white-space: nowrap;
 }
+
+@media (max-width: 720px) {
+  /* overview: the three figures beside the chart become a compact two-column block */
+  .bx-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bx-rail > .bx-tile:first-child {
+    grid-column: 1 / -1;
+  }
+  .bx-tile {
+    padding: 14px;
+  }
+  .bx-rail .bx-val {
+    font-size: 22px;
+  }
+}

@@ -22,6 +22,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from apps.api.routers.accounts import get_current_user
 from core.analytics.equity_signals import MOMENTUM_LOOKBACK_DAYS, _no_partial, build_signal_row, compute_stock_signals, load_benchmark
 from core.analytics.live_signals import live_india_rows, live_us_rows
+from core.analytics.portfolio_risk import portfolio_risk
+from core.market_data.candle_store import get_india_candles
+from core.market_data.history import NIFTY_50_SYMBOL, NIFTY_50_TOKEN
 from core.market_data.indmoney_client import IndmoneyAuthRequiredError
 from core.market_data.kite_client import KiteAuthRequiredError
 from core.market_data.service import MCPMarketDataService
@@ -373,6 +376,49 @@ async def get_symbol_map(current_user_id: str = Depends(get_current_user)) -> Di
     """Lets any page link a holding to its Momentum view. Cache only: nothing is resolved here."""
     holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
     return {"in": await _equity_symbol_map(holdings, None), "us": _us_symbol_map(holdings)}
+
+
+_risk_cache: Dict[str, Any] = {}
+RISK_TTL_SECONDS = 600.0
+
+
+@router.get("/risk", status_code=status.HTTP_200_OK, summary="Beta, volatility and drawdown of the caller's Indian equity")
+async def get_portfolio_risk(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Replays today's Indian equity weights over the stored daily candles. Needs the candles stored by a signals
+    refresh; stocks without them are left out and `coverage_pct` says how much of the value was measured."""
+    hit = _risk_cache.get(current_user_id)
+    if hit and time.monotonic() - hit[0] < RISK_TTL_SECONDS:
+        return hit[1]
+    holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
+    symbol_map = await _equity_symbol_map(holdings, None)
+    cached = await SignalCacheRepository().get_many(list(set(symbol_map.values())))
+
+    values: Dict[str, float] = {}
+    for h in holdings:
+        inst = symbol_map.get(h.instrument_symbol)
+        if inst and h.asset_class == AssetClass.EQUITY:
+            values[inst] = values.get(inst, 0.0) + float(h.current_value or 0.0)
+
+    positions = []
+    for inst, value in values.items():
+        token = (cached.get(inst) or {}).get("token")
+        if not token:
+            continue
+        candles, _ = await get_india_candles(None, {"instrument_token": token, "id": inst}, allow_fetch=False)
+        if candles:
+            positions.append((inst.split(":", 1)[-1], value, candles))
+    bench, _ = await get_india_candles(None, {"instrument_token": NIFTY_50_TOKEN, "id": NIFTY_50_SYMBOL}, allow_fetch=False)
+
+    result = await asyncio.get_running_loop().run_in_executor(None, portfolio_risk, positions, bench) if positions and bench else None
+    payload = {
+        "risk": result,
+        "equity_value": sum(values.values()),
+        "measured_stocks": len(positions),
+        "total_stocks": len(values),
+        "ready": result is not None,
+    }
+    _risk_cache[current_user_id] = (time.monotonic(), payload)
+    return payload
 
 
 @router.get("/us-live", status_code=status.HTTP_200_OK, summary="Live USD prices for the caller's US stocks")

@@ -1,268 +1,845 @@
-/* Executive overview: at-a-glance strip, category cards, and the day-move breakdown */
-.xs-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.xs-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-}
+/* Executive overview: a bento layout on a 12-column grid. Every row fills the width; cards in a row share a height. */
 
-.xs-strip {
-  display: grid;
-  grid-template-columns: 1.25fr 1fr 1fr 1fr;
-  gap: 16px;
-}
-.xs-hero,
-.xs-kpi {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 18px 20px;
-  min-width: 0;
-}
-.xs-hero {
-  background: var(--text);
-  color: var(--bg);
-  border-color: var(--text);
-}
-.xs-hero .lbl,
-.xs-hero .foot {
-  color: color-mix(in srgb, var(--bg) 82%, transparent);
-}
-.xs-hero .val {
-  color: var(--bg);
-}
-.xs-strip .lbl {
-  font-size: 12px;
+.bx-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text-3);
 }
-.xs-strip .val {
-  font-size: 28px;
-  font-weight: 650;
+.bx-mini {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+.bx-fine {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+
+/* ---------- hero band ---------- */
+.bx-band {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+.bx-hero {
+  grid-column: span 8;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 24px 16px;
+  min-width: 0;
+}
+.bx-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.bx-big {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  margin-top: 6px;
+  color: var(--text);
+}
+.bx-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.bx-chart {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+.bx-chart svg {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 170px;
+  display: block;
+  touch-action: pan-y;
+}
+.bx-chart-empty {
+  flex: 1 1 auto;
+  display: grid;
+  place-items: center;
+  min-height: 170px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 13px;
+  text-align: center;
+  padding: 16px;
+}
+.bx-axis {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-3);
+  padding-top: 8px;
+}
+.bx-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bx-legend i {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 2px solid var(--accent);
+  margin-left: 8px;
+}
+.bx-legend i.i {
+  border-top: 2px dashed var(--text-3);
+}
+.bx-tip {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.bx-rail {
+  grid-column: span 4;
+  display: grid;
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  min-width: 0;
+}
+.bx-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px 20px;
+  min-width: 0;
+}
+.bx-val {
+  font-size: 30px;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
-.xs-strip .foot {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 8px;
+.bx-foot {
   font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+.bx-vs {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+}
+.bx-vs-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+.bx-vs-row .num {
+  text-align: right;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.bx-vs-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.bx-vs-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--text-3);
+}
+.bx-vs-bar i.pos {
+  background: var(--gain);
+}
+.bx-vs-bar i.neg {
+  background: var(--loss);
+}
+.bx-vs-note {
+  font-size: 11px;
   color: var(--text-3);
 }
 
-.xs-cards {
+/* ---------- brief ---------- */
+.bx-brief {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px 20px;
+  background: var(--accent-weak);
+  border-color: transparent;
+}
+.bx-brief .ic {
+  color: var(--accent);
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.bx-brief-t {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.bx-brief ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 4px;
+}
+.bx-brief li {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* ---------- category cards: equal columns that always fill the row ---------- */
+.bx-cats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 16px;
 }
-.xs-card {
+.bx-cat {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding: 16px 18px;
   color: inherit;
   text-decoration: none;
   min-width: 0;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
 }
-.xs-card:hover {
+.bx-cat:hover {
   border-color: var(--border-strong);
-  box-shadow: 0 2px 10px rgba(15, 23, 32, 0.08);
+  box-shadow: 0 4px 14px rgba(15, 23, 32, 0.08);
+  transform: translateY(-1px);
 }
-.xs-card:focus-visible {
+.bx-cat:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.xs-card-h {
+.bx-cat-h {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 13px;
   font-weight: 600;
 }
-.xs-card-h .dot {
+.bx-cat-h .dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  flex: 0 0 auto;
 }
-.xs-card-t {
+.bx-cat-t {
   flex: 1;
   min-width: 0;
 }
-.xs-card-w {
+.bx-cat-w {
   font-size: 12px;
   color: var(--text-3);
   font-weight: 500;
 }
-.xs-card-v {
-  font-size: 24px;
-  font-weight: 650;
+.bx-cat-v {
+  font-size: 26px;
+  font-weight: 700;
   letter-spacing: -0.02em;
+  line-height: 1.1;
 }
-.xs-spark {
-  width: 100%;
-  height: 28px;
-  display: block;
-}
-.xs-rows {
-  margin: 0;
-  display: grid;
-  gap: 6px;
-}
-.xs-rows > div {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-}
-.xs-rows dt {
-  font-size: 12px;
-  color: var(--text-3);
-  white-space: nowrap;
-}
-.xs-rows dd {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: right;
-}
-.xs-rows dd small {
-  font-size: 11px;
-  font-weight: 500;
-  opacity: 0.85;
-}
-.xs-note {
-  color: var(--text-3);
-  white-space: nowrap;
-}
-.xs-moves {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-
-.xs-move-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 28px;
-}
-.xs-bars {
-  display: grid;
-  gap: 12px;
-  align-content: start;
-}
-.xs-bar-row {
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 84px;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-}
-.xs-bar-n {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-}
-.xs-bar-n .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.xs-bar-track {
-  height: 8px;
-  border-radius: 4px;
+.bx-wbar {
+  height: 4px;
+  border-radius: 2px;
   background: var(--surface-2);
   overflow: hidden;
 }
-.xs-bar-track > span {
+.bx-wbar i {
   display: block;
   height: 100%;
-  border-radius: 4px;
+  border-radius: 2px;
 }
-.xs-bar-track > .pos {
+.bx-cat-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.bx-cat-pair > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.bx-m {
+  font-size: 15px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.bx-p {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.bx-spark {
+  width: 100%;
+  height: 32px;
+  display: block;
+  margin-top: auto;
+}
+.bx-spark.empty {
+  border-bottom: 1px dashed var(--border);
+}
+.bx-cat-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  min-height: 16px;
+  color: var(--text-3);
+}
+
+/* ---------- two- and three-up rows ---------- */
+.bx-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.bx-three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+.bx-panel {
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.bx-ph {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.bx-ph .card-t,
+.bx-ph .card-s {
+  margin: 0;
+}
+.bx-ph .card-s {
+  margin-top: 2px;
+}
+.bx-ph .link {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* why today moved: bars grow left (loss) or right (gain) of a centre line */
+.bx-axis-rows {
+  display: grid;
+  gap: 12px;
+}
+.bx-ax {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) 80px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.bx-ax-n {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  min-width: 0;
+}
+.bx-ax-n .dot,
+.bx-dr .dot,
+.bx-pos .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-block;
+}
+.bx-ax-track {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface-2);
+}
+.bx-ax-zero {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: var(--border-strong);
+}
+.bx-ax-track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 5px;
+}
+.bx-ax-track i.pos {
   background: var(--gain);
 }
-.xs-bar-track > .neg {
+.bx-ax-track i.neg {
   background: var(--loss);
 }
-.xs-bar-v {
+.bx-ax-v {
   text-align: right;
-  font-weight: 600;
+  font-weight: 650;
 }
-.xs-who {
+.bx-who {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
+  margin-top: 6px;
 }
-.xs-who-h {
-  margin: 0 0 6px;
-  font-size: 12px;
+.bx-who-h {
+  margin: 0 0 4px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
-.xs-who-r {
+.bx-who-r {
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  padding: 6px 0;
+  padding: 7px 0;
   border-top: 1px solid var(--border);
   font-size: 13px;
   min-width: 0;
 }
-.xs-who-r > :first-child {
+.bx-who-r > :first-child {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.xs-who-r .num {
-  font-weight: 600;
+.bx-who-r .num {
+  font-weight: 650;
   flex: 0 0 auto;
 }
 
+/* signals */
+.bx-sig {
+  display: grid;
+  gap: 14px;
+}
+.bx-sig-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.bx-sig-tile {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.bx-sig-tile .n {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.bx-sig-tile .l {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.3;
+}
+.bx-sig-tile.bad {
+  background: var(--loss-weak);
+}
+.bx-sig-tile.bad .n {
+  color: var(--loss);
+}
+.bx-sig-tile.ok {
+  background: var(--gain-weak);
+}
+.bx-sig-tile.ok .n {
+  color: var(--gain);
+}
+.bx-sig-tile.warn {
+  background: var(--warn-weak);
+}
+.bx-sig-tile.warn .n {
+  color: var(--warn);
+}
+.bx-sig-list {
+  display: grid;
+}
+.bx-sig-list .bx-who-h {
+  margin-top: 8px;
+}
+.bx-sig-list .bx-who-h:first-child {
+  margin-top: 0;
+}
+.bx-sig-r {
+  display: grid;
+  gap: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.bx-sig-r > div:first-child {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-weight: 600;
+}
+.bx-sig-r .badge {
+  height: 20px;
+  font-size: 11px;
+  padding: 0 8px;
+}
+.bx-sig-r .sub {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* drift */
+.bx-drift {
+  display: grid;
+  gap: 14px;
+}
+.bx-dr {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) 84px 92px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+.bx-dr .n {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  min-width: 0;
+}
+.bx-dr .bar {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface-2);
+}
+.bx-dr .bar i {
+  display: block;
+  height: 100%;
+  border-radius: 5px;
+}
+.bx-dr .bar b {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+  border-radius: 1px;
+}
+.bx-dr .w {
+  text-align: right;
+  font-weight: 600;
+}
+.bx-dr .w small {
+  color: var(--text-3);
+  font-weight: 500;
+}
+.bx-dr .mv {
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+.bx-dr .sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* risk */
+.bx-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.bx-stat {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  min-width: 0;
+}
+.bx-sv {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.bx-sn {
+  font-size: 11px;
+  color: var(--text-3);
+  line-height: 1.35;
+}
+.bx-conc {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+.bx-conc .bx-who-h {
+  margin: 8px 0 0;
+  color: var(--text-3);
+}
+.bx-conc-r {
+  display: grid;
+  grid-template-columns: minmax(0, 168px) minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.bx-conc-r .l {
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bx-conc-r .l small {
+  color: var(--text-3);
+}
+.bx-conc-r .t {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.bx-conc-r .t i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.bx-conc-r .t i.warn {
+  background: var(--warn);
+}
+.bx-conc-r .t i.neg {
+  background: var(--loss);
+}
+.bx-conc-r .t b {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+}
+.bx-conc-r .v {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* largest positions */
+.bx-pos {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 70px 52px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.bx-pos .rk {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.bx-pos .nm {
+  display: grid;
+  min-width: 0;
+  font-weight: 600;
+}
+.bx-pos .nm > a,
+.bx-pos .nm > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bx-pos .nm small {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bx-pos .bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.bx-pos .bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}
+.bx-pos .v {
+  text-align: right;
+  font-weight: 600;
+}
+.brow {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.brow .n {
+  font-weight: 600;
+  font-size: 13px;
+}
+.brow .m {
+  font-size: 11px;
+  color: var(--text-3);
+}
+.brow .v {
+  font-weight: 650;
+  font-size: 14px;
+  text-align: right;
+}
+
+/* ---------- breakpoints ---------- */
 @media (max-width: 1180px) {
-  .xs-strip {
+  .bx-hero,
+  .bx-rail {
+    grid-column: 1 / -1;
+  }
+  .bx-rail {
+    grid-template-rows: none;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .bx-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bx-three {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .xs-move-body {
+}
+@media (max-width: 860px) {
+  .bx-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bx-three {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 720px) {
-  .xs-strip {
-    gap: 10px;
+  .bx-band,
+  .bx-rail,
+  .bx-two,
+  .bx-three,
+  .bx-cats {
+    gap: 12px;
   }
-  .xs-hero,
-  .xs-strip > .card:last-child:nth-child(even) {
+  .bx-hero {
+    padding: 16px 16px 12px;
+  }
+  .bx-big {
+    font-size: 34px;
+  }
+  .bx-chart {
+    min-height: 170px;
+  }
+  .bx-chart svg {
+    min-height: 140px;
+  }
+  .bx-val {
+    font-size: 26px;
+  }
+  .bx-cats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bx-cats > .bx-cat:last-child:nth-child(odd) {
     grid-column: 1 / -1;
   }
-  .xs-hero,
-  .xs-kpi {
+  .bx-cat {
     padding: 14px;
   }
-  .xs-strip .val {
+  .bx-cat-v {
     font-size: 22px;
   }
-  .xs-cards {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
+  .bx-panel {
+    padding: 16px;
   }
-  .xs-bar-row {
-    grid-template-columns: 96px minmax(0, 1fr) 72px;
+  .bx-ax,
+  .bx-dr {
+    grid-template-columns: 92px minmax(0, 1fr) 64px;
     gap: 8px;
   }
-  .xs-who {
+  .bx-dr .mv {
+    grid-column: 1 / -1;
+    text-align: left;
+    padding-left: 100px;
+    margin-top: -6px;
+  }
+  .bx-who {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .bx-sig-tiles {
+    gap: 8px;
+  }
+  .bx-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bx-conc-r {
+    grid-template-columns: minmax(0, 110px) minmax(0, 1fr) 48px;
+    gap: 8px;
+  }
+  .bx-pos {
+    grid-template-columns: 16px minmax(0, 1fr) 48px;
+  }
+  .bx-pos .bar {
+    display: none;
   }
 }
