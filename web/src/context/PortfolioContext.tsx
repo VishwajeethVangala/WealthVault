@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import type { Holding } from '../types'
-import { fetchPortfolioHoldings } from '../utils/api'
-import { brokerKeyOf, classifyAssetClass, type CanonicalAssetClass } from '../utils/portfolioFilters'
+import { fetchPortfolioHoldings, fetchSymbolMap } from '../utils/api'
+import { type CanonicalAssetClass } from '../utils/portfolioFilters'
+import { buildInstruments } from '../components/holdings/holdingsModel'
 
 export interface PortfolioCounts {
   total: number
@@ -20,6 +21,15 @@ interface PortfolioContextValue {
   counts: PortfolioCounts
   dataFreshness: 'live' | 'cached'
   lastRefreshedAt: Date | null
+  /** where a stock name should link to (its Momentum view), or null when there is no such view */
+  stockHref: (i: LinkableInstrument) => string | null
+}
+
+/** The parts of a holding row needed to work out its Momentum link. */
+export interface LinkableInstrument {
+  sym: string
+  cls: string
+  lots: { holding: Holding }[]
 }
 
 const defaultCounts: PortfolioCounts = {
@@ -46,6 +56,7 @@ const PortfolioContext = createContext<PortfolioContextValue>({
   counts: defaultCounts,
   dataFreshness: 'cached',
   lastRefreshedAt: null,
+  stockHref: () => null,
 })
 
 export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,6 +64,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null)
+  const [indiaSymbols, setIndiaSymbols] = useState<Record<string, string>>({})
   // Only the Holdings page asks for INDmoney's own live prices (US stocks, NPS); other pages keep the cheaper poll
   const { pathname } = useLocation()
   const onHoldings = useRef(pathname === '/holdings')
@@ -130,27 +142,44 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       OTHER: 0,
     }
 
-    holdings.forEach((h) => {
-      const broker = brokerKeyOf(h.connection_id)
-      if (broker) byBroker[broker] = (byBroker[broker] || 0) + 1
-
-      const c = classifyAssetClass(h)
-      byAssetClass[c] = (byAssetClass[c] || 0) + 1
-
-      const invested = h.quantity * h.average_price
-      const gain = h.pnl ?? (h.current_value - invested)
-      if (gain >= 0) gainers++
+    // count distinct holdings, as the Holdings page does: a stock held with two brokers is one holding
+    buildInstruments(holdings).forEach((i) => {
+      i.brokers.forEach((broker) => {
+        if (broker) byBroker[broker] = (byBroker[broker] || 0) + 1
+      })
+      byAssetClass[i.cls] = (byAssetClass[i.cls] || 0) + 1
+      if (i.pnl >= 0) gainers++
       else losers++
     })
 
     return {
-      total: holdings.length,
+      total: buildInstruments(holdings).length,
       byBroker,
       byAssetClass,
       gainers,
       losers,
     }
   }, [holdings])
+
+  // Broker symbols that are not exchange codes (INDmoney's INDS... ids) are resolved once by the signals runs
+  const holdingCount = holdings.length
+  useEffect(() => {
+    if (holdingCount === 0) return
+    fetchSymbolMap()
+      .then((m) => setIndiaSymbols(m.in))
+      .catch(() => {})
+  }, [holdingCount])
+
+  const stockHref = useCallback(
+    (i: LinkableInstrument): string | null => {
+      if (i.cls !== 'EQUITY') return null // Momentum covers NSE/BSE stocks; US stocks, funds and NPS have no such view
+      const raw = i.lots[0]?.holding.instrument_symbol ?? i.sym
+      const resolved = indiaSymbols[raw]
+      const code = resolved ? resolved.replace(/^NSE:/, '') : /^INDS\d+/i.test(raw) ? null : raw.trim().split(/\s+/)[0]
+      return code ? `/momentum?symbol=${encodeURIComponent(code)}` : null
+    },
+    [indiaSymbols],
+  )
 
   const dataFreshness = useMemo<'live' | 'cached'>(() => {
     return holdings.some((h) => h.data_freshness === 'live') ? 'live' : 'cached'
@@ -166,6 +195,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         counts,
         dataFreshness,
         lastRefreshedAt,
+        stockHref,
       }}
     >
       {children}

@@ -49,3 +49,22 @@ def test_ath_buy_reports_the_broken_high_and_days_since_the_dma_break():
     assert call["above_ath_pct"] == round((125 / 120 - 1) * 100, 2)
     assert call["days_since_below_dma"] == 2  # last close under the DMA was two bars earlier
     assert call["entry_date"] == "2026-01-04" and call["entry_price"] == 125.0
+
+
+def test_exit_calls_report_the_signal_bar_and_the_fill_for_a_swing_sell():
+    from core.analytics.strategy_calls import exit_calls, swing_pending_sell
+
+    series = [_bar(f"2026-02-{d:02d}") for d in range(1, 8)]
+    trades = [
+        NS(entry_date="2026-01-05", entry_price=90.0, exit_date="2026-01-20", exit_price=85.0, exit_reason="ATR STOP", pnl_pct=-5.5, bars_held=10),
+        NS(entry_date="2026-02-02", entry_price=100.0, exit_date="2026-02-06", exit_price=108.0, exit_reason="UT + EMA20 SELL", pnl_pct=8.0, bars_held=4),
+        NS(entry_date="2026-02-07", entry_price=109.0, exit_date=None, exit_price=None, exit_reason="OPEN", pnl_pct=1.0, bars_held=0),
+    ]
+    out = exit_calls(NS(series=series, trades=trades))
+    assert [e["exit_date"] for e in out] == ["2026-02-06", "2026-01-20"]  # open trade excluded, newest first
+    assert out[0]["signal_date"] == "2026-02-05" and out[0]["exit_price"] == 108.0  # sold at the next open
+    assert out[1]["signal_date"] == "2026-01-20"  # a stop fills intrabar on its own day
+
+    queued = swing_pending_sell(NS(series=series, status=NS(pending_order="SELL", entry_date="2026-02-02", entry_price=100.0)))
+    assert queued["signal_date"] == "2026-02-07"
+    assert swing_pending_sell(NS(series=series, status=NS(pending_order=None))) is None

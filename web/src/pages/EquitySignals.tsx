@@ -1,3 +1,5 @@
+import { StockLink } from '../components/StockLink'
+import { CallsView, type CallSource } from '../components/signals/NewCalls'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowDown, ArrowUp, RefreshCw, Search } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
@@ -76,7 +78,7 @@ const sortValue = (r: Row, key: SortKey): string | number | null => {
 }
 
 export const EquitySignals: React.FC = () => {
-  const { holdings, loading: portfolioLoading } = usePortfolio()
+  const { holdings, loading: portfolioLoading, stockHref } = usePortfolio()
   const { money, price: inr, signedMoney, hidden } = useMoney()
   const [searchParams, setSearchParams] = useSearchParams()
   const market: Market = searchParams.get('market') === 'us' ? 'us' : 'in'
@@ -92,6 +94,7 @@ export const EquitySignals: React.FC = () => {
   const [filter, setFilter] = useState<'all' | Alignment | 'trade'>('all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'cur', dir: -1 })
   const [starting, setStarting] = useState(false)
+  const [view, setView] = useState<'calls' | 'table'>('table')
   const [usLive, setUsLive] = useState<Record<string, UsLiveQuote>>({})
   const [usClosed, setUsClosed] = useState(true)
   const timer = useRef<number | undefined>(undefined)
@@ -187,6 +190,19 @@ export const EquitySignals: React.FC = () => {
       return { inst, ltp, live, sig, ...readSignals(sig, ltp) }
     })
   }, [instruments, data, isUs, usLive, live.signals])
+
+  const callSources = useMemo<CallSource[]>(
+    () =>
+      rows.map((r) => ({
+        code: r.inst.sym,
+        name: r.sig?.name || r.inst.sym,
+        held: true,
+        sig: r.sig,
+        ltp: r.ltp,
+        href: isUs ? null : stockHref(r.inst),
+      })),
+    [rows, isUs, stockHref],
+  )
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -311,6 +327,14 @@ export const EquitySignals: React.FC = () => {
       </section>
 
       <section className="toolbar" aria-label="Filters">
+        <div className="seg" role="group" aria-label="View">
+          <button type="button" className={view === 'table' ? 'on' : ''} aria-pressed={view === 'table'} onClick={() => setView('table')}>
+            Holdings
+          </button>
+          <button type="button" className={view === 'calls' ? 'on' : ''} aria-pressed={view === 'calls'} onClick={() => setView('calls')}>
+            Buy &amp; sell calls
+          </button>
+        </div>
         <div className="seg" role="group" aria-label="Market">
           {([['in', 'India'], ['us', 'US']] as const).map(([id, label]) => (
             <button
@@ -325,6 +349,7 @@ export const EquitySignals: React.FC = () => {
             </button>
           ))}
         </div>
+        {view === 'table' && (
         <div className="search">
           <label className="sr" htmlFor="sig-q">
             Search stocks
@@ -332,6 +357,8 @@ export const EquitySignals: React.FC = () => {
           <Search size={16} strokeWidth={1.75} aria-hidden="true" />
           <input id="sig-q" className="input" type="search" placeholder="Search stock" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        )}
+        {view === 'table' && (
         <div className="seg" role="group" aria-label="Signal alignment">
           {(
             [
@@ -347,6 +374,7 @@ export const EquitySignals: React.FC = () => {
             </button>
           ))}
         </div>
+        )}
         <span className="spacer" />
         <div className="sg-run">
           {running && (
@@ -387,6 +415,8 @@ export const EquitySignals: React.FC = () => {
             Press Refresh signals to analyse your {rows.length} stocks. {isUs ? 'The first run builds each stock’s full price history and stores it; later runs only add the latest days.' : 'The first run takes a minute or two.'} Results are saved, so the page opens instantly after that.
           </p>
         </div>
+      ) : view === 'calls' ? (
+        <CallsView sources={callSources} fmt={fmt} sessionOpen={isUs ? usSessionActive() : indiaSessionActive()} defaultWindow="open" />
       ) : (
         <div className="card stbl-wrap">
           <table className="stbl">
@@ -408,7 +438,9 @@ export const EquitySignals: React.FC = () => {
                 return (
                   <tr key={inst.key}>
                     <td>
-                      <div className="sg-sym">{inst.sym}</div>
+                      <div className="sg-sym">
+                        <StockLink href={isUs ? null : stockHref(inst)}>{inst.sym}</StockLink>
+                      </div>
                       <div className="sg-sub">
                         {inst.brokers.map(brokerLabel).join(' + ')} · {inst.qty.toLocaleString('en-IN', { maximumFractionDigits: 4 })} @ {inr(inst.avg)}
                       </div>

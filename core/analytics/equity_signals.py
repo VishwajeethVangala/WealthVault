@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from core.analytics import analyze_momentum
 from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
-from core.analytics.strategy_calls import ath_buy_call, swing_buy_call
+from core.analytics.strategy_calls import ath_buy_call, exit_calls, swing_buy_call, swing_pending_sell
 from core.analytics.swing_strategy import run_swing_strategy
 from core.market_data.candle_store import get_india_candles
 from core.market_data.history import (
@@ -31,6 +31,7 @@ MIN_MOMENTUM_CANDLES = 50
 MOMENTUM_LOOKBACK_DAYS = 400
 SWING_YEARS = 5
 STRATEGY_WARMUP_DAYS = 330
+SESSIONS_KEPT = 7  # most recent sessions listed per row, for the buy and sell call windows
 
 
 def _since(candles: List[Dict[str, Any]], days: int) -> List[Dict[str, Any]]:
@@ -94,6 +95,8 @@ def _swing_section(instrument_id: str, instrument: Dict[str, Any], candles, drop
         "regime_bullish": s.regime_bullish,
         "as_of": r.as_of,
         "call": swing_buy_call(r, params.slope_lookback),
+        "exits": exit_calls(r),
+        "pending_sell": swing_pending_sell(r),
     }
 
 
@@ -122,6 +125,7 @@ def _ath_section(instrument_id: str, instrument: Dict[str, Any], candles, drop_p
         "pct_above_dma": s.pct_above_dma,
         "as_of": r.as_of,
         "call": ath_buy_call(r, params.window_bars),
+        "exits": exit_calls(r),
     }
 
 
@@ -141,7 +145,7 @@ def build_signal_row(
         "as_of": str(candles[-1]["date"])[:10] if candles else None,
         "history_days": len(candles),
         # the two most recent completed sessions, so pages can ask "what happened in the last 2 sessions"
-        "last_sessions": [str(c["date"])[:10] for c in drop_partial(candles)[0][-2:]],
+        "last_sessions": [str(c["date"])[:10] for c in drop_partial(candles)[0][-SESSIONS_KEPT:]],
         "momentum": None,
         "swing": None,
         "ath": None,

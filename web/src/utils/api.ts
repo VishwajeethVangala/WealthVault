@@ -241,6 +241,10 @@ export async function fetchStage2LiveSignals(): Promise<LiveSignalsResponse> {
   return fetchApi<LiveSignalsResponse>('/api/v1/analytics/stage2/live-signals')
 }
 
+export async function fetchSymbolMap(): Promise<{ in: Record<string, string>; us: Record<string, string> }> {
+  return fetchApi('/api/v1/analytics/signals/symbol-map')
+}
+
 export async function fetchUsLive(): Promise<UsLiveResponse> {
   return fetchApi<UsLiveResponse>('/api/v1/analytics/signals/us-live')
 }

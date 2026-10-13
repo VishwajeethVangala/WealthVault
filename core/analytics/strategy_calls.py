@@ -6,7 +6,7 @@ breakout the prior all-time high that was broken, the setup window and the 200-D
 signal, it only reports the bar the engine already chose, so the explanation always matches the call.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 def _pct(a: Optional[float], b: Optional[float]) -> Optional[float]:
@@ -72,4 +72,49 @@ def ath_buy_call(result: Any, window_bars: int) -> Optional[Dict[str, Any]]:
         "dma": bar.dma,
         "above_dma_pct": _pct(bar.close, bar.dma),
         "queued": False,
+    }
+
+
+def exit_calls(result: Any, keep: int = 4) -> List[Dict[str, Any]]:
+    """The most recent closed trades, newest first: where the strategy said SELL and at what price.
+
+    Swing V2.1 sells fill at the next open (a UT + EMA20 sell signalled on the close before) or intrabar at
+    the ATR stop; the ATH breakout sells at the close that broke the 200-DMA.
+    """
+    dates = [b.date for b in result.series]
+    out: List[Dict[str, Any]] = []
+    for t in reversed([t for t in result.trades if t.exit_date]):
+        signal_date = t.exit_date
+        if t.exit_reason == "UT + EMA20 SELL" and t.exit_date in dates:
+            i = dates.index(t.exit_date)
+            signal_date = dates[i - 1] if i > 0 else t.exit_date
+        out.append(
+            {
+                "signal_date": signal_date,
+                "exit_date": t.exit_date,
+                "exit_price": t.exit_price,
+                "reason": t.exit_reason,
+                "entry_date": t.entry_date,
+                "entry_price": t.entry_price,
+                "pnl_pct": t.pnl_pct,
+                "bars_held": t.bars_held,
+            }
+        )
+        if len(out) >= keep:
+            break
+    return out
+
+
+def swing_pending_sell(result: Any) -> Optional[Dict[str, Any]]:
+    """A Swing sell signalled on the latest close that fills at the next open."""
+    status = result.status
+    if status.pending_order != "SELL" or not result.series:
+        return None
+    last = result.series[-1]
+    return {
+        "signal_date": last.date,
+        "signal_close": last.close,
+        "reason": "UT + EMA20 SELL",
+        "entry_date": status.entry_date,
+        "entry_price": status.entry_price,
     }
