@@ -20,8 +20,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from apps.api.routers.accounts import get_current_user
-from core.analytics.equity_signals import MOMENTUM_LOOKBACK_DAYS, _no_partial, build_signal_row, compute_stock_signals
-from core.market_data.history import NIFTY_50_TOKEN, get_history_service
+from core.analytics.equity_signals import MOMENTUM_LOOKBACK_DAYS, _no_partial, build_signal_row, compute_stock_signals, load_benchmark
+from core.analytics.live_signals import live_india_rows, live_us_rows
 from core.market_data.indmoney_client import IndmoneyAuthRequiredError
 from core.market_data.kite_client import KiteAuthRequiredError
 from core.market_data.service import MCPMarketDataService
@@ -140,10 +140,9 @@ async def _run_job_in(owner_id: str, job: Job) -> None:
         symbols = sorted(set((await _equity_symbol_map(holdings, client)).values()))
         job.total = len(symbols)
 
-        history = get_history_service()
         benchmark = None
         try:
-            benchmark = await history.get_daily_candles(client, NIFTY_50_TOKEN, MOMENTUM_LOOKBACK_DAYS)
+            benchmark = await load_benchmark(client)
         except KiteAuthRequiredError:
             raise
         except Exception as exc:
@@ -337,11 +336,10 @@ async def get_signals(
     return {"job": _job_dict(job), "symbol_map": symbol_map, "signals": signals}
 
 
-@router.get("/us-live", status_code=status.HTTP_200_OK, summary="Live USD prices for the caller's US stocks")
-async def get_us_live(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
-    holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
-    tickers = sorted({_us_ticker(h.instrument_symbol) for h in holdings if h.asset_class == AssetClass.US_STOCKS})
-    cached = _us_live_cache.get(current_user_id)
+async def _us_quotes(owner_id: str, holdings: List[Holding]) -> Dict[str, Any]:
+    """Live INDmoney quotes for the owner's US stocks plus SPY (the benchmark), cached for a few seconds."""
+    tickers = sorted({_us_ticker(h.instrument_symbol) for h in holdings if h.asset_class == AssetClass.US_STOCKS} | {US_BENCHMARK})
+    cached = _us_live_cache.get(owner_id)
     if cached and time.monotonic() - cached[0] < US_LIVE_TTL_SECONDS:
         quotes = cached[1]
     else:
@@ -366,8 +364,40 @@ async def get_us_live(current_user_id: str = Depends(get_current_user)) -> Dict[
                     logger.warning("US live quotes failed for %s: %s", batch, exc)
                     continue
                 _collect_us_quotes(resp, batch, quotes)
-        _us_live_cache[current_user_id] = (time.monotonic(), quotes)
-    return {"quotes": quotes, "session_closed": us_session_closed()}
+        _us_live_cache[owner_id] = (time.monotonic(), quotes)
+    return quotes
+
+
+@router.get("/us-live", status_code=status.HTTP_200_OK, summary="Live USD prices for the caller's US stocks")
+async def get_us_live(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
+    holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
+    return {"quotes": await _us_quotes(current_user_id, holdings), "session_closed": us_session_closed()}
+
+
+@router.get("/live", status_code=status.HTTP_200_OK, summary="Signals recomputed on the live price")
+async def get_live_signals(
+    market: str = Query("in", pattern="^(in|us)$"),
+    current_user_id: str = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """The cached rows rebuilt with today's bar made from the live quote. Rows that cannot be (history behind,
+    no quote, session not open) are simply absent and the caller keeps the cached ones."""
+    holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
+    rows: Dict[str, Any] = {}
+    try:
+        if market == "us":
+            symbol_map = _us_symbol_map(holdings)
+            cached = await SignalCacheRepository().get_many(list(set(symbol_map.values())))
+            quotes = await _us_quotes(current_user_id, holdings)
+            rows = await live_us_rows(cached, quotes, _us_names(holdings), US_TICK_SIZE)
+        else:
+            symbol_map = await _equity_symbol_map(holdings, None)
+            cached = await SignalCacheRepository().get_many(list(set(symbol_map.values())))
+            rows = await live_india_rows(await get_user_kite_client(current_user_id), cached)
+    except (KiteAuthRequiredError, IndmoneyAuthRequiredError, HTTPException) as exc:
+        logger.info("Live signals unavailable: %s", getattr(exc, "detail", exc))
+    except Exception as exc:
+        logger.warning("Live signals failed: %s", exc, exc_info=True)
+    return {"signals": rows, "live": bool(rows), "at": datetime.now(timezone.utc).isoformat()}
 
 
 def _collect_us_quotes(resp: Any, batch: List[str], quotes: Dict[str, Any]) -> None:

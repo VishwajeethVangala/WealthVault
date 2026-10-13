@@ -381,6 +381,7 @@ class MomentumAnalysis(BaseModel):
     as_of: str = Field(..., description="Date of the latest candle (YYYY-MM-DD)")
     last_price: float = Field(..., description="Latest close / last traded price")
     candles_used: int = Field(..., description="Number of daily candles analysed")
+    live_bar: bool = Field(default=False, description="Last price is the live quote, not a finished close")
 
     # Trend / moving averages (primary verdict)
     trend_score: int = Field(..., description="Number of trend rules passed")
@@ -532,6 +533,8 @@ class SwingStrategyResult(BaseModel):
     test_end: str
     bars_tested: int
     partial_bar_excluded: bool = Field(default=False, description="Today's unfinished candle was dropped")
+    live_bar: bool = Field(default=False, description="Today's bar is built from the live price and can change until the close")
+    live_price: Optional[float] = None
     status: StrategyStatus
     stats: StrategyStats
     trades: List[StrategyTrade] = Field(default_factory=list)
@@ -599,6 +602,8 @@ class AthBreakoutResult(BaseModel):
     test_end: str
     bars_tested: int
     partial_bar_excluded: bool = False
+    live_bar: bool = False
+    live_price: Optional[float] = None
     status: AthBreakoutStatus
     stats: StrategyStats
     trades: List[StrategyTrade] = Field(default_factory=list)

@@ -1,3 +1,4 @@
+import type { LiveSignalsResponse } from '../components/signals/useLiveSignals'
 import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, SwingStrategyOptions, SwingStrategyResult, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
 
 const TOKEN_KEY = 'wv_token'
@@ -230,6 +231,14 @@ export async function fetchHistory(days = 365): Promise<HistoryPoint[]> {
 // Equity signals
 export async function fetchSignals(market: 'in' | 'us' = 'in'): Promise<SignalsResponse> {
   return fetchApi<SignalsResponse>(`/api/v1/analytics/signals?market=${market}`)
+}
+
+export async function fetchLiveSignals(market: 'in' | 'us' = 'in'): Promise<LiveSignalsResponse> {
+  return fetchApi<LiveSignalsResponse>(`/api/v1/analytics/signals/live?market=${market}`)
+}
+
+export async function fetchStage2LiveSignals(): Promise<LiveSignalsResponse> {
+  return fetchApi<LiveSignalsResponse>('/api/v1/analytics/stage2/live-signals')
 }
 
 export async function fetchUsLive(): Promise<UsLiveResponse> {

@@ -202,6 +202,7 @@ export interface MomentumAnalysis {
   as_of: string
   last_price: number
   candles_used: number
+  live_bar?: boolean
   trend_score: number
   trend_max_score: number
   trend_verdict: string
@@ -328,6 +329,8 @@ export interface SwingStrategyResult {
   test_end: string
   bars_tested: number
   partial_bar_excluded: boolean
+  live_bar?: boolean
+  live_price?: number | null
   status: StrategyStatus
   stats: StrategyStats
   trades: StrategyTrade[]
@@ -394,6 +397,8 @@ export interface AthBreakoutResult {
   test_end: string
   bars_tested: number
   partial_bar_excluded: boolean
+  live_bar?: boolean
+  live_price?: number | null
   status: AthBreakoutStatus
   stats: StrategyStats
   trades: StrategyTrade[]
@@ -462,6 +467,9 @@ export interface StockSignals {
   history_days?: number
   /** the two most recent completed sessions for this stock */
   last_sessions?: string[]
+  /** present when the row was rebuilt on the live price: today's bar is unfinished until the close */
+  live?: { price: number; date: string; at: string }
+  live_date?: string
   momentum: MomentumSignal | null
   swing: SwingSignal | null
   ath: AthSignal | null

@@ -14,10 +14,12 @@ from core.analytics import analyze_momentum
 from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
 from core.analytics.strategy_calls import ath_buy_call, swing_buy_call
 from core.analytics.swing_strategy import run_swing_strategy
+from core.market_data.candle_store import get_india_candles
 from core.market_data.history import (
     MAX_LOOKBACK_DAYS,
     InstrumentNotFoundError,
     NIFTY_50_SYMBOL,
+    NIFTY_50_TOKEN,
     drop_incomplete_today,
     get_history_service,
 )
@@ -175,7 +177,22 @@ async def compute_stock_signals(client: Any, symbol: str, benchmark: Optional[Li
             if attempt == 2:
                 raise
             await asyncio.sleep(1.0 * (attempt + 1))
-    token = int(instrument["instrument_token"])
     instrument_id = str(instrument.get("id") or f"{instrument.get('exchange')}:{instrument.get('tradingsymbol')}")
-    candles = await history.get_full_daily_history(client, token, earliest=instrument.get("listing_date") or None)
-    return build_signal_row(instrument_id, instrument, candles, benchmark)
+    # stored finished candles, topped up from Kite when behind; the live price is folded in at read time
+    candles, _meta = await get_india_candles(client, instrument)
+    if not candles:
+        raise ValueError("Price history unavailable")
+    return build_signal_row(
+        instrument_id,
+        instrument,
+        candles,
+        benchmark,
+        extra={"token": int(instrument["instrument_token"]), "tick_size": instrument.get("tick_size")},
+    )
+
+
+async def load_benchmark(client: Any) -> Optional[List[Dict[str, Any]]]:
+    """NIFTY 50 candles for the relative-strength reading, from the same store as the stocks."""
+    nifty = {"instrument_token": NIFTY_50_TOKEN, "id": NIFTY_50_SYMBOL, "tick_size": 0.05}
+    candles, _meta = await get_india_candles(client, nifty)
+    return _since(candles, MOMENTUM_LOOKBACK_DAYS) or None

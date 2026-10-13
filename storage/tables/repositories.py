@@ -810,6 +810,14 @@ class UsCandleRepository(BaseTableStorage):
             await self.delete_entity(user_id=ticker, entity_id=r["RowKey"])
 
 
+class IndiaCandleRepository(UsCandleRepository):
+    """Same layout as UsCandleRepository for Indian stocks: PartitionKey = Kite instrument token (as text),
+    RowKey = 'y2025' or 'meta'; candles carry source 'k' (Kite)."""
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        BaseTableStorage.__init__(self, table_name="incandles", connection_string=connection_string)
+
+
 class ScreenerSnapshotRepository(BaseTableStorage):
     """Azure Table store of what a screener returned on each day, so changes between days can be shown.
 
