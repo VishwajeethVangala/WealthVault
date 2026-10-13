@@ -91,10 +91,11 @@ export const EquitySignals: React.FC = () => {
   const [data, setData] = useState<SignalsResponse | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [q, setQ] = useState('')
-  const [filter, setFilter] = useState<'all' | Alignment | 'trade'>('all')
+  const startFilter = searchParams.get('filter')
+  const [filter, setFilter] = useState<'all' | Alignment | 'trade'>(startFilter === 'all-bear' || startFilter === 'all-bull' || startFilter === 'mixed' || startFilter === 'trade' ? startFilter : 'all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'cur', dir: -1 })
   const [starting, setStarting] = useState(false)
-  const [view, setView] = useState<'calls' | 'table'>('table')
+  const [view, setView] = useState<'calls' | 'table'>(searchParams.get('view') === 'calls' ? 'calls' : 'table')
   const [usLive, setUsLive] = useState<Record<string, UsLiveQuote>>({})
   const [usClosed, setUsClosed] = useState(true)
   const timer = useRef<number | undefined>(undefined)
@@ -416,7 +417,14 @@ export const EquitySignals: React.FC = () => {
           </p>
         </div>
       ) : view === 'calls' ? (
-        <CallsView sources={callSources} fmt={fmt} sessionOpen={isUs ? usSessionActive() : indiaSessionActive()} defaultWindow="open" />
+        <CallsView
+          sources={callSources}
+          fmt={fmt}
+          sessionOpen={isUs ? usSessionActive() : indiaSessionActive()}
+          defaultWindow={searchParams.get('window') === '2' ? 2 : searchParams.get('window') === '7' ? 7 : 'open'}
+          defaultSide={searchParams.get('side') === 'sell' ? 'sell' : 'buy'}
+          expand={searchParams.has('side')}
+        />
       ) : (
         <div className="card stbl-wrap">
           <table className="stbl">

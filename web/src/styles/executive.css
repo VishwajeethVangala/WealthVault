@@ -843,3 +843,40 @@
     display: none;
   }
 }
+
+/* signal tiles are buttons: lift on hover, arrow appears, keyboard focus is visible */
+a.bx-sig-tile {
+  position: relative;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+a.bx-sig-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(15, 23, 32, 0.12);
+}
+a.bx-sig-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.bx-sig-tile .go {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  opacity: 0.45;
+  transition: opacity 0.15s, transform 0.15s;
+}
+a.bx-sig-tile:hover .go {
+  opacity: 1;
+  transform: translateX(2px);
+}
+a.bx-who-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
+}
+a.bx-who-link:hover {
+  text-decoration: underline;
+}

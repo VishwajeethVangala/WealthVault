@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
 import { fetchLiveSignals, fetchSignals } from '../../utils/api'
 import { price as inrPrice, tone } from '../../utils/format'
 import { usePortfolio } from '../../context/PortfolioContext'
 import { StockLink } from '../StockLink'
 import { buildBuys, buildSells, latestSessions, type CallSource } from '../signals/NewCalls'
 import { useLiveSignals } from '../signals/useLiveSignals'
-import { swingLean, athLean } from '../signals/signalKit'
+import { readSignals } from '../signals/signalKit'
 import type { Fmt } from '../signals/signalKit'
 import type { SignalsResponse, StockSignals } from '../../types'
 import type { Instrument } from '../holdings/holdingsModel'
@@ -85,14 +86,16 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
     const sells = [...a.sells, ...b.sells].sort((x, y) => y.date.localeCompare(x.date))
     const buys = [...a.buys, ...b.buys].filter((r) => !r.waiting).sort((x, y) => y.date.localeCompare(x.date))
     const waitingBuys = [...a.buys, ...b.buys].filter((r) => r.waiting)
-    const review = all.filter((s) => {
-      const sig = s.sig
-      if (!sig) return false
-      const leans = [sig.swing && swingLean(sig.swing), sig.ath && athLean(sig.ath)].filter(Boolean)
-      return !!sig.momentum && /downtrend/i.test(sig.momentum.verdict) && leans.every((l) => l === 'bear' || l === 'neutral') && leans.some((l) => l === 'bear')
-    })
+    // the same "all bearish" reading the Equity signals page filters on, so the count matches what the link opens
+    const review = all.filter((s) => readSignals(s.sig, s.ltp).alignment === 'all-bear')
     const covered = all.filter((s) => s.sig && (s.sig.momentum || s.sig.swing || s.sig.ath)).length
-    return { sells, buys, waitingBuys, review, covered, total: all.length, hasExit: all.some((s) => s.sig?.swing?.exits || s.sig?.ath?.exits), s7 }
+    const market = (rows: { src: CallSource }[]) => (rows.length > 0 && rows.every((r) => inSrc.includes(r.src) === false) ? 'us' : 'in')
+    const links = {
+      sells: `/signals?view=calls&side=sell${market(sells) === 'us' ? '&market=us' : ''}`,
+      buys: `/signals?view=calls&side=buy&window=2${market(buys) === 'us' ? '&market=us' : ''}`,
+      review: `/signals?filter=all-bear${review.length > 0 && review.every((r) => usSrc.includes(r)) ? '&market=us' : ''}`,
+    }
+    return { links, sells, buys, waitingBuys, review, covered, total: all.length, hasExit: all.some((s) => s.sig?.swing?.exits || s.sig?.ath?.exits), s7 }
   }, [base, liveIn.signals, liveUs.signals, instruments, stockHref])
 
   useEffect(() => {
@@ -124,30 +127,35 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
       ) : (
         <div className="bx-sig">
           <div className="bx-sig-tiles">
-            <div className={`bx-sig-tile ${model.sells.length ? 'bad' : ''}`}>
+            <Link to={model.links.sells} className={`bx-sig-tile ${model.sells.length ? 'bad' : ''}`} aria-label={`${model.sells.length} sell calls in the last 7 sessions: open them`}>
               <span className="n num">{model.sells.length}</span>
               <span className="l">Sell calls · 7 sessions</span>
-            </div>
-            <div className="bx-sig-tile ok">
+              <ChevronRight className="go" size={16} strokeWidth={2} aria-hidden="true" />
+            </Link>
+            <Link to={model.links.buys} className="bx-sig-tile ok" aria-label={`${model.buys.length} new buys in the last 2 sessions: open them`}>
               <span className="n num">{model.buys.length}</span>
               <span className="l">New buys · 2 sessions</span>
-            </div>
-            <div className={`bx-sig-tile ${model.review.length ? 'warn' : ''}`}>
+              <ChevronRight className="go" size={16} strokeWidth={2} aria-hidden="true" />
+            </Link>
+            <Link to={model.links.review} className={`bx-sig-tile ${model.review.length ? 'warn' : ''}`} aria-label={`${model.review.length} holdings to review: open them`}>
               <span className="n num">{model.review.length}</span>
               <span className="l">To review</span>
-            </div>
+              <ChevronRight className="go" size={16} strokeWidth={2} aria-hidden="true" />
+            </Link>
           </div>
 
           {!model.hasExit && <p className="empty-s">Sell history is added after the next signals refresh.</p>}
           {model.review.length > 0 && (
             <p className="bx-fine">
-              <b>To review</b> (downtrend, no bullish strategy): {model.review.slice(0, 6).map((r) => r.name).join(', ')}
+              <b>To review</b> (all three signals bearish): {model.review.slice(0, 6).map((r) => r.name).join(', ')}
               {model.review.length > 6 ? ` and ${model.review.length - 6} more` : ''}
             </p>
           )}
 
           <div className="bx-sig-list">
-            <p className="bx-who-h neg">Sell calls</p>
+            <Link to={model.links.sells} className="bx-who-h neg bx-who-link">
+              Sell calls <ChevronRight size={12} strokeWidth={2.2} aria-hidden="true" />
+            </Link>
             {model.sells.length === 0 && <p className="empty-s">No sell calls on your holdings in the last 7 sessions.</p>}
             {model.sells.slice(0, 4).map((r) => (
               <div className="bx-sig-r" key={r.key}>
@@ -161,7 +169,9 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
                 </div>
               </div>
             ))}
-            <p className="bx-who-h pos">New buys</p>
+            <Link to={model.links.buys} className="bx-who-h pos bx-who-link">
+              New buys <ChevronRight size={12} strokeWidth={2.2} aria-hidden="true" />
+            </Link>
             {model.buys.length === 0 && <p className="empty-s">No new buys on your holdings in the last 2 sessions.</p>}
             {model.buys.slice(0, 3).map((r) => (
               <div className="bx-sig-r" key={r.key}>
