@@ -222,6 +222,8 @@ export interface HistoryPoint {
   date: string
   value: number
   invested: number
+  /** value of each asset class that day, keyed by class name */
+  classes?: Record<string, number>
 }
 
 export async function fetchHistory(days = 365): Promise<HistoryPoint[]> {

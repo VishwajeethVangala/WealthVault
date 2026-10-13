@@ -5,7 +5,7 @@ can chart value against money invested over time.
 """
 
 from datetime import date, timedelta
-from typing import List
+from typing import Dict, List
 
 from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
@@ -20,6 +20,8 @@ class HistoryPoint(BaseModel):
     date: str
     value: float
     invested: float
+    # value of each asset class that day (INR), keyed by class name
+    classes: Dict[str, float] = {}
 
 
 @router.get(
@@ -37,7 +39,12 @@ async def get_history(
     snapshots = await SnapshotsRepository().list_snapshots(owner_id=current_user_id, limit=days)
     cutoff = (date.today() - timedelta(days=days)).isoformat()
     points = [
-        HistoryPoint(date=s.as_of_date, value=s.total_current_value, invested=s.total_invested_value)
+        HistoryPoint(
+            date=s.as_of_date,
+            value=s.total_current_value,
+            invested=s.total_invested_value,
+            classes={k: v.get('absolute_value', 0.0) for k, v in (s.asset_allocation or {}).items()},
+        )
         for s in snapshots
         if s.as_of_date >= cutoff
     ]

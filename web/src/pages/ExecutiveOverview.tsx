@@ -1,6 +1,5 @@
+import { ExecutiveStrip, type Period } from '../components/dashboard/ExecutiveStrip'
 import { StockLink } from '../components/StockLink'
-import { DayCoverageNote } from '../components/DayCoverageNote'
-import { dayCoverage } from '../utils/dayCoverage'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, Info, PieChart } from 'lucide-react'
@@ -30,6 +29,7 @@ export const ExecutiveOverview: React.FC = () => {
   const [editingTargets, setEditingTargets] = useState(false)
   const [history, setHistory] = useState<HistoryPoint[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [period, setPeriod] = useState<Period>('1D')
 
   const activeBroker = searchParams.get('broker') || 'all'
   const activeAssetClass = searchParams.get('assetClass') || 'all'
@@ -44,6 +44,13 @@ export const ExecutiveOverview: React.FC = () => {
       .catch(() => setHistory([]))
       .finally(() => setHistoryLoading(false))
   }, [])
+
+  // per-class value by day, for the category cards
+  const classHistory = useMemo(() => {
+    const out: Record<string, { date: string; v: number }[]> = {}
+    history.forEach((p) => Object.entries(p.classes ?? {}).forEach(([k, v]) => (out[k] = [...(out[k] ?? []), { date: p.date, v }])))
+    return out
+  }, [history])
 
   const filtered = useMemo(() => {
     const brokers = activeBroker !== 'all' ? activeBroker.split(',').filter(Boolean) : []
@@ -237,35 +244,14 @@ export const ExecutiveOverview: React.FC = () => {
         </div>
       )}
 
-      <section className="kpis" aria-label="Key figures">
-        <div className="card kpi hero">
-          <span className="lbl">Net worth{filterActive ? ' (filtered)' : ''}</span>
-          <span className="val num">{compact(totals.cur)}</span>
-          <span className="foot num">
-            {instruments.length} instruments · {byBroker.length} {byBroker.length === 1 ? 'broker' : 'brokers'}
-          </span>
-        </div>
-        <div className="card kpi">
-          <span className="lbl">Invested</span>
-          <span className="val num">{compact(totals.inv)}</span>
-          <span className="foot">Cost basis of current holdings</span>
-        </div>
-        <div className="card kpi">
-          <span className="lbl">Total returns</span>
-          <span className={`val num ${tone(totals.pnl)}`}>{signedCompact(totals.pnl)}</span>
-          <span className="foot">
-            <span className={`pill ${tone(totals.pnlPct)}`}>{pct(totals.pnlPct)}</span> unrealised
-          </span>
-        </div>
-        <div className="card kpi">
-          <span className="lbl">Today&apos;s P&amp;L</span>
-          <span className={`val num ${tone(totals.day)}`}>{signedCompact(totals.day)}</span>
-          <span className="foot">
-            <span className={`pill ${tone(totals.dayPct)}`}>{pct(totals.dayPct)}</span>
-            <DayCoverageNote coverage={dayCoverage(instruments)} />
-          </span>
-        </div>
-      </section>
+      <ExecutiveStrip
+        instruments={instruments}
+        history={history}
+        classHistory={classHistory}
+        period={period}
+        onPeriod={setPeriod}
+        filterActive={filterActive}
+      />
 
       <section className="g-main">
         <ValueChart history={history} loading={historyLoading} />
