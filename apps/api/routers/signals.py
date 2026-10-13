@@ -368,6 +368,13 @@ async def _us_quotes(owner_id: str, holdings: List[Holding]) -> Dict[str, Any]:
     return quotes
 
 
+@router.get("/symbol-map", status_code=status.HTTP_200_OK, summary="Broker symbol to exchange id for the caller's stocks")
+async def get_symbol_map(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
+    """Lets any page link a holding to its Momentum view. Cache only: nothing is resolved here."""
+    holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
+    return {"in": await _equity_symbol_map(holdings, None), "us": _us_symbol_map(holdings)}
+
+
 @router.get("/us-live", status_code=status.HTTP_200_OK, summary="Live USD prices for the caller's US stocks")
 async def get_us_live(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
     holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)

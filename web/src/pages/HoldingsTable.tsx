@@ -1,3 +1,6 @@
+import { StockLink } from '../components/StockLink'
+import { DayCoverageNote } from '../components/DayCoverageNote'
+import { dayCoverage } from '../utils/dayCoverage'
 import React, { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronRight, Download, Search, X } from 'lucide-react'
@@ -45,7 +48,7 @@ const COLUMNS: { key: SortKey | null; label: string; cell: string }[] = [
 
 export const HoldingsTable: React.FC = () => {
   const [params, setParams] = useSearchParams()
-  const { holdings, loading, error, refresh } = usePortfolio()
+  const { holdings, loading, error, refresh, stockHref } = usePortfolio()
   const fmt = useMoney()
 
   const [q, setQ] = useState('')
@@ -226,7 +229,9 @@ export const HoldingsTable: React.FC = () => {
             </button>
             <div style={{ minWidth: 0 }}>
               <div className="ins-sym">
-                <span title={i.sym}>{i.sym.length > 34 ? `${i.sym.slice(0, 33)}…` : i.sym}</span>
+                <StockLink href={stockHref(i)} title={stockHref(i) ? 'Open in Momentum' : i.sym}>
+                  {i.sym.length > 34 ? `${i.sym.slice(0, 33)}…` : i.sym}
+                </StockLink>
                 <BrokerBadges keys={i.brokers} />
               </div>
               <div className="ins-nm">
@@ -344,12 +349,8 @@ export const HoldingsTable: React.FC = () => {
     rows.forEach((i) => body.push(renderRow(i)))
   }
 
-  const dayNote =
-    totals.reporting === 0
-      ? 'No day change reported yet'
-      : totals.reporting < rows.length
-      ? `${totals.reporting} of ${rows.length} reporting`
-      : 'All positions reporting'
+  const coverage = dayCoverage(rows)
+  const dayNote = totals.reporting === 0 ? <span>No day change reported yet</span> : <DayCoverageNote coverage={coverage} />
 
   return (
     <>

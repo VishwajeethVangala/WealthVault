@@ -1,3 +1,6 @@
+import { StockLink } from '../components/StockLink'
+import { DayCoverageNote } from '../components/DayCoverageNote'
+import { dayCoverage } from '../utils/dayCoverage'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, Info, PieChart } from 'lucide-react'
@@ -19,7 +22,7 @@ const NOTE_ICON = { ok: Check, warn: AlertTriangle, info: Info, neg: AlertTriang
 export const ExecutiveOverview: React.FC = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { holdings, loading, error, refresh } = usePortfolio()
+  const { holdings, loading, error, refresh, stockHref } = usePortfolio()
   const { money, compact, signedCompact, signedMoney } = useMoney()
 
   const [sessions, setSessions] = useState<BrokerSessionInfo[]>([])
@@ -259,7 +262,7 @@ export const ExecutiveOverview: React.FC = () => {
           <span className={`val num ${tone(totals.day)}`}>{signedCompact(totals.day)}</span>
           <span className="foot">
             <span className={`pill ${tone(totals.dayPct)}`}>{pct(totals.dayPct)}</span>
-            {totals.reporting} of {instruments.length} reporting
+            <DayCoverageNote coverage={dayCoverage(instruments)} />
           </span>
         </div>
       </section>
@@ -349,7 +352,9 @@ export const ExecutiveOverview: React.FC = () => {
               return (
                 <div className="bar-row" key={i.key}>
                   <div className="bar-top">
-                    <span className="n">{i.sym}</span>
+                    <span className="n">
+                      <StockLink href={stockHref(i)}>{i.sym}</StockLink>
+                    </span>
                     <span className={`v num ${tone(i.pnl)}`}>{signedCompact(i.pnl)}</span>
                   </div>
                   <div className="dtrack">
@@ -419,7 +424,9 @@ export const ExecutiveOverview: React.FC = () => {
                 {col.rows.map((m) => (
                   <div className="mrow" key={m.key}>
                     <div style={{ minWidth: 0 }}>
-                      <div className="s">{m.sym}</div>
+                      <div className="s">
+                        <StockLink href={stockHref(m)}>{m.sym}</StockLink>
+                      </div>
                       <div className="nm">{CLASS_LABEL[m.cls]}</div>
                     </div>
                     <div className="rt">
@@ -450,7 +457,7 @@ export const ExecutiveOverview: React.FC = () => {
                 <span className="rk num">{idx + 1}</span>
                 <div style={{ minWidth: 0 }}>
                   <div className="s">
-                    {t.sym}
+                    <StockLink href={stockHref(t)}>{t.sym}</StockLink>
                     <span className="tag-cls">
                       <span className="dot" style={{ background: CLASS_COLOR[t.cls], width: 6, height: 6 }} />
                       {CLASS_LABEL[t.cls]}

@@ -100,6 +100,7 @@ class Holding(BaseModel):
     pnl: Optional[float] = Field(default=None, description="Total unrealized profit or loss")
     day_pnl: Optional[float] = Field(default=None, description="1-day unrealized profit or loss")
     day_change_percentage: Optional[float] = Field(default=None, description="1-day price percentage change")
+    isin: Optional[str] = Field(default=None, description="ISIN, kept for mutual funds so their NAV change can be looked up")
     data_freshness: str = Field(default="live", description="'live' if refreshed via MCP, 'cached' if fallback")
     last_price_updated_at: Optional[str] = Field(default=None, description="ISO timestamp of last quote update")
     currency: str = Field(default="INR", description="Denomination currency code")

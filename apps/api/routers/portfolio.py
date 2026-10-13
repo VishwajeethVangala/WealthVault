@@ -18,6 +18,7 @@ from core.market_data import get_market_data_service
 from core.market_data.indmoney_client import IndmoneyAuthRequiredError, IndmoneyMCPClient, get_indmoney_mcp_client
 from core.market_data.kite_client import get_kite_mcp_client
 from core.market_data.indmoney_live import overlay_indmoney_live
+from core.market_data.mf_nav import apply_mf_day_changes
 from core.market_data.user_client import get_user_kite_client
 from core.models import (
     BrokerCatalogItem,
@@ -266,10 +267,10 @@ async def get_portfolio_holdings(
                 filtered = await overlay_indmoney_live(current_user_id, filtered)
             try:
                 enriched, _ = await market_service.enrich_holdings_with_live_quotes(filtered, client=await get_user_kite_client(current_user_id))
-                return enriched
+                return await apply_mf_day_changes(enriched)
             except Exception as quote_err:
                 logger.warning("Market quote enrichment note for persisted holdings: %s", quote_err)
-        return filtered
+        return await apply_mf_day_changes(filtered)
 
     normalizer = NormalizationService()
     unified_holdings: List[Holding] = []

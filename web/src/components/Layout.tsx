@@ -9,6 +9,7 @@ import { GlobalFilters } from './GlobalFilters'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useTheme } from '../context/ThemeContext'
 import { usePrivacy } from '../context/PrivacyContext'
+import { buildInstruments } from './holdings/holdingsModel'
 import type { BrokerSessionInfo } from '../types'
 
 interface LayoutProps {
@@ -87,6 +88,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     }
   }
 
+  // one holding per instrument, as the Holdings page counts them (a stock held with two brokers is one holding)
+  const holdingsCount = useMemo(() => buildInstruments(holdings).length, [holdings])
+
   const handleLogout = () => {
     clearToken()
     if (onLogout) onLogout()
@@ -95,7 +99,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
 
   return (
     <div className="app">
-      <Sidebar holdingsCount={holdings.length} sessions={sessions} />
+      <Sidebar holdingsCount={holdingsCount} sessions={sessions} />
 
       <div className="main">
         <header className="topbar">

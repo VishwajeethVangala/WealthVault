@@ -430,6 +430,26 @@ export interface MomentumSignal {
   range_pos: number | null
 }
 
+/** A closed trade: where the strategy said sell. */
+export interface ExitCall {
+  signal_date: string
+  exit_date: string
+  exit_price: number | null
+  reason: string
+  entry_date: string
+  entry_price: number | null
+  pnl_pct: number | null
+  bars_held: number | null
+}
+
+export interface PendingSell {
+  signal_date: string
+  signal_close: number
+  reason: string
+  entry_date: string | null
+  entry_price: number | null
+}
+
 export interface SwingSignal {
   state: 'IN_POSITION' | 'FLAT'
   headline: string
@@ -442,6 +462,8 @@ export interface SwingSignal {
   regime_bullish: boolean
   as_of: string
   call?: SwingCall | null
+  exits?: ExitCall[]
+  pending_sell?: PendingSell | null
 }
 
 export interface AthSignal {
@@ -458,6 +480,7 @@ export interface AthSignal {
   pct_above_dma: number | null
   as_of: string
   call?: AthCall | null
+  exits?: ExitCall[]
 }
 
 export interface StockSignals {
@@ -465,7 +488,7 @@ export interface StockSignals {
   name?: string | null
   as_of?: string | null
   history_days?: number
-  /** the two most recent completed sessions for this stock */
+  /** the most recent sessions (up to 7) for this stock, oldest first */
   last_sessions?: string[]
   /** present when the row was rebuilt on the live price: today's bar is unfinished until the close */
   live?: { price: number; date: string; at: string }

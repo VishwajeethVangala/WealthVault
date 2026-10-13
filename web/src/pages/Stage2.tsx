@@ -16,7 +16,7 @@ import {
   type Fmt,
   type Reading,
 } from '../components/signals/signalKit'
-import { NewCalls, type CallSource } from '../components/signals/NewCalls'
+import { CallsView, type CallSource } from '../components/signals/NewCalls'
 import type { Stage2Response, Stage2Row, StockSignals } from '../types'
 
 type Filter = 'all' | 'new' | 'bull' | 'fresh' | 'held'
@@ -204,6 +204,7 @@ export const Stage2: React.FC = () => {
         code: r.row.nsecode,
         name: r.row.name,
         sector: typeof r.row.sector === 'string' ? titleCase(r.row.sector) : undefined,
+        href: `/momentum?symbol=${encodeURIComponent(r.row.nsecode)}`,
         held: r.row.held,
         isNew: r.row.is_new,
         sig: r.sig,
@@ -369,7 +370,7 @@ export const Stage2: React.FC = () => {
         </section>
       )}
 
-      {list && view === 'calls' && <NewCalls sources={callSources} fmt={fmt} sessionOpen={sessionOpen} />}
+      {list && view === 'calls' && <CallsView sources={callSources} fmt={fmt} sessionOpen={sessionOpen} />}
 
       {(!list || view === 'list') && (<section className="toolbar" aria-label="Filters">
         <div className="search">

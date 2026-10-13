@@ -5,6 +5,8 @@ import './styles/holdings.css'
 import './styles/brokers.css'
 import './styles/dashboard.css'
 import './styles/signals.css'
+import './styles/components.css'
+import './styles/polish.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(

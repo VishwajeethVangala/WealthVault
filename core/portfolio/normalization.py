@@ -119,6 +119,7 @@ class NormalizationService:
                 pnl = round(current_value - (quantity * average_price), 2)
 
             isin = str(item.get("tradingsymbol") or symbol)
+            holding_isin = isin if isin.upper().startswith("INF") else None
             holding_id = self._generate_id("hld_mf", owner_id, connection_id, isin)
             day_pnl, day_pct = None, None
         else:
@@ -137,6 +138,7 @@ class NormalizationService:
                 asset_class = AssetClass.EQUITY
 
             holding_id = self._generate_id("hld", owner_id, connection_id, symbol)
+            holding_isin = None
 
             # Kite holdings report the per-share change versus the previous close
             day_change = item.get("day_change")
@@ -157,6 +159,7 @@ class NormalizationService:
             pnl=pnl,
             day_pnl=day_pnl,
             day_change_percentage=day_pct,
+            isin=holding_isin,
             currency="INR",
         )
 
