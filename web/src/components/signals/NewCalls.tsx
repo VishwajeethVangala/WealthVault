@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { pct, tone, weight } from '../../utils/format'
 import { StockLink } from '../StockLink'
@@ -195,7 +195,8 @@ const groupRows = (rows: Row[], side: 'buy' | 'sell'): Group[] => {
 
 const PAGE = 40
 
-const CallTable: React.FC<{ kind: Kind; side: 'buy' | 'sell'; rows: Row[]; fmt: Fmt; empty: string; title?: string; sub?: string; accent?: string }> = ({
+const CallTable: React.FC<{ kind: Kind; side: 'buy' | 'sell'; rows: Row[]; fmt: Fmt; empty: string; title?: string; sub?: string; accent?: string; startOpen?: boolean }> = ({
+  startOpen = false,
   kind,
   side,
   rows,
@@ -206,6 +207,12 @@ const CallTable: React.FC<{ kind: Kind; side: 'buy' | 'sell'; rows: Row[]; fmt: 
   accent,
 }) => {
   const [shown, setShown] = useState(PAGE)
+  const [open, setOpen] = useState(startOpen && rows.length > 0)
+  // a link that asks for these rows open must still open them when the data arrives a moment later
+  const hasRows = rows.length > 0
+  useEffect(() => {
+    if (startOpen && hasRows) setOpen(true)
+  }, [startOpen, hasRows])
   const flat = useMemo<Group[]>(() => (rows.every((r) => r.waiting) ? [{ id: 'waiting', title: '', rows }] : groupRows(rows, side)), [rows, side])
   // page by rows so a long "all open" list stays quick to scroll
   let budget = shown
@@ -221,7 +228,7 @@ const CallTable: React.FC<{ kind: Kind; side: 'buy' | 'sell'; rows: Row[]; fmt: 
   const labels = side === 'buy' ? ['Stock', 'Entry', 'Why it fired', 'Risk', 'Now', 'Since entry'] : ['Stock', 'Exit', 'Why it fired', 'Trade', 'Now', 'Since exit']
 
   return (
-    <details className="card callsec">
+    <details className="card callsec" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary className="callsec-h">
         <span className="callsec-bar" style={{ background: accent ?? head.accent }} aria-hidden="true" />
         <div className="callsec-t">
@@ -316,13 +323,15 @@ const CallTable: React.FC<{ kind: Kind; side: 'buy' | 'sell'; rows: Row[]; fmt: 
   )
 }
 
-export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?: boolean; defaultWindow?: BuyWindow }> = ({
+export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?: boolean; defaultWindow?: BuyWindow; defaultSide?: 'buy' | 'sell'; expand?: boolean }> = ({
   sources,
   fmt,
   sessionOpen = false,
   defaultWindow = 2,
+  defaultSide = 'buy',
+  expand = false,
 }) => {
-  const [side, setSide] = useState<'buy' | 'sell'>('buy')
+  const [side, setSide] = useState<'buy' | 'sell'>(defaultSide)
   const [window, setWindow] = useState<BuyWindow>(defaultWindow)
   const [mine, setMine] = useState(false)
 
@@ -409,6 +418,7 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
           kind={kind}
           side={side}
           rows={filled.filter((r) => r.kind === kind)}
+          startOpen={expand}
           fmt={fmt}
           empty={side === 'buy' ? (window === 'open' ? 'No open positions.' : 'No buys filled in this period.') : 'No sells in the last 7 sessions.'}
         />
@@ -423,6 +433,7 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
           title={side === 'buy' ? 'Swing buys waiting to fill' : 'Swing sells waiting to fill'}
           sub={`The latest session's Swing ${side} signals. The strategy trades at the next open, so none has filled yet; the price shown is the signal close and the real fill can differ.`}
           accent="var(--warn)"
+          startOpen={expand}
           empty="Nothing is waiting to fill."
         />
       )}
