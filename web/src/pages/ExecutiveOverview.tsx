@@ -1,17 +1,24 @@
-import { ExecutiveStrip, type Period } from '../components/dashboard/ExecutiveStrip'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, Check, Info } from 'lucide-react'
 import { StockLink } from '../components/StockLink'
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, Info, PieChart } from 'lucide-react'
 import { fetchBrokerSessions, fetchHistory, fetchTargets, saveTargets, type HistoryPoint } from '../utils/api'
 import { usePortfolio } from '../context/PortfolioContext'
 import { brokerLabel, classifyAssetClass, matchesBroker, brokerKeyOf } from '../utils/portfolioFilters'
 import { SINGLE_POSITION_LIMIT_PCT, dayPctOf, displaySymbol } from '../utils/dayChange'
-import { pct, tone, weight } from '../utils/format'
+import { pct, weight } from '../utils/format'
 import { useMoney } from '../utils/useMoney'
-import { CLASS_COLOR, CLASS_LABEL, CLASS_ORDER, brokerCode, brokerColor, buildInstruments, type Instrument } from '../components/holdings/holdingsModel'
+import { CLASS_COLOR, CLASS_LABEL, brokerCode, brokerColor, buildInstruments } from '../components/holdings/holdingsModel'
 import { TargetAllocationEditor } from '../components/dashboard/TargetAllocationEditor'
-import { ValueChart } from '../components/dashboard/ValueChart'
+import { HeroBand } from '../components/dashboard/HeroBand'
+import { CategoryGrid } from '../components/dashboard/CategoryGrid'
+import { DayMove } from '../components/dashboard/DayMove'
+import { SignalsPanel, type SignalDigest } from '../components/dashboard/SignalsPanel'
+import { RiskPanel } from '../components/dashboard/RiskPanel'
+import { DriftPanel } from '../components/dashboard/DriftPanel'
+import { Brief } from '../components/dashboard/Brief'
+import { useNifty, useUsdMove } from '../components/dashboard/useMarket'
+import { baseline, buildClassCards, concentration, drawdownOf, driftRows, totalsOf, type Period } from '../components/dashboard/metrics'
 import type { BrokerSessionInfo } from '../types'
 
 type Note = { id: string; tone: 'ok' | 'warn' | 'info' | 'neg'; title: string; body: string }
@@ -19,17 +26,15 @@ type Note = { id: string; tone: 'ok' | 'warn' | 'info' | 'neg'; title: string; b
 const NOTE_ICON = { ok: Check, warn: AlertTriangle, info: Info, neg: AlertTriangle }
 
 export const ExecutiveOverview: React.FC = () => {
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { holdings, loading, error, refresh, stockHref } = usePortfolio()
-  const { money, compact, signedCompact, signedMoney } = useMoney()
+  const { compact, signedCompact } = useMoney()
 
   const [sessions, setSessions] = useState<BrokerSessionInfo[]>([])
   const [targets, setTargets] = useState<Record<string, number>>({})
   const [editingTargets, setEditingTargets] = useState(false)
   const [history, setHistory] = useState<HistoryPoint[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
-  const [period, setPeriod] = useState<Period>('1D')
+    const [period, setPeriod] = useState<Period>('1D')
 
   const activeBroker = searchParams.get('broker') || 'all'
   const activeAssetClass = searchParams.get('assetClass') || 'all'
@@ -42,7 +47,6 @@ export const ExecutiveOverview: React.FC = () => {
     fetchHistory(3650)
       .then(setHistory)
       .catch(() => setHistory([]))
-      .finally(() => setHistoryLoading(false))
   }, [])
 
   // per-class value by day, for the category cards
@@ -64,35 +68,19 @@ export const ExecutiveOverview: React.FC = () => {
 
   const instruments = useMemo(() => buildInstruments(filtered), [filtered])
 
-  const totals = useMemo(() => {
-    const cur = instruments.reduce((s, i) => s + i.cur, 0)
-    const inv = instruments.reduce((s, i) => s + i.inv, 0)
-    const reporting = instruments.filter((i) => i.day !== null)
-    const day = reporting.reduce((s, i) => s + (i.day as number), 0)
-    const dayBase = reporting.reduce((s, i) => s + i.cur - (i.day as number), 0)
-    return {
-      cur,
-      inv,
-      pnl: cur - inv,
-      pnlPct: inv > 0 ? ((cur - inv) / inv) * 100 : null,
-      day: reporting.length > 0 ? day : null,
-      dayPct: reporting.length > 0 && dayBase > 0 ? (day / dayBase) * 100 : null,
-      reporting: reporting.length,
-    }
-  }, [instruments])
+  const totals = useMemo(() => totalsOf(instruments), [instruments])
 
-  const allocation = useMemo(
-    () =>
-      CLASS_ORDER.map((cls) => {
-        const items = instruments.filter((i) => i.cls === cls)
-        const cur = items.reduce((s, i) => s + i.cur, 0)
-        const inv = items.reduce((s, i) => s + i.inv, 0)
-        const w = totals.cur > 0 ? (cur / totals.cur) * 100 : 0
-        const target = targets[cls] || 0
-        return { cls, count: items.length, cur, w, ret: inv > 0 ? ((cur - inv) / inv) * 100 : null, target, drift: w - target }
-      }).filter((a) => a.count > 0 && a.cur > 0),
-    [instruments, totals.cur, targets],
-  )
+  const nifty = useNifty()
+  const usdMove = useUsdMove(instruments.some((i) => i.cls === 'US_STOCKS'))
+  const [digest, setDigest] = useState<SignalDigest | null>(null)
+
+  const fromDate = useMemo(() => baseline(history, period === '1D' ? '1M' : period)?.date ?? null, [history, period])
+  const cards = useMemo(() => buildClassCards(instruments, classHistory, fromDate, totals.cur), [instruments, classHistory, fromDate, totals.cur])
+  const conc = useMemo(() => concentration(instruments, totals.cur), [instruments, totals.cur])
+  const drawdown = useMemo(() => drawdownOf(history), [history])
+  const drift = useMemo(() => driftRows(cards, targets, totals.cur), [cards, targets, totals.cur])
+  const usdPct = useMemo(() => cards.find((c) => c.cls === 'US_STOCKS')?.weight ?? 0, [cards])
+  const allocation = useMemo(() => drift.map((d) => ({ cls: d.cls, w: d.weight, target: d.target, drift: d.drift })), [drift])
 
   const byBroker = useMemo(() => {
     const map = new Map<string, { cur: number; inv: number; count: number }>()
@@ -109,21 +97,7 @@ export const ExecutiveOverview: React.FC = () => {
       .sort((a, b) => b.cur - a.cur)
   }, [filtered, totals.cur])
 
-  const movers = useMemo(() => {
-    const ranked = instruments.filter((i) => i.dayPct !== null && i.day !== null)
-    const by = (a: Instrument, b: Instrument) => (b.dayPct as number) - (a.dayPct as number)
-    return {
-      gainers: ranked.filter((i) => (i.day as number) > 0).sort(by).slice(0, 4),
-      losers: ranked.filter((i) => (i.day as number) < 0).sort((a, b) => by(b, a)).slice(0, 4),
-    }
-  }, [instruments])
-
   const top = useMemo(() => [...instruments].sort((a, b) => b.cur - a.cur).slice(0, 6), [instruments])
-
-  const contributors = useMemo(() => {
-    const sorted = [...instruments].sort((a, b) => b.pnl - a.pnl)
-    return [...sorted.slice(0, 5), ...sorted.slice(-2).filter((i) => i.pnl < 0)].filter((v, i, arr) => arr.indexOf(v) === i)
-  }, [instruments])
 
   const notes = useMemo<Note[]>(() => {
     const out: Note[] = []
@@ -174,17 +148,32 @@ export const ExecutiveOverview: React.FC = () => {
     return out
   }, [sessions, instruments, totals.cur, allocation, filtered, targets])
 
-  const drill = useCallback(
-    (params: { assetClass?: string; highlight?: string; pnl?: string }) => {
-      const next = new URLSearchParams()
-      if (activeBroker !== 'all') next.set('broker', activeBroker)
-      if (params.assetClass) next.set('assetClass', params.assetClass)
-      if (params.highlight) next.set('highlight', params.highlight)
-      if (params.pnl) next.set('pnl', params.pnl)
-      navigate(`/holdings${next.toString() ? `?${next.toString()}` : ''}`)
-    },
-    [activeBroker, navigate],
-  )
+  const brief = useMemo(() => {
+    const out: string[] = []
+    if (totals.day !== null && totals.dayPct !== null) {
+      const dir = totals.day >= 0 ? 'up' : 'down'
+      const worst = [...cards].filter((c) => c.day !== null).sort((a, b) => (a.day as number) - (b.day as number))[0]
+      const best = [...cards].filter((c) => c.day !== null).sort((a, b) => (b.day as number) - (a.day as number))[0]
+      let line = `Your portfolio is ${dir} ${Math.abs(totals.dayPct).toFixed(2)}% today (${signedCompact(totals.day)})`
+      if (nifty != null) line += `, ${totals.dayPct - nifty >= 0 ? 'ahead of' : 'behind'} the Nifty (${pct(nifty)})`
+      line += '.'
+      if (worst && (worst.day as number) < 0) line += ` ${CLASS_LABEL[worst.cls]} cost the most (${signedCompact(worst.day)})`
+      if (best && (best.day as number) > 0 && best !== worst) line += `${worst && (worst.day as number) < 0 ? ', ' : ' '}${CLASS_LABEL[best.cls]} helped most (${signedCompact(best.day)})`
+      if (/[a-z)]$/.test(line)) line += '.'
+      out.push(line)
+    }
+    if (digest?.ready) {
+      const parts: string[] = []
+      if (digest.sells > 0) parts.push(`${digest.sells} sell call${digest.sells === 1 ? '' : 's'} on your holdings this week${digest.sellNames.length ? ` (${digest.sellNames.join(', ')})` : ''}`)
+      if (digest.buys > 0) parts.push(`${digest.buys} new buy${digest.buys === 1 ? '' : 's'}`)
+      if (digest.review > 0) parts.push(`${digest.review} to review`)
+      out.push(parts.length ? `Signals: ${parts.join(', ')}.` : 'Signals: no sell calls on your holdings this week.')
+    }
+    const guide = drift.filter((d) => d.target > 0 && Math.abs(d.drift) >= 3).sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift))[0]
+    if (conc.top1 && conc.top1Pct >= SINGLE_POSITION_LIMIT_PCT) out.push(`${conc.top1.sym} is ${weight(conc.top1Pct, 1)} of the portfolio, above the ${SINGLE_POSITION_LIMIT_PCT}% guide.`)
+    else if (guide) out.push(`${CLASS_LABEL[guide.cls]} sits ${Math.abs(guide.drift).toFixed(1)} points ${guide.drift > 0 ? 'over' : 'under'} target.`)
+    return out
+  }, [totals, cards, nifty, digest, drift, conc, signedCompact])
 
   const kiteSession = sessions.find((s) => s.broker_name.toLowerCase().includes('zerodha') && s.auth_url)
 
@@ -244,69 +233,38 @@ export const ExecutiveOverview: React.FC = () => {
         </div>
       )}
 
-      <ExecutiveStrip
+      <HeroBand
         instruments={instruments}
+        totals={totals}
         history={history}
-        classHistory={classHistory}
         period={period}
         onPeriod={setPeriod}
+        nifty={nifty}
         filterActive={filterActive}
       />
 
-      <section className="g-main">
-        <ValueChart history={history} loading={historyLoading} />
+      <Brief lines={brief} />
 
-        <div className="card">
-          <div className="card-h">
-            <div>
-              <h2 className="card-t">Asset allocation</h2>
-              <p className="card-s">Share of portfolio value by asset class</p>
-            </div>
-            <button className="btn btn-sm" onClick={() => setEditingTargets(true)}>
-              <PieChart size={16} strokeWidth={1.75} /> {Object.keys(targets).length ? 'Edit targets' : 'Set targets'}
-            </button>
-          </div>
-          <div className="stack" role="img" aria-label="Allocation bar">
-            {allocation.map((a) => (
-              <span key={a.cls} style={{ width: `${a.w}%`, background: CLASS_COLOR[a.cls] }} title={`${CLASS_LABEL[a.cls]} ${weight(a.w, 1)}`} />
-            ))}
-          </div>
-          <div className="alist">
-            <div className="arow thead">
-              <span>Class</span>
-              <span>Value</span>
-              <span style={{ textAlign: 'right' }}>Weight</span>
-              <span style={{ textAlign: 'right' }} className="r">
-                Return
-              </span>
-              <span style={{ textAlign: 'right' }} className="tg">
-                Target
-              </span>
-            </div>
-            {allocation.map((a) => (
-              <button key={a.cls} className="arow" onClick={() => drill({ assetClass: a.cls })} aria-label={`Open ${CLASS_LABEL[a.cls]} in Holdings`}>
-                <span className="nm">
-                  <span className="dot" style={{ background: CLASS_COLOR[a.cls] }} />
-                  {CLASS_LABEL[a.cls]}
-                </span>
-                <span className="num">{compact(a.cur)}</span>
-                <span className="w num dim">{weight(a.w, 1)}</span>
-                <span className={`r num ${tone(a.ret)}`}>{pct(a.ret, 1)}</span>
-                <span className="tg num dim">{a.target > 0 ? `${a.target.toFixed(0)}% (${a.drift > 0 ? '+' : a.drift < 0 ? '−' : ''}${Math.abs(a.drift).toFixed(1)})` : '—'}</span>
-              </button>
-            ))}
-          </div>
-        </div>
+      <CategoryGrid cards={cards} period={period} usdMove={usdMove} />
+
+      <section className="bx-two">
+        <DayMove cards={cards} instruments={instruments} total={totals.day} />
+        <SignalsPanel instruments={instruments} onDigest={setDigest} />
       </section>
 
-      <section className="g-3">
-        <div className="card">
-          <div className="card-h">
+      <section className="bx-two">
+        <DriftPanel rows={drift} hasTargets={Object.keys(targets).length > 0} onEdit={() => setEditingTargets(true)} />
+        <RiskPanel concentration={conc} drawdown={drawdown} usdPct={usdPct} />
+      </section>
+
+      <section className="bx-three">
+        <div className="card bx-panel">
+          <header className="bx-ph">
             <div>
               <h2 className="card-t">Notes</h2>
               <p className="card-s">Computed from your holdings and connections</p>
             </div>
-          </div>
+          </header>
           <div className="ins">
             {notes.map((n) => {
               const Icon = NOTE_ICON[n.tone]
@@ -325,35 +283,38 @@ export const ExecutiveOverview: React.FC = () => {
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-h">
+        <div className="card bx-panel">
+          <header className="bx-ph">
             <div>
-              <h2 className="card-t">Profit contributors</h2>
-              <p className="card-s">What drives your {signedCompact(totals.pnl)} unrealised result</p>
+              <h2 className="card-t">Largest positions</h2>
+              <p className="card-s">Merged across brokers, share of portfolio value</p>
             </div>
-          </div>
-          <div className="bars">
-            {contributors.map((i) => {
-              const maxAbs = Math.max(...contributors.map((c) => Math.abs(c.pnl)), 1)
-              return (
-                <div className="bar-row" key={i.key}>
-                  <div className="bar-top">
-                    <span className="n">
-                      <StockLink href={stockHref(i)}>{i.sym}</StockLink>
-                    </span>
-                    <span className={`v num ${tone(i.pnl)}`}>{signedCompact(i.pnl)}</span>
-                  </div>
-                  <div className="dtrack">
-                    <span style={{ width: `${(Math.abs(i.pnl) / maxAbs) * 100}%`, background: i.pnl < 0 ? 'var(--loss)' : 'var(--gain)' }} />
-                  </div>
+            <Link className="link" to="/holdings">
+              All holdings
+            </Link>
+          </header>
+          {top.map((t, idx) => {
+            const w = totals.cur > 0 ? (t.cur / totals.cur) * 100 : 0
+            return (
+              <div className="bx-pos" key={t.key}>
+                <span className="rk num">{idx + 1}</span>
+                <div className="nm">
+                  <StockLink href={stockHref(t)}>{t.sym}</StockLink>
+                  <small>
+                    <span className="dot" style={{ background: CLASS_COLOR[t.cls] }} /> {CLASS_LABEL[t.cls]} · {t.brokers.map(brokerLabel).join(' + ')}
+                  </small>
                 </div>
-              )
-            })}
-          </div>
+                <div className="bar" aria-hidden="true">
+                  <i style={{ width: `${Math.min(100, w * 4)}%` }} />
+                </div>
+                <div className="v num">{weight(w, 1)}</div>
+              </div>
+            )
+          })}
         </div>
 
-        <div className="card">
-          <div className="card-h">
+        <div className="card bx-panel">
+          <header className="bx-ph">
             <div>
               <h2 className="card-t">By broker</h2>
               <p className="card-s">Holdings value at each account</p>
@@ -361,7 +322,7 @@ export const ExecutiveOverview: React.FC = () => {
             <Link className="link" to="/brokers">
               Manage
             </Link>
-          </div>
+          </header>
           <div>
             {byBroker.map((b) => (
               <div className="brow" key={b.key}>
@@ -379,94 +340,13 @@ export const ExecutiveOverview: React.FC = () => {
                 </div>
                 <div>
                   <div className="v num">{compact(b.cur)}</div>
-                  <div className={`m num ${tone(b.ret)}`} style={{ textAlign: 'right' }}>
+                  <div className={`m num ${b.ret != null && b.ret < 0 ? 'neg' : 'pos'}`} style={{ textAlign: 'right' }}>
                     {pct(b.ret, 1)}
                   </div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      <section className="g-2">
-        <div className="card">
-          <div className="card-h">
-            <div>
-              <h2 className="card-t">Today&apos;s movers</h2>
-              <p className="card-s">Ranked by 1-day change. Funds and NPS report none.</p>
-            </div>
-          </div>
-          <div className="mv">
-            {([
-              { label: 'Top gainers', icon: <ArrowUpRight size={14} className="pos" />, rows: movers.gainers, cls: 'pos' },
-              { label: 'Top losers', icon: <ArrowDownRight size={14} className="neg" />, rows: movers.losers, cls: 'neg' },
-            ] as const).map((col) => (
-              <div key={col.label}>
-                <p className="mv-h">
-                  {col.icon} {col.label}
-                </p>
-                {col.rows.length === 0 && <p className="empty-s">None today</p>}
-                {col.rows.map((m) => (
-                  <div className="mrow" key={m.key}>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="s">
-                        <StockLink href={stockHref(m)}>{m.sym}</StockLink>
-                      </div>
-                      <div className="nm">{CLASS_LABEL[m.cls]}</div>
-                    </div>
-                    <div className="rt">
-                      <span className={`pill ${col.cls}`}>{pct(m.dayPct)}</span>
-                      <span className={`num ${col.cls}`}>{signedMoney(m.day)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-h">
-            <div>
-              <h2 className="card-t">Largest positions</h2>
-              <p className="card-s">Merged across brokers, share of portfolio value</p>
-            </div>
-            <Link className="link" to="/holdings">
-              All holdings
-            </Link>
-          </div>
-          {top.map((t, idx) => {
-            const w = totals.cur > 0 ? (t.cur / totals.cur) * 100 : 0
-            return (
-              <div className="trow" key={t.key}>
-                <span className="rk num">{idx + 1}</span>
-                <div style={{ minWidth: 0 }}>
-                  <div className="s">
-                    <StockLink href={stockHref(t)}>{t.sym}</StockLink>
-                    <span className="tag-cls">
-                      <span className="dot" style={{ background: CLASS_COLOR[t.cls], width: 6, height: 6 }} />
-                      {CLASS_LABEL[t.cls]}
-                    </span>
-                  </div>
-                  <div className="nm">{t.brokers.map(brokerLabel).join(' + ')}</div>
-                </div>
-                <div className="wbar">
-                  <div className="dtrack" style={{ margin: 0 }}>
-                    <span style={{ width: `${Math.min(100, w * 4)}%` }} />
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div className="num" style={{ fontWeight: 600 }}>
-                    {weight(w, 1)}
-                  </div>
-                  <div className="num dim" style={{ fontSize: 12 }}>
-                    {money(t.cur)}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
         </div>
       </section>
 

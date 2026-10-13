@@ -243,6 +243,19 @@ export async function fetchStage2LiveSignals(): Promise<LiveSignalsResponse> {
   return fetchApi<LiveSignalsResponse>('/api/v1/analytics/stage2/live-signals')
 }
 
+export interface PortfolioRisk {
+  days: number; since: string; until: string; beta: number | null; correlation: number | null
+  volatility_pct: number; benchmark_volatility_pct: number; downside_volatility_pct: number; var95_1d_pct: number
+  max_drawdown_pct: number; best_day_pct: number; worst_day_pct: number; positive_days_pct: number
+  coverage_pct: number; stocks: number; high_beta: { name: string; weight: number; beta: number; contribution: number }[]
+}
+
+export interface PortfolioRiskResponse { risk: PortfolioRisk | null; equity_value: number; measured_stocks: number; total_stocks: number; ready: boolean }
+
+export async function fetchPortfolioRisk(): Promise<PortfolioRiskResponse> {
+  return fetchApi<PortfolioRiskResponse>('/api/v1/analytics/signals/risk')
+}
+
 export async function fetchSymbolMap(): Promise<{ in: Record<string, string>; us: Record<string, string> }> {
   return fetchApi('/api/v1/analytics/signals/symbol-map')
 }
