@@ -210,18 +210,26 @@ async def get_stage2(current_user_id: str = Depends(get_current_user)) -> Dict[s
 async def get_stage2_live_signals(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
     latest, _ = await ScreenerSnapshotRepository().latest_two(SLUG)
     if latest is None:
-        return {"signals": {}, "live": False}
+        return {"signals": {}, "live": False, "reason": "no_signals"}
     codes = [r["nsecode"] for r in latest[1].get("rows", [])]
     cached = await SignalCacheRepository().get_many([_code_key(c) for c in codes])
     rows: Dict[str, Any] = {}
+    reason = "ok"
     try:
-        live = await live_india_rows(await get_user_kite_client(current_user_id), cached)
+        kite = await get_user_kite_client(current_user_id)
+        live = await live_india_rows(kite, cached)
         rows = {k.split(":", 1)[1]: v for k, v in live.items()}
+        if not rows and not kite.is_authenticated:
+            reason = "login"  # the quote call flips this flag when the daily Kite session has lapsed
     except KiteAuthRequiredError as exc:
         logger.info("Live Stage 2 signals unavailable: %s", exc)
+        reason = "login"
     except Exception as exc:
         logger.warning("Live Stage 2 signals failed: %s", exc, exc_info=True)
-    return {"signals": rows, "live": bool(rows), "at": datetime.now(timezone.utc).isoformat()}
+        reason = "error"
+    if not rows and reason == "ok":
+        reason = "no_prices" if cached else "no_signals"
+    return {"signals": rows, "live": bool(rows), "reason": "ok" if rows else reason, "at": datetime.now(timezone.utc).isoformat()}
 
 
 @router.get("/live", status_code=status.HTTP_200_OK, summary="Live Kite prices for the Stage 2 stocks")

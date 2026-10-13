@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import type { StockSignals } from '../../types'
 
+/** Why the rows are not live: no broker login, nothing to price, nothing computed yet, or a failure. */
+export type LiveReason = 'ok' | 'login' | 'no_prices' | 'no_signals' | 'error'
+
 export interface LiveSignalsResponse {
   signals: Record<string, StockSignals>
   live: boolean
+  reason?: LiveReason
   at?: string
 }
+
+/** `checking` until the first answer arrives, then `live` or `stored` (with the reason). */
+export type LiveStatus = { kind: 'checking' } | { kind: 'live'; at: string | null } | { kind: 'stored'; reason: LiveReason }
 
 /**
  * Signal rows recomputed on the live price. Starts when `enabled`, then repeats every `everyMs()` (slower
@@ -18,8 +25,13 @@ export function useLiveSignals(
   everyMs: () => number,
   resetKey: string,
   rerunKey?: string | null,
-): { signals: Record<string, StockSignals>; at: string | null } {
-  const [state, setState] = useState<{ key: string; signals: Record<string, StockSignals>; at: string | null }>({ key: resetKey, signals: {}, at: null })
+): { signals: Record<string, StockSignals>; at: string | null; status: LiveStatus } {
+  const [state, setState] = useState<{ key: string; signals: Record<string, StockSignals>; at: string | null; status: LiveStatus }>({
+    key: resetKey,
+    signals: {},
+    at: null,
+    status: { kind: 'checking' },
+  })
   const fetchRef = useRef(fetcher)
   fetchRef.current = fetcher
   const everyRef = useRef(everyMs)
@@ -33,9 +45,12 @@ export function useLiveSignals(
       if (!document.hidden) {
         try {
           const res = await fetchRef.current()
-          if (!stop && res.live) setState({ key: resetKey, signals: res.signals, at: res.at ?? null })
+          if (!stop) {
+            if (res.live) setState({ key: resetKey, signals: res.signals, at: res.at ?? null, status: { kind: 'live', at: res.at ?? null } })
+            else setState({ key: resetKey, signals: {}, at: null, status: { kind: 'stored', reason: res.reason ?? 'no_prices' } })
+          }
         } catch {
-          /* keep the cached rows */
+          /* a network blip keeps whatever was showing */
         }
       }
       if (!stop) timer = window.setTimeout(tick, everyRef.current())
@@ -48,5 +63,5 @@ export function useLiveSignals(
   }, [enabled, resetKey, rerunKey])
 
   // rows from another market or list must never leak into this one
-  return state.key === resetKey ? { signals: state.signals, at: state.at } : { signals: {}, at: null }
+  return state.key === resetKey ? { signals: state.signals, at: state.at, status: state.status } : { signals: {}, at: null, status: { kind: 'checking' } }
 }

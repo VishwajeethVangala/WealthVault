@@ -436,21 +436,32 @@ async def get_live_signals(
     no quote, session not open) are simply absent and the caller keeps the cached ones."""
     holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
     rows: Dict[str, Any] = {}
+    cached: Dict[str, Any] = {}
+    reason = "ok"
     try:
         if market == "us":
             symbol_map = _us_symbol_map(holdings)
             cached = await SignalCacheRepository().get_many(list(set(symbol_map.values())))
             quotes = await _us_quotes(current_user_id, holdings)
             rows = await live_us_rows(cached, quotes, _us_names(holdings), US_TICK_SIZE)
+            if not rows and not _indmoney_client(current_user_id, holdings).is_authenticated():
+                reason = "login"
         else:
             symbol_map = await _equity_symbol_map(holdings, None)
             cached = await SignalCacheRepository().get_many(list(set(symbol_map.values())))
-            rows = await live_india_rows(await get_user_kite_client(current_user_id), cached)
+            kite = await get_user_kite_client(current_user_id)
+            rows = await live_india_rows(kite, cached)
+            if not rows and not kite.is_authenticated:
+                reason = "login"  # the quote call flips this flag when the daily Kite session has lapsed
     except (KiteAuthRequiredError, IndmoneyAuthRequiredError, HTTPException) as exc:
         logger.info("Live signals unavailable: %s", getattr(exc, "detail", exc))
+        reason = "login"
     except Exception as exc:
         logger.warning("Live signals failed: %s", exc, exc_info=True)
-    return {"signals": rows, "live": bool(rows), "at": datetime.now(timezone.utc).isoformat()}
+        reason = "error"
+    if not rows and reason == "ok":
+        reason = "no_prices" if cached else "no_signals"
+    return {"signals": rows, "live": bool(rows), "reason": "ok" if rows else reason, "at": datetime.now(timezone.utc).isoformat()}
 
 
 def _collect_us_quotes(resp: Any, batch: List[str], quotes: Dict[str, Any]) -> None:

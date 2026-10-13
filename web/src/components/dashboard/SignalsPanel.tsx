@@ -7,6 +7,8 @@ import { usePortfolio } from '../../context/PortfolioContext'
 import { StockLink } from '../StockLink'
 import { buildBuys, buildSells, latestSessions, type CallSource } from '../signals/NewCalls'
 import { useLiveSignals } from '../signals/useLiveSignals'
+import { FreshnessChip } from '../signals/FreshnessChip'
+import { indiaSessionActive } from '../../utils/session'
 import { readSignals } from '../signals/signalKit'
 import type { Fmt } from '../signals/signalKit'
 import type { SignalsResponse, StockSignals } from '../../types'
@@ -115,9 +117,12 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
           <h2 className="card-t">Signals on your holdings</h2>
           <p className="card-s">Swing V2.1 and ATH breakout calls, on live prices</p>
         </div>
-        <Link className="link" to="/signals">
-          Open
-        </Link>
+        <div className="bx-ph-r">
+          {hasIn && <FreshnessChip status={liveIn.status} broker="Kite" sessionOpen={indiaSessionActive()} />}
+          <Link className="link" to="/signals">
+            Open
+          </Link>
+        </div>
       </header>
 
       {failed || model.covered === 0 ? (
