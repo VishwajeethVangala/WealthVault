@@ -1,0 +1,6 @@
+-keepattributes *Annotation*, InnerClasses
+-keep,includedescriptorclasses class com.wealthvault.app.**$$serializer { *; }
+-keepclassmembers class com.wealthvault.app.** { *** Companion; }
+-keepclasseswithmembers class com.wealthvault.app.** { kotlinx.serialization.KSerializer serializer(...); }
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** { *; }

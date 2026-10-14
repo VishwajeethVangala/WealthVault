@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The web app's mark: a white "W" on the accent square. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#0F1720" android:pathData="M18,18h72v72h-72z" />
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:fillColor="#00000000" android:pathData="M34,40 L42,70 L54,48 L66,70 L74,40" />
+</vector>
