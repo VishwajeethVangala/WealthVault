@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Debug builds only: tests start the app signed in with
-        // `adb shell am start -n com.wealthvault.app/.MainActivity --es wv_base <url> --es wv_token <jwt>`
+        // `adb shell am start -n com.vangala.wealthvault/com.wealthvault.app.MainActivity --es wv_base <url> --es wv_token <jwt>`
         if (BuildConfig.DEBUG) {
             val base = intent.getStringExtra("wv_base")
             val token = intent.getStringExtra("wv_token")
