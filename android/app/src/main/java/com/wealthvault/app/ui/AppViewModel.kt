@@ -7,6 +7,7 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -97,7 +98,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun debugSignIn(baseUrl: String, token: String) = viewModelScope.launch {
         prefs.saveBaseUrl(baseUrl)
         prefs.signIn(com.wealthvault.app.data.TokenResponse(token, com.wealthvault.app.data.User("test", "test@local", "Test")))
-        refreshAll()
     }
 
     fun signOut() = viewModelScope.launch {
@@ -124,13 +124,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val cred = result.credential
                 if (cred is CustomCredential && cred.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     val idToken = GoogleIdTokenCredential.createFrom(cred.data).idToken
-                    prefs.signIn(api.signInWithGoogle(idToken))
-                    refreshAll()
+                    prefs.signIn(api.signInWithGoogle(idToken)) // the signed-in screen loads everything
                 } else {
                     message.value = "That sign-in type is not supported. Use a Google account."
                 }
             } catch (e: GetCredentialCancellationException) {
                 // the person closed the account picker
+            } catch (e: NoCredentialException) {
+                message.value = "No Google account to sign in with. Add one to the phone, or (first install) finish the Google setup in the app's README."
             } catch (e: GetCredentialException) {
                 message.value = "Google sign-in did not finish: ${e.message ?: e.type}"
             } catch (e: Exception) {

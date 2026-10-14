@@ -4,6 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -195,7 +197,18 @@ private fun MoversCard(up: List<Holding>, down: List<Holding>) {
     }
 }
 
-private fun displayName(h: Holding) = h.instrument_symbol.substringAfter(':')
+/** "INDS02714 (Transformers & Rectifiers India Ltd)" reads as the company name; a bare ticker stays as is. */
+private fun displayName(h: Holding): String {
+    val sym = h.instrument_symbol.substringAfter(':').trim()
+    val name = Regex("""\((.+)\)\s*$""").find(sym)?.groupValues?.get(1)?.trim()
+    return if (name.isNullOrBlank()) sym else name
+}
+
+/** The ticker part, shown small under the name when the name came from the brackets. */
+private fun ticker(h: Holding): String? {
+    val sym = h.instrument_symbol.substringAfter(':').trim()
+    return if (sym.endsWith(")") && '(' in sym) sym.substringBefore('(').trim().takeIf { it.isNotBlank() && !it.startsWith("INDS") } else null
+}
 
 // --- holdings ------------------------------------------------------------------------------------------
 
@@ -209,7 +222,7 @@ fun HoldingsScreen(vm: AppViewModel) {
     val classes = all.map { it.asset_class }.distinct().sortedBy { ASSET_CLASS_LABEL.keys.indexOf(it) }
     val rows = all
         .filter { cls == null || it.asset_class == cls }
-        .filter { query.isBlank() || it.instrument_symbol.contains(query.trim(), ignoreCase = true) }
+        .filter { query.isBlank() || it.instrument_symbol.contains(query.trim(), ignoreCase = true) || displayName(it).contains(query.trim(), ignoreCase = true) }
         .sortedByDescending { it.current_value }
 
     PullToRefreshBox(isRefreshing = holdings.loading, onRefresh = { vm.refreshAll() }) {
@@ -220,9 +233,9 @@ fun HoldingsScreen(vm: AppViewModel) {
             }
             if (classes.size > 1) {
                 item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                         Chip("All", cls == null) { cls = null }
-                        classes.take(4).forEach { c -> Chip(ASSET_CLASS_LABEL[c] ?: c, cls == c) { cls = c } }
+                        classes.forEach { c -> Chip(ASSET_CLASS_LABEL[c] ?: c, cls == c) { cls = c } }
                     }
                 }
             }
@@ -238,11 +251,11 @@ private fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
     Text(
         text,
         style = Wv.small.copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal),
-        color = if (on) Wv.c.text else Wv.c.text2,
+        color = if (on) Wv.c.accent else Wv.c.text2,
         maxLines = 1,
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(if (on) Wv.c.surface else Wv.c.surface2)
+            .background(if (on) Wv.c.accentWeak else Wv.c.surface2)
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
     )
@@ -256,7 +269,7 @@ private fun HoldingRow(h: Holding) {
             Column(Modifier.weight(1f)) {
                 Text(displayName(h), style = Wv.title, color = Wv.c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
-                    "${ASSET_CLASS_LABEL[h.asset_class] ?: h.asset_class} · ${trimQty(h.quantity)} at ${if (us) "$" + String.format("%.2f", h.average_price) else price(h.average_price)}",
+                    "${listOfNotNull(ticker(h), ASSET_CLASS_LABEL[h.asset_class] ?: h.asset_class).joinToString(" · ")} · ${trimQty(h.quantity)} at ${if (us) "$" + String.format("%.2f", h.average_price) else price(h.average_price)}",
                     style = Wv.small,
                     color = Wv.c.text3,
                 )
@@ -303,7 +316,7 @@ private fun BrokerCard(b: BrokerSession, syncing: String?, onSync: () -> Unit) {
     WvCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(b.display_name.ifBlank { b.broker_name }, style = Wv.title, color = Wv.c.text)
+                Text(brokerName(b), style = Wv.title, color = Wv.c.text)
                 Text(listOfNotNull(b.account_label, b.account_id.ifBlank { null }).joinToString(" · "), style = Wv.small, color = Wv.c.text3)
             }
             Badge(label, tone)
@@ -320,7 +333,7 @@ private fun BrokerCard(b: BrokerSession, syncing: String?, onSync: () -> Unit) {
             }
             Column(Modifier.weight(1.4f)) {
                 Text("Last sync", style = Wv.small, color = Wv.c.text3)
-                Text(b.last_sync_time?.take(16)?.replace('T', ' ') ?: "Never", style = Wv.small, color = Wv.c.text2)
+                Text(localTime(b.last_sync_time), style = Wv.small, color = Wv.c.text2)
             }
         }
         b.error_message?.takeIf { it.isNotBlank() }?.let { Note(it, bad = true) }
@@ -330,10 +343,28 @@ private fun BrokerCard(b: BrokerSession, syncing: String?, onSync: () -> Unit) {
             }
             if (!b.auth_url.isNullOrBlank() && b.status != "CONNECTED") {
                 OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(b.auth_url))) }, shape = RoundedCornerShape(10.dp)) {
-                    Text("Log in to ${b.display_name.ifBlank { "broker" }}", color = Wv.c.accent)
+                    Text("Log in", color = Wv.c.accent)
                 }
             }
         }
+    }
+}
+
+/** "Zerodha Kite Connect — Primary Account" without the account part, which is shown on the line below. */
+private fun brokerName(b: BrokerSession): String {
+    val name = b.display_name.ifBlank { b.broker_name }
+    val label = b.account_label
+    return if (!label.isNullOrBlank()) name.removeSuffix(label).trimEnd(' ', '—', '-', '·') else name
+}
+
+/** The server sends UTC; show it in the phone's time zone, e.g. "14 Oct, 1:08 am". */
+private fun localTime(iso: String?): String {
+    if (iso.isNullOrBlank()) return "Never"
+    return try {
+        java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofPattern("d MMM, h:mm a"))
+    } catch (e: Exception) {
+        iso.take(16).replace('T', ' ')
     }
 }
 
