@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
@@ -34,6 +34,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("wealthvault.api")
+
+_MEDIA_TYPES = {".webmanifest": "application/manifest+json", ".js": "text/javascript"}
 
 
 def _register_frontend_method() -> None:
@@ -74,7 +76,10 @@ def _register_frontend_method() -> None:
             # Check if requesting static asset directly inside dist
             candidate = target_dir / full_path
             if full_path and candidate.is_file():
-                return FileResponse(str(candidate))
+                # the browser refuses a service worker or manifest sent with the wrong type, so name them outright
+                media_type = _MEDIA_TYPES.get(candidate.suffix.lower())
+                headers = {"Cache-Control": "no-cache"} if candidate.name == "sw.js" else None
+                return FileResponse(str(candidate), media_type=media_type, headers=headers)
             # Client-side route fallback to index.html
             return FileResponse(str(fallback_file))
 
@@ -150,6 +155,25 @@ def create_application() -> FastAPI:
     app.include_router(history_router, prefix=settings.API_V1_PREFIX)
     app.include_router(signals_router, prefix=settings.API_V1_PREFIX)
     app.include_router(stage2_router, prefix=settings.API_V1_PREFIX)
+
+    @app.get("/.well-known/assetlinks.json", include_in_schema=False)
+    async def android_asset_links():
+        """Lets the Android app (Trusted Web Activity) open this site full-screen without a browser bar."""
+        fingerprints = [f.strip() for f in settings.ANDROID_SHA256_FINGERPRINTS.split(",") if f.strip()]
+        if not fingerprints:
+            return JSONResponse([])
+        return JSONResponse(
+            [
+                {
+                    "relation": ["delegate_permission/common.handle_all_urls"],
+                    "target": {
+                        "namespace": "android_app",
+                        "package_name": settings.ANDROID_PACKAGE_NAME,
+                        "sha256_cert_fingerprints": fingerprints,
+                    },
+                }
+            ]
+        )
 
     # Native frontend serving attached after all API routers to prevent route swallowing
     app.frontend("/", directory="dist", fallback="index.html")

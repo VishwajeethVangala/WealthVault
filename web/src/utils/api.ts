@@ -73,8 +73,13 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
 }
 
 // Fetch Public Auth Config
-export async function fetchAuthConfig(): Promise<{ google_client_id: string; environment: string }> {
-  return fetchApi<{ google_client_id: string; environment: string }>('/api/v1/auth/config')
+export async function fetchAuthConfig(): Promise<{ google_client_id: string; environment: string; support_email?: string }> {
+  return fetchApi<{ google_client_id: string; environment: string; support_email?: string }>('/api/v1/auth/config')
+}
+
+// Erase the signed-in user's profile and every piece of data held for them
+export async function deleteAccount(): Promise<void> {
+  await fetchApi('/api/v1/auth/account', { method: 'DELETE', body: JSON.stringify({ confirm: 'DELETE' }) })
 }
 
 // Verify Session Validity with Backend

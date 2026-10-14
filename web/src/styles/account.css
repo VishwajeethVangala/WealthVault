@@ -1,0 +1,130 @@
+/* account page */
+.acct {
+  display: grid;
+  gap: 14px;
+  max-width: 640px;
+}
+.acct .card-t {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.acct-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.avatar.big {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+.acct-links {
+  display: flex;
+  gap: 16px;
+  margin: 12px 0 0;
+}
+.acct-links a {
+  color: var(--accent);
+  font-weight: 600;
+}
+.acct-danger {
+  border-color: color-mix(in srgb, var(--loss) 35%, var(--border));
+}
+.acct-danger .btn {
+  margin-top: 14px;
+}
+.btn-danger {
+  background: var(--loss);
+  border-color: var(--loss);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+.acct-confirm {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  max-width: 320px;
+}
+.acct-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.acct-err {
+  margin: 0;
+  color: var(--loss);
+  font-size: 13px;
+}
+a.avatar {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* public legal pages (no sign-in) */
+.legal {
+  min-height: 100vh;
+  background: var(--bg, #f3f4f6);
+  padding: 24px 16px 48px;
+  display: flex;
+  justify-content: center;
+}
+.legal-card {
+  width: 100%;
+  max-width: 720px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 16px;
+  padding: 28px 24px;
+  line-height: 1.6;
+  color: var(--text, inherit);
+}
+.legal-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  text-decoration: none;
+  color: inherit;
+}
+.legal h1 {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 18px 0 2px;
+}
+.legal h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 22px 0 6px;
+}
+.legal ul,
+.legal ol {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+.legal ul {
+  list-style: disc;
+}
+.legal ol {
+  list-style: decimal;
+}
+.legal li {
+  margin: 4px 0;
+}
+.legal a {
+  color: var(--accent, #3340d0);
+}
+.legal-meta,
+.legal-foot {
+  font-size: 13px;
+  color: var(--text-3, #6b7280);
+}
+.legal-foot {
+  margin-top: 28px;
+  border-top: 1px solid var(--border, #e5e7eb);
+  padding-top: 14px;
+}

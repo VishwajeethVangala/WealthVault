@@ -206,6 +206,15 @@ class BaseTableStorage:
 
         return results
 
+    async def delete_partition(self, user_id: str) -> int:
+        """Delete every entity in the user's partition and return how many were removed."""
+        rows = await self.query_entities(user_id=user_id, select=["PartitionKey", "RowKey"])
+        removed = 0
+        for row in rows:
+            if await self.delete_entity(user_id=user_id, entity_id=row["RowKey"]):
+                removed += 1
+        return removed
+
     async def delete_entity(self, user_id: str, entity_id: str) -> bool:
         """Delete an entity within the user's partition.
 

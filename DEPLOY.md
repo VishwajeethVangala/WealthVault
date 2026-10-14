@@ -66,3 +66,7 @@ SmartAPI needs a fixed public IP registered with Angel One. App Service outbound
 
 ## Rollback
 Re-run the workflow on an older commit (Run workflow, choose the branch or tag), or use Deployment Center to redeploy a previous build.
+
+## Android app
+
+See `ANDROID.md`. Extra optional app settings: `SUPPORT_EMAIL`, `ANDROID_PACKAGE_NAME`, `ANDROID_SHA256_FINGERPRINTS`.

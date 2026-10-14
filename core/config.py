@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     PUBLIC_BASE_URL: str = Field(default="", description="Public base URL, e.g. https://wealthvault.azurewebsites.net")
     # Fixed outbound public IP registered with Angel One SmartAPI; blank sends this machine's IP
     ANGELONE_PUBLIC_IP: str = Field(default="", description="Static public IP registered with Angel One")
+    # Shown on the privacy page as the contact for questions and data requests
+    SUPPORT_EMAIL: str = Field(default="", description="Contact email shown on the privacy page")
+    # Android app (Trusted Web Activity): the package name and the signing-key fingerprints Google Play issues.
+    # They go into /.well-known/assetlinks.json, which is what lets the app open this site without a browser bar.
+    ANDROID_PACKAGE_NAME: str = Field(default="com.wealthvault.app", description="Android application id")
+    ANDROID_SHA256_FINGERPRINTS: str = Field(default="", description="Comma-separated SHA-256 signing-key fingerprints")
 
     model_config = SettingsConfigDict(
         env_file=".env",
