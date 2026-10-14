@@ -10,7 +10,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.wealthvault.app"
+        applicationId = "com.vangala.wealthvault" // the name registered on Google Play; code stays in com.wealthvault.app
         minSdk = 26
         targetSdk = 35
         versionCode = 1
