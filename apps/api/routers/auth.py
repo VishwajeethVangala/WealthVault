@@ -4,8 +4,11 @@ Provides endpoints for verifying Google OAuth ID tokens and issuing internal ses
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 
+from apps.api.routers.accounts import get_current_user
+from core.account_deletion import delete_user_data
 from core.config import get_settings
 from core.models import GoogleAuthRequest, TokenResponse, User
 from core.security import create_access_token, sanitize_key, verify_google_id_token
@@ -27,7 +30,26 @@ async def get_auth_config():
     return {
         "google_client_id": settings.GOOGLE_CLIENT_ID,
         "environment": settings.ENVIRONMENT,
+        "support_email": settings.SUPPORT_EMAIL,
     }
+
+
+class DeleteAccountRequest(BaseModel):
+    confirm: str
+
+
+@router.delete(
+    "/account",
+    status_code=status.HTTP_200_OK,
+    summary="Delete my account and all my data",
+    description="Permanently erases the caller's holdings, history, targets, broker connections, saved broker logins and profile.",
+)
+async def delete_account(payload: DeleteAccountRequest, current_user_id: str = Depends(get_current_user)):
+    """The caller must send {"confirm": "DELETE"}; nothing else can trigger this."""
+    if payload.confirm.strip() != "DELETE":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Type DELETE to confirm.')
+    removed = await delete_user_data(current_user_id)
+    return {"status": "deleted", "removed": removed}
 
 
 @router.post(

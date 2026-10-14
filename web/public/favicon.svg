@@ -35,18 +35,8 @@
       stroke-linecap="round"
       stroke-linejoin="round"
     />
-    <!-- Inner Vault Core Accent -->
-    <path
-      d="M12 8v4"
-      stroke="#34d399"
-      stroke-width="2"
-      stroke-linecap="round"
-    />
-    <circle
-      cx="12"
-      cy="14.5"
-      r="1.2"
-      fill="#34d399"
-    />
+    <!-- Rising trend line inside the shield -->
+    <path d="M8 15l3-3.2 2.2 2L16.5 10" stroke="#34d399" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    <path d="M14.2 10h2.3v2.3" stroke="#34d399" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none" />
   </g>
 </svg>

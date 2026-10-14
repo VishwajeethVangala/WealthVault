@@ -46,3 +46,10 @@ Thumbs.db
 
 # local broker credentials and sessions
 storage/blobs/indmoney_client.json
+
+# Android build outputs and signing keys
+*.aab
+*.apk
+*.keystore
+*.jks
+android.keystore
