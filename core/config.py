@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     SUPPORT_EMAIL: str = Field(default="", description="Contact email shown on the privacy page")
     # Android app (Trusted Web Activity): the package name and the signing-key fingerprints Google Play issues.
     # They go into /.well-known/assetlinks.json, which is what lets the app open this site without a browser bar.
-    ANDROID_PACKAGE_NAME: str = Field(default="com.wealthvault.app", description="Android application id")
+    ANDROID_PACKAGE_NAME: str = Field(default="com.vangala.wealthvault", description="Android application id")
     ANDROID_SHA256_FINGERPRINTS: str = Field(default="", description="Comma-separated SHA-256 signing-key fingerprints")
 
     model_config = SettingsConfigDict(

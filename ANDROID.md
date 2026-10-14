@@ -11,7 +11,7 @@ The Android app is the website in a full-screen Android shell (Chrome, no addres
 ## App settings to add in Azure (Configuration, Application settings)
 | Name | Value |
 |---|---|
-| `ANDROID_PACKAGE_NAME` | `com.wealthvault.app` (must match the package id used in PWABuilder) |
+| `ANDROID_PACKAGE_NAME` | `com.vangala.wealthvault` (must match the package id used in PWABuilder) |
 | `ANDROID_SHA256_FINGERPRINTS` | the signing-key fingerprint(s), comma separated (see step 3) |
 | `SUPPORT_EMAIL` | the contact address shown on the privacy page |
 
@@ -21,7 +21,7 @@ Open `https://<your-app>/.well-known/assetlinks.json` to check. It shows `[]` un
 1. Deploy this branch's zip to Azure, restart, and open the site in Chrome on your phone. The menu should offer **Install app**.
 2. Set `SUPPORT_EMAIL` (and restart).
 3. Go to https://www.pwabuilder.com, enter the site URL, choose **Package for stores, Android**.
-   - Package ID `com.wealthvault.app`, name `WealthVault`.
+   - Package ID `com.vangala.wealthvault`, name `WealthVault`.
    - Choose **Google Play** signing: let Play manage the key. Download the package.
    - The fingerprint comes from Play Console (Release, Setup, App signing, SHA-256 of the *app signing key*). Add it to `ANDROID_SHA256_FINGERPRINTS`. If you also sideload the upload build, add the *upload key* fingerprint too.
 4. Play Console: create the app, then **Testing, Internal testing**, create a release, upload the `.aab`, add testers by email, and share the opt-in link.
