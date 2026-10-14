@@ -1,6 +1,9 @@
 package com.wealthvault.app
 
+import android.graphics.Color
 import android.os.Bundle
+import androidx.activity.SystemBarStyle
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -63,7 +66,14 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val session by vm.session.collectAsState()
-            WealthVaultTheme(session?.theme ?: "system") {
+            val theme = session?.theme ?: "system"
+            val dark = theme == "dark" || (theme == "system" && isSystemInDarkTheme())
+            // status bar and gesture bar icons follow the app's theme, not just the phone's
+            LaunchedEffect(dark) {
+                val bars = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
+            }
+            WealthVaultTheme(theme) {
                 when {
                     session == null -> Unit // reading the saved session
                     session?.token == null -> SignInScreen(vm)
