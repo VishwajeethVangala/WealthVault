@@ -96,7 +96,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Debug builds only (see MainActivity): sign in with a token issued by a test server. */
     fun debugSignIn(baseUrl: String, token: String) = viewModelScope.launch {
-        prefs.saveBaseUrl(baseUrl)
+        prefs.saveDebugBaseUrl(baseUrl)
         prefs.signIn(com.wealthvault.app.data.TokenResponse(token, com.wealthvault.app.data.User("test", "test@local", "Test")))
     }
 
@@ -129,7 +129,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     message.value = "That sign-in type is not supported. Use a Google account."
                 }
             } catch (e: GetCredentialCancellationException) {
-                // the person closed the account picker
+                // Also what Google returns when it does not know this app yet (no Android OAuth client).
+                message.value = "Sign-in closed. If you picked an account and it closed by itself, Google does not recognise this app yet (see the setup step in the README)."
             } catch (e: NoCredentialException) {
                 message.value = "No Google account to sign in with. Add one to the phone, or (first install) finish the Google setup in the app's README."
             } catch (e: GetCredentialException) {

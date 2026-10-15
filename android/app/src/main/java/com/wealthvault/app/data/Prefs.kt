@@ -16,6 +16,7 @@ data class Session(val baseUrl: String, val token: String?, val name: String, va
 
 class Prefs(private val context: Context) {
     private val baseUrl = stringPreferencesKey("base_url")
+    private val debugBaseUrl = stringPreferencesKey("debug_base_url") // set only by the debug test hook
     private val token = stringPreferencesKey("token")
     private val name = stringPreferencesKey("name")
     private val email = stringPreferencesKey("email")
@@ -23,7 +24,8 @@ class Prefs(private val context: Context) {
 
     val session: Flow<Session> = context.store.data.map {
         Session(
-            baseUrl = it[baseUrl] ?: BuildConfig.DEFAULT_BASE_URL,
+            // built-in address first; a typed one only when the build has none
+            baseUrl = it[debugBaseUrl] ?: BuildConfig.DEFAULT_BASE_URL.ifBlank { it[baseUrl] ?: "" },
             token = it[token],
             name = it[name] ?: "",
             email = it[email] ?: "",
@@ -35,6 +37,10 @@ class Prefs(private val context: Context) {
 
     suspend fun saveBaseUrl(url: String) {
         context.store.edit { it[baseUrl] = url.trim().trimEnd('/') }
+    }
+
+    suspend fun saveDebugBaseUrl(url: String) {
+        context.store.edit { it[debugBaseUrl] = url.trim().trimEnd('/') }
     }
 
     suspend fun signIn(t: TokenResponse) {
