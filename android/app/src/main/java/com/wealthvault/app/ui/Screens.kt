@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.wealthvault.app.BuildConfig
 import com.wealthvault.app.data.ASSET_CLASS_LABEL
 import com.wealthvault.app.data.BrokerSession
 import com.wealthvault.app.data.Holding
@@ -96,18 +97,22 @@ fun SignInScreen(vm: AppViewModel) {
         Text("WealthVault", style = Wv.h1, color = Wv.c.text)
         Text("All your broker accounts in one place.", style = Wv.sub, color = Wv.c.text3)
         Spacer(Modifier.height(28.dp))
-        OutlinedTextField(
-            value = url,
-            onValueChange = { url = it },
-            label = { Text("Server address") },
-            placeholder = { Text("https://your-app.azurewebsites.net") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text("The same address you open WealthVault at in the browser.", style = Wv.small, color = Wv.c.text3, modifier = Modifier.padding(top = 4.dp))
-        Spacer(Modifier.height(20.dp))
+        // the address is built in (wvBaseUrl); the field only shows for a build without one
+        val askForUrl = BuildConfig.DEFAULT_BASE_URL.isBlank()
+        if (askForUrl) {
+            OutlinedTextField(
+                value = url,
+                onValueChange = { url = it },
+                label = { Text("Server address") },
+                placeholder = { Text("https://your-app.azurewebsites.net") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text("The same address you open WealthVault at in the browser.", style = Wv.small, color = Wv.c.text3, modifier = Modifier.padding(top = 4.dp))
+            Spacer(Modifier.height(20.dp))
+        }
         PrimaryButton("Sign in with Google", busy = busy, enabled = url.startsWith("http"), modifier = Modifier.fillMaxWidth()) {
-            vm.saveBaseUrl(url)
+            if (askForUrl) vm.saveBaseUrl(url)
             vm.signIn(context)
         }
         if (message != null) {
