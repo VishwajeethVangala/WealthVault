@@ -9,6 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +31,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
@@ -36,6 +40,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,10 +54,10 @@ import com.wealthvault.app.data.ASSET_CLASS_LABEL
 import com.wealthvault.app.data.BrokerSession
 import com.wealthvault.app.data.Holding
 
-private val pagePad = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+val pagePad = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
 
 @Composable
-private fun PageTitle(title: String, sub: String) {
+fun PageTitle(title: String, sub: String) {
     Column(Modifier.padding(bottom = 4.dp)) {
         Text(title, style = Wv.h1, color = Wv.c.text)
         Text(sub, style = Wv.sub, color = Wv.c.text3)
@@ -60,7 +65,7 @@ private fun PageTitle(title: String, sub: String) {
 }
 
 @Composable
-private fun PrimaryButton(text: String, busy: Boolean = false, enabled: Boolean = true, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun PrimaryButton(text: String, busy: Boolean = false, enabled: Boolean = true, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         enabled = enabled && !busy,
@@ -126,14 +131,24 @@ fun SignInScreen(vm: AppViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OverviewScreen(vm: AppViewModel) {
+fun OverviewScreen(vm: AppViewModel, avm: AnalysisViewModel, onSignals: () -> Unit = {}) {
+    val signals by avm.signals.collectAsState()
+    val liveSignals by avm.liveSignals.collectAsState()
+    val history by avm.history.collectAsState()
+    val targets by avm.targets.collectAsState()
+    val risk by avm.risk.collectAsState()
+    var editTargets by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (avm.history.value.data == null) avm.loadOverviewPanels() }
     val summary by vm.summary.collectAsState()
     val holdings by vm.holdings.collectAsState()
+    // the signals summary needs the saved signals; read them once the portfolio itself is on screen
+    val hasSummary = summary.data != null
+    LaunchedEffect(hasSummary) { if (hasSummary && avm.signals.value.data == null && !avm.signals.value.loading) avm.loadSignals() }
     val syncing by vm.syncing.collectAsState()
     val message by vm.message.collectAsState()
     val s = summary.data?.snapshot
 
-    PullToRefreshBox(isRefreshing = summary.loading, onRefresh = { vm.refreshAll() }) {
+    PullToRefreshBox(isRefreshing = summary.loading, onRefresh = { vm.refreshAll(); avm.loadOverviewPanels() }) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -160,33 +175,29 @@ fun OverviewScreen(vm: AppViewModel) {
                 if (dayPnl != null) {
                     item { Kpi("Today", signedMoney(dayPnl), "Change across holdings with a live price", toneOf(dayPnl)) }
                 }
-                item { AllocationCard(s.asset_allocation.mapValues { it.value.percentage_weight to it.value.absolute_value }) }
+                history.data?.let { h -> item { ValueCard(h) } }
+                history.problem?.let { p -> item { Note("Value over time did not load: ${p.text}", bad = true) } }
+                val mix = s.asset_allocation.mapValues { it.value.percentage_weight to it.value.absolute_value }
+                item { AssetMixCard(mix, targets.data.orEmpty(), s.total_current_value) { editTargets = true } }
                 val movers = holdings.data?.filter { it.day_change_percentage != null }?.sortedByDescending { it.day_change_percentage!! }
                 if (!movers.isNullOrEmpty()) {
                     item { MoversCard(movers.take(3), movers.takeLast(3).reversed()) }
                 }
+                val sig = signals.data
+                if (sig != null && avm.market.value == "in" && holdings.data != null) item { SignalsSummaryCard(holdings.data!!, sig, liveSignals, onSignals) }
+                risk.data?.let { r -> item { RiskCard(r) } }
             }
         }
     }
+    if (editTargets) TargetsEditor(vm, avm) { editTargets = false }
 }
 
 @Composable
-private fun AllocationCard(mix: Map<String, Pair<Double, Double>>) {
-    val rows = mix.entries.sortedByDescending { it.value.first }
-    WvCard {
-        Label("Asset mix")
-        MixBar(rows.map { (Wv.c.classColors[it.key] ?: Wv.c.text3) to it.value.first })
-        Spacer(Modifier.height(4.dp))
-        rows.forEach { (cls, v) ->
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 3.dp)) {
-                Box(Modifier.size(10.dp).clip(CircleShape).background(Wv.c.classColors[cls] ?: Wv.c.text3))
-                Spacer(Modifier.width(8.dp))
-                Text(ASSET_CLASS_LABEL[cls] ?: cls, style = Wv.body, color = Wv.c.text, modifier = Modifier.weight(1f))
-                Text(compact(v.second), style = Wv.num, color = Wv.c.text2)
-                Text(String.format("%.1f%%", v.first), style = Wv.num.copy(fontWeight = FontWeight.SemiBold), color = Wv.c.text, modifier = Modifier.width(64.dp), maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End)
-            }
-        }
-    }
+private fun TargetsEditor(vm: AppViewModel, avm: AnalysisViewModel, onDone: () -> Unit) {
+    val summary by vm.summary.collectAsState()
+    val targets by avm.targets.collectAsState()
+    val classes = (summary.data?.snapshot?.asset_allocation?.keys.orEmpty() + targets.data.orEmpty().keys).distinct()
+    TargetsDialog(classes, targets.data.orEmpty(), onSave = { avm.saveTargets(it); onDone() }, onDismiss = onDone)
 }
 
 @Composable
@@ -203,7 +214,7 @@ private fun MoversCard(up: List<Holding>, down: List<Holding>) {
 }
 
 /** "INDS02714 (Transformers & Rectifiers India Ltd)" reads as the company name; a bare ticker stays as is. */
-private fun displayName(h: Holding): String {
+fun displayName(h: Holding): String {
     val sym = h.instrument_symbol.substringAfter(':').trim()
     val name = Regex("""\((.+)\)\s*$""").find(sym)?.groupValues?.get(1)?.trim()
     return if (name.isNullOrBlank()) sym else name
@@ -219,16 +230,26 @@ private fun ticker(h: Holding): String? {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HoldingsScreen(vm: AppViewModel) {
+fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
     val holdings by vm.holdings.collectAsState()
-    var query by remember { mutableStateOf("") }
-    var cls by remember { mutableStateOf<String?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var cls by rememberSaveable { mutableStateOf<String?>(null) }
+    var sort by rememberSaveable { mutableStateOf("value") }
     val all = holdings.data.orEmpty()
     val classes = all.map { it.asset_class }.distinct().sortedBy { ASSET_CLASS_LABEL.keys.indexOf(it) }
     val rows = all
         .filter { cls == null || it.asset_class == cls }
         .filter { query.isBlank() || it.instrument_symbol.contains(query.trim(), ignoreCase = true) || displayName(it).contains(query.trim(), ignoreCase = true) }
-        .sortedByDescending { it.current_value }
+        .let { l ->
+            when (sort) {
+                "gain" -> l.sortedByDescending { it.pnlPct ?: -999.0 }
+                "today" -> l.sortedByDescending { it.day_change_percentage ?: -999.0 }
+                "name" -> l.sortedBy { displayName(it).lowercase() }
+                else -> l.sortedByDescending { it.current_value }
+            }
+        }
+    val shownValue = rows.sumOf { it.current_value }
+    val shownGain = rows.sumOf { it.pnl ?: (it.current_value - it.invested) }
 
     PullToRefreshBox(isRefreshing = holdings.loading, onRefresh = { vm.refreshAll() }) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -244,15 +265,29 @@ fun HoldingsScreen(vm: AppViewModel) {
                     }
                 }
             }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Sort", style = Wv.small, color = Wv.c.text3)
+                    listOf("value" to "Value", "gain" to "Gain %", "today" to "Today", "name" to "Name").forEach { (k, label) -> Chip(label, sort == k) { sort = k } }
+                }
+            }
+            if (cls != null || query.isNotBlank()) {
+                item {
+                    Text("${rows.size} shown · ${compact(shownValue)} · ${signedMoney(shownGain)}", style = Wv.small.copy(fontFeatureSettings = "tnum"), color = toneOf(shownGain))
+                }
+            }
             holdings.error?.let { item { Note(it, bad = true) } }
-            items(rows, key = { it.holding_id }) { HoldingRow(it) }
-            if (rows.isEmpty() && !holdings.loading) item { Note(if (all.isEmpty()) "No holdings yet. Sync your brokers first." else "Nothing matches.") }
+            items(rows, key = { it.holding_id }) { h ->
+                // stocks open their Momentum page; funds, gold and NPS have no price history there
+                HoldingRow(h, if (h.asset_class == "EQUITY" && !tickerOf(h.instrument_symbol).startsWith("INDS")) ({ onStock(tickerOf(h.instrument_symbol)) }) else null)
+            }
+            if (rows.isEmpty() && !holdings.loading && holdings.error == null) item { Note(if (all.isEmpty()) "No holdings yet. Sync your brokers first." else "Nothing matches.") }
         }
     }
 }
 
 @Composable
-private fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
+fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
     Text(
         text,
         style = Wv.small.copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal),
@@ -267,9 +302,9 @@ private fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun HoldingRow(h: Holding) {
+private fun HoldingRow(h: Holding, onOpen: (() -> Unit)?) {
     val us = h.currency.equals("USD", ignoreCase = true)
-    WvCard(padding = 14) {
+    WvCard(padding = 14, modifier = if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text(displayName(h), style = Wv.title, color = Wv.c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -288,27 +323,49 @@ private fun HoldingRow(h: Holding) {
     }
 }
 
-private fun trimQty(q: Double) = if (q % 1.0 == 0.0) q.toLong().toString() else String.format("%.3f", q).trimEnd('0').trimEnd('.')
+fun trimQty(q: Double) = if (q % 1.0 == 0.0) q.toLong().toString() else String.format("%.3f", q).trimEnd('0').trimEnd('.')
 
 // --- brokers -------------------------------------------------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BrokersScreen(vm: AppViewModel) {
+fun BrokersScreen(vm: AppViewModel, avm: AnalysisViewModel) {
     val brokers by vm.brokers.collectAsState()
     val syncing by vm.syncing.collectAsState()
-    PullToRefreshBox(isRefreshing = brokers.loading, onRefresh = { vm.loadBrokers() }) {
+    val catalog by avm.catalog.collectAsState()
+    val problem by avm.brokerMessage.collectAsState()
+    var dialog by remember { mutableStateOf<BrokerDialog?>(null) }
+    LaunchedEffect(Unit) { avm.loadCatalog() }
+    val itemFor = { b: BrokerSession -> catalog.data?.firstOrNull { it.broker_name.equals(b.broker_name, ignoreCase = true) } }
+
+    PullToRefreshBox(isRefreshing = brokers.loading, onRefresh = { vm.loadBrokers(); avm.loadCatalog() }) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { PageTitle("Brokers", "Connections are set up once on the web app; sync them from here.") }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { PageTitle("Brokers", "Your connections. Sync, log in, or add another broker.") }
+                    PrimaryButton("Add") { avm.brokerMessage.value = null; dialog = BrokerDialog.Pick }
+                }
+            }
             brokers.error?.let { item { Note(it, bad = true) } }
-            items(brokers.data.orEmpty(), key = { it.connection_id }) { BrokerCard(it, syncing) { vm.syncOne(it.connection_id) } }
-            if (brokers.data?.isEmpty() == true) item { Note("No broker connections yet. Add one on the web app (Brokers page).") }
+            problem?.let { item { Note(it.text, bad = true) } }
+            items(brokers.data.orEmpty(), key = { it.connection_id }) { b ->
+                val item = itemFor(b)
+                BrokerCard(
+                    b, syncing,
+                    onSync = { vm.syncOne(b.connection_id) },
+                    onKeys = if (item != null && item.credential_fields.isNotEmpty()) ({ dialog = BrokerDialog.Keys(b, item) }) else null,
+                    onRemove = { dialog = BrokerDialog.Remove(b) },
+                )
+            }
+            if (brokers.data?.isEmpty() == true) item { Note("No broker connections yet. Press Add to connect your first broker.") }
         }
     }
+    BrokerDialogs(dialog, avm, brokers.data.orEmpty(), onDialog = { dialog = it }, onChanged = { vm.refreshAll() })
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BrokerCard(b: BrokerSession, syncing: String?, onSync: () -> Unit) {
+private fun BrokerCard(b: BrokerSession, syncing: String?, onSync: () -> Unit, onKeys: (() -> Unit)?, onRemove: () -> Unit) {
     val context = LocalContext.current
     val (label, tone) = when (b.status) {
         "CONNECTED" -> "Connected" to Tone.Ok
@@ -342,7 +399,7 @@ private fun BrokerCard(b: BrokerSession, syncing: String?, onSync: () -> Unit) {
             }
         }
         b.error_message?.takeIf { it.isNotBlank() }?.let { Note(it, bad = true) }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = onSync, enabled = syncing == null, shape = RoundedCornerShape(10.dp)) {
                 Text(if (syncing == b.connection_id) "Syncing…" else "Sync now", color = Wv.c.text)
             }
@@ -351,19 +408,23 @@ private fun BrokerCard(b: BrokerSession, syncing: String?, onSync: () -> Unit) {
                     Text("Log in", color = Wv.c.accent)
                 }
             }
+            if (onKeys != null) {
+                OutlinedButton(onClick = onKeys, shape = RoundedCornerShape(10.dp)) { Text("Keys", color = Wv.c.text) }
+            }
+            TextButton(onClick = onRemove) { Text("Remove", color = Wv.c.loss) }
         }
     }
 }
 
 /** "Zerodha Kite Connect — Primary Account" without the account part, which is shown on the line below. */
-private fun brokerName(b: BrokerSession): String {
+fun brokerName(b: BrokerSession): String {
     val name = b.display_name.ifBlank { b.broker_name }
     val label = b.account_label
     return if (!label.isNullOrBlank()) name.removeSuffix(label).trimEnd(' ', '—', '-', '·') else name
 }
 
 /** The server sends UTC; show it in the phone's time zone, e.g. "14 Oct, 1:08 am". */
-private fun localTime(iso: String?): String {
+fun localTime(iso: String?): String {
     if (iso.isNullOrBlank()) return "Never"
     return try {
         java.time.OffsetDateTime.parse(iso).atZoneSameInstant(java.time.ZoneId.systemDefault())

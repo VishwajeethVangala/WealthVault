@@ -53,8 +53,23 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshAll() {
         load(summary) { api.summary() }
-        load(holdings) { api.holdings() }
+        loadHoldings()
         load(brokers) { api.sessions() }
+    }
+
+    /** The saved holdings first so screens fill at once, then the same list on live prices. */
+    private fun loadHoldings() {
+        holdings.value = holdings.value.copy(loading = true, error = null)
+        viewModelScope.launch {
+            if (holdings.value.data == null) {
+                runCatching { api.holdings(live = false) }.getOrNull()?.let { holdings.value = Load(loading = true, data = it) }
+            }
+            holdings.value = try {
+                Load(data = api.holdings(live = true))
+            } catch (e: Exception) {
+                Load(data = holdings.value.data, error = if (holdings.value.data == null) e.message ?: "Could not load holdings." else null)
+            }
+        }
     }
 
     fun loadBrokers() = load(brokers) { api.sessions() }
