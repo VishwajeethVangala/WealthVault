@@ -2,8 +2,8 @@ package com.wealthvault.app.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,7 +34,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -106,20 +105,18 @@ fun LineChart(
                 Modifier
                     .weight(1f)
                     .height(height)
+                    // a press or a sideways drag reads the chart; an up-down swipe is left to the page so it scrolls
                     .pointerInput(dates) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown()
-                            val pick = { x: Float -> ((x / size.width) * (dates.size - 1)).toInt().coerceIn(0, dates.size - 1) }
-                            touch = pick(down.position.x)
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val ch = event.changes.firstOrNull() ?: break
-                                if (!ch.pressed) break
-                                touch = pick(ch.position.x)
-                                if (ch.positionChange() != Offset.Zero) ch.consume()
-                            }
-                            touch = null
-                        }
+                        val pick = { x: Float -> ((x / size.width) * (dates.size - 1)).toInt().coerceIn(0, dates.size - 1) }
+                        detectTapGestures(onPress = { o -> touch = pick(o.x); tryAwaitRelease(); touch = null })
+                    }
+                    .pointerInput(dates) {
+                        val pick = { x: Float -> ((x / size.width) * (dates.size - 1)).toInt().coerceIn(0, dates.size - 1) }
+                        detectHorizontalDragGestures(
+                            onDragStart = { o -> touch = pick(o.x) },
+                            onDragEnd = { touch = null },
+                            onDragCancel = { touch = null },
+                        ) { change, _ -> touch = pick(change.position.x); change.consume() }
                     },
             ) {
                 val w = size.width
