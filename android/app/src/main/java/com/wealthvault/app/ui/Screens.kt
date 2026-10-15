@@ -179,7 +179,8 @@ fun OverviewScreen(vm: AppViewModel, avm: AnalysisViewModel, onSignals: () -> Un
                 history.problem?.let { p -> item { Note("Value over time did not load: ${p.text}", bad = true) } }
                 val mix = s.asset_allocation.mapValues { it.value.percentage_weight to it.value.absolute_value }
                 item { AssetMixCard(mix, targets.data.orEmpty(), s.total_current_value) { editTargets = true } }
-                val movers = holdings.data?.filter { it.day_change_percentage != null }?.sortedByDescending { it.day_change_percentage!! }
+                // one line per company even when two brokers hold it
+                val movers = holdings.data?.filter { it.day_change_percentage != null }?.distinctBy { displayName(it).uppercase() }?.sortedByDescending { it.day_change_percentage!! }
                 if (!movers.isNullOrEmpty()) {
                     item { MoversCard(movers.take(3), movers.takeLast(3).reversed()) }
                 }
@@ -309,7 +310,7 @@ private fun HoldingRow(h: Holding, onOpen: (() -> Unit)?) {
             Column(Modifier.weight(1f)) {
                 Text(displayName(h), style = Wv.title, color = Wv.c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(
-                    "${listOfNotNull(ticker(h), ASSET_CLASS_LABEL[h.asset_class] ?: h.asset_class).joinToString(" · ")} · ${trimQty(h.quantity)} at ${if (us) "$" + String.format("%.2f", h.average_price) else price(h.average_price)}",
+                    "${listOfNotNull(ticker(h), ASSET_CLASS_LABEL[h.asset_class] ?: h.asset_class).distinct().joinToString(" · ")} · ${trimQty(h.quantity)} at ${if (us) "$" + String.format("%.2f", h.average_price) else price(h.average_price)}",
                     style = Wv.small,
                     color = Wv.c.text3,
                 )
@@ -462,5 +463,6 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
         item { Text("Information from your brokers, not investment advice.", style = Wv.small, color = Wv.c.text3) }
+        item { Text("WealthVault for Android ${com.wealthvault.app.BuildConfig.VERSION_NAME}", style = Wv.small, color = Wv.c.text3) }
     }
 }

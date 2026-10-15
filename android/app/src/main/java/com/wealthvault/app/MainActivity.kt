@@ -16,7 +16,9 @@ import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.CandlestickChart
 import androidx.compose.material.icons.outlined.MoreHoriz
@@ -136,6 +138,11 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
                     NavigationBarItem(
                         selected = tabOf(route) == tab.route,
                         onClick = {
+                            // More again while inside it: back to its list
+                            if (tab.route == "more" && tabOf(route) == "more") {
+                                nav.popBackStack("more", inclusive = false)
+                                return@NavigationBarItem
+                            }
                             nav.navigate(tab.route) {
                                 popUpTo(nav.graph.findStartDestination().id) { saveState = true }
                                 launchSingleTop = true
@@ -163,13 +170,13 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
             composable("stage2") { Stage2Screen(avm) { openStock("momentum", it) } }
             composable("more") { MoreScreen { nav.navigate(it) } }
             composable("momentum?symbol={symbol}", arguments = listOf(navArgument("symbol") { nullable = true; defaultValue = null })) { e ->
-                MomentumScreen(vm, avm, e.arguments?.getString("symbol")) { openStock("strategy", it) }
+                SubPage({ nav.popBackStack() }) { MomentumScreen(vm, avm, e.arguments?.getString("symbol")) { openStock("strategy", it) } }
             }
             composable("strategy?symbol={symbol}", arguments = listOf(navArgument("symbol") { nullable = true; defaultValue = null })) { e ->
-                StrategyScreen(vm, avm, e.arguments?.getString("symbol"))
+                SubPage({ nav.popBackStack() }) { StrategyScreen(vm, avm, e.arguments?.getString("symbol")) }
             }
-            composable("brokers") { BrokersScreen(vm, avm) }
-            composable("settings") { SettingsScreen(vm) }
+            composable("brokers") { SubPage({ nav.popBackStack() }) { BrokersScreen(vm, avm) } }
+            composable("settings") { SubPage({ nav.popBackStack() }) { SettingsScreen(vm) } }
         }
     }
 }
@@ -191,5 +198,20 @@ private fun MoreScreen(onOpen: (String) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** A page reached from another one: a back row above it. */
+@Composable
+private fun SubPage(onBack: () -> Unit, content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable(onClick = onBack).padding(start = 8.dp, end = 16.dp, top = 8.dp, bottom = 0.dp),
+        ) {
+            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = Wv.c.text2, modifier = Modifier.padding(8.dp))
+            Text("Back", style = Wv.sub, color = Wv.c.text2)
+        }
+        Box(Modifier.weight(1f)) { content() }
     }
 }
