@@ -20,8 +20,8 @@ gradlew.bat assembleDebug
 The APK lands in `app/build/outputs/apk/debug/app-debug.apk`. Copy it to the phone and open it to install
 (allow "install unknown apps" once). `local.properties` (not committed) points at the SDK.
 
-The server address is typed on the sign-in screen once (the address you open WealthVault at in the
-browser). It can also be baked in at build time with `-PwvBaseUrl=https://...`.
+The server address is built in from `wvBaseUrl` in `gradle.properties` (the Azure portal), so nobody types
+it. Override with `-PwvBaseUrl=https://...`; an empty value brings back an address field on the sign-in screen.
 
 ## One-time Google sign-in setup (needed before sign-in works)
 
