@@ -41,19 +41,22 @@ Nothing changes on the server: the app asks Google for an ID token for the web c
 
 ## Release build and Play Store
 
-`gradlew.bat assembleRelease bundleRelease` makes the signed, shrunk app (`app-release.apk`, about 2.7 MB) and the
-Play bundle (`app-release.aab`, about 5.3 MB). It signs with the upload key at
-`D:\Gravityndroid-tools\keys\wealthvault-upload.jks`; `android/keystore.properties` (not committed) holds its
-path and passwords. **Back both files up somewhere safe: losing the key means losing the ability to update the app.**
-`gradlew.bat assembleReleaseCheck` makes a debuggable copy of the shrunk build, for testing it on an emulator.
+Run `powershell -ExecutionPolicy Bypass -File scriptsuild_all.ps1` from the repo root. It builds the web zip for
+Azure and the signed Android app, checks the app carries the key Google Play expects, and leaves three files in
+`D:\Gravity`: `wealthvault-release.zip`, `WealthVault-<version>-release.aab` (Play) and `...-release.apk`.
+Use `-SkipWeb`, `-SkipAndroid` or `-SkipTests` to do part of it.
 
-Upload key fingerprints (not secret):
-SHA-1 `10:F1:D8:14:75:41:D8:36:84:99:04:82:EE:62:67:FC:8D:F9:DE:C2`
-SHA-256 `0A:FA:4C:19:48:B4:D1:A6:37:7F:43:3D:F8:99:B7:7F:BD:E1:6B:BE:24:F5:20:6A:6D:12:80:DE:33:FB:F9:DE`
+Signing: Google Play registered the upload key made with the first (PWA) upload on 14 Oct 2026, SHA-1
+`22:CE:1D:79:AB:74:38:66:07:27:B9:4B:36:F5:A9:66:7A:E4:4B:EF`. The app is signed with that key, kept at
+`D:\Gravityndroid-tools\keys\wealthvault-play-upload.keystore` (password in `wealthvault-play-upload-info.txt`
+beside it); `android/keystore.properties` (not committed) points at it. **Back up the whole `keys` folder somewhere
+safe: without that key the app cannot be updated on Play.** A second key made earlier (`wealthvault-upload.jks`,
+SHA-1 `10:F1:...:DE:C2`) was rejected by Play and is not used.
 
-For Google sign-in, an Android OAuth client is needed for each signing key: the debug key (testing), this upload key
-(a release APK installed directly) and the key Play App Signing uses (shown in Play Console under App integrity).
-Play links needed: `<server>/privacy` and `<server>/delete-account`.
+Each release needs a higher `versionCode` in `app/build.gradle.kts`. For Google sign-in an Android OAuth client is
+needed per signing key: debug (testing), the key above (a release APK installed directly) and the key Play App
+Signing uses (Play Console, App integrity). Play links: `<server>/privacy` and `<server>/delete-account`.
+`gradlew.bat assembleReleaseCheck` makes a debuggable copy of the shrunk build for emulator tests.
 
 ## Tested
 
