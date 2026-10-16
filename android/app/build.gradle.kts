@@ -15,14 +15,14 @@ val keystoreProps = Properties().apply {
 
 android {
     namespace = "com.wealthvault.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.vangala.wealthvault" // the name registered on Google Play; code stays in com.wealthvault.app
         minSdk = 26
-        targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        targetSdk = 36 // Google Play requires the latest API level
+        versionCode = 4
+        versionName = "0.3.1"
         buildConfigField("String", "DEFAULT_BASE_URL", "\"${(project.findProperty("wvBaseUrl") as String?) ?: ""}\"")
     }
 
@@ -42,6 +42,8 @@ android {
             if (keystoreProps.isNotEmpty()) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
+            // names for the native code inside libraries, so Play can read crash reports
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
