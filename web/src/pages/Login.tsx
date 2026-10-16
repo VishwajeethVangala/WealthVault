@@ -133,6 +133,9 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
         <p className="text-[11px] text-outline mt-8 leading-normal border-t border-surface-container pt-4 w-full">
           Multi-tenant partitioned via Azure Tables. Verified with Zerodha Kite, Coin, and INDmoney API feeds.
         </p>
+        <p className="text-[11px] text-outline mt-2 leading-normal">
+          Information only, not investment advice. <a className="underline" href="/privacy">Privacy policy</a>
+        </p>
       </div>
     </div>
   )

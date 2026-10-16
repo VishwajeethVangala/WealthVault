@@ -38,6 +38,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val brokers = MutableStateFlow(Load<List<BrokerSession>>())
     val syncing = MutableStateFlow<String?>(null) // "all", a connection id, or null
     val message = MutableStateFlow<String?>(null)
+    /** A neutral note for the sign-in screen, such as "your account was deleted". */
+    val notice = MutableStateFlow<String?>(null)
     val signingIn = MutableStateFlow(false)
 
     private fun <T> load(target: MutableStateFlow<Load<T>>, block: suspend () -> T) {
@@ -106,6 +108,36 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveBaseUrl(url: String) = viewModelScope.launch { prefs.saveBaseUrl(url) }
+
+    /** Whether the app lock has been passed since the app was opened or came back to the front. */
+    val unlocked = MutableStateFlow(false)
+
+    fun setLock(on: Boolean) = viewModelScope.launch {
+        prefs.saveLock(on)
+        unlocked.value = true // the person has just proved who they are
+    }
+
+    val deleting = MutableStateFlow(false)
+
+    /** Deletes the account and all its data on the server, then signs out here. */
+    fun deleteAccount() {
+        if (deleting.value) return
+        deleting.value = true
+        message.value = null
+        viewModelScope.launch {
+            try {
+                api.deleteAccount()
+                prefs.signOut()
+                prefs.saveLock(false)
+                summary.value = Load(); holdings.value = Load(); brokers.value = Load()
+                notice.value = "Your account and all its data were deleted."
+            } catch (e: Exception) {
+                message.value = e.message ?: "Could not delete the account."
+            } finally {
+                deleting.value = false
+            }
+        }
+    }
 
     fun setTheme(value: String) = viewModelScope.launch { prefs.saveTheme(value) }
 

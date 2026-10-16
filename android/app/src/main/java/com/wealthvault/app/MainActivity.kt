@@ -4,7 +4,7 @@ import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.SystemBarStyle
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
@@ -62,6 +62,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.wealthvault.app.ui.AppViewModel
+import com.wealthvault.app.ui.LockScreen
 import com.wealthvault.app.ui.BrokersScreen
 import com.wealthvault.app.ui.HoldingsScreen
 import com.wealthvault.app.ui.OverviewScreen
@@ -88,7 +89,7 @@ private val MORE = listOf(
     Tab("settings", "Settings", Icons.Outlined.Settings, "Theme and account"),
 )
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val vm: AppViewModel by viewModels()
     private val avm: AnalysisViewModel by viewModels()
 
@@ -111,14 +112,28 @@ class MainActivity : ComponentActivity() {
                 val bars = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
+            val unlocked by vm.unlocked.collectAsState()
+            val lockOn = session?.lock == true && session?.token != null
+            // with the lock on, hide the screen from screenshots and the recent-apps thumbnail
+            LaunchedEffect(lockOn) {
+                if (lockOn) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+                else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+            }
             WealthVaultTheme(theme) {
                 when {
                     session == null -> Unit // reading the saved session
                     session?.token == null -> SignInScreen(vm)
+                    lockOn && !unlocked -> LockScreen { vm.unlocked.value = true }
                     else -> SignedIn(vm, avm)
                 }
             }
         }
+    }
+
+    // Leaving the app (home, another app, screen off) locks it again; turning the phone over does not.
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) vm.unlocked.value = false
     }
 }
 

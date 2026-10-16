@@ -7,6 +7,7 @@ import './styles/dashboard.css'
 import './styles/signals.css'
 import './styles/components.css'
 import './styles/executive.css'
+import './styles/account.css'
 import './styles/polish.css'
 import App from './App.tsx'
 

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Eye, EyeOff, LogOut, Moon, RefreshCw, Sun } from 'lucide-react'
 import { clearToken, fetchBrokerSessions, getStoredUser, triggerPortfolioSync } from '../utils/api'
 import { PRIVACY_READY_PATHS, SHOW_THEME_TOGGLE } from '../utils/features'
@@ -46,7 +46,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   const path = location.pathname
   // Portfolio filters do not apply to single-stock or broker pages
   // (Holdings has its own toolbar, built on the same URL filters)
-  const hideGlobalFilters = path === '/brokers' || path === '/signals' || path === '/stage2' || path === '/momentum' || path === '/strategy' || path === '/holdings'
+  const hideGlobalFilters = path === '/brokers' || path === '/signals' || path === '/stage2' || path === '/momentum' || path === '/strategy' || path === '/holdings' || path === '/account'
 
   const connected = sessions.filter((s) => s.status === 'CONNECTED').length
   const lastSync = useMemo(
@@ -69,6 +69,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     if (path === '/signals') return { title: 'Equity signals', sub: 'Momentum, Swing V2.1 and 200-DMA ATH breakout for every stock you hold' }
     if (path === '/momentum') return { title: 'Momentum', sub: 'Trend, returns and relative strength for one stock' }
     if (path === '/strategy') return { title: 'Strategies', sub: 'Rule-based backtests on daily candles' }
+    if (path === '/account') return { title: 'Account', sub: 'Your sign-in, privacy and data' }
     return { title: 'Overview', sub: syncLine }
   }, [path, lastSync, connected, sessions.length, lastRefreshedAt, dataFreshness])
 
@@ -140,9 +141,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
 
           {user && (
             <>
-              <span className="avatar" title={user.name}>
+              <Link to="/account" className="avatar" title={`${user.name} · Account`} aria-label="Account">
                 {user.picture ? <img src={user.picture} alt="" referrerPolicy="no-referrer" /> : user.name.charAt(0).toUpperCase()}
-              </span>
+              </Link>
               <button className="btn btn-ghost btn-icon" type="button" onClick={handleLogout} aria-label="Sign out" title="Sign out">
                 <LogOut size={18} strokeWidth={1.75} />
               </button>

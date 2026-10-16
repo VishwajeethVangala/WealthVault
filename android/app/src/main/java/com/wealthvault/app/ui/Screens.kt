@@ -120,9 +120,21 @@ fun SignInScreen(vm: AppViewModel) {
             if (askForUrl) vm.saveBaseUrl(url)
             vm.signIn(context)
         }
+        val notice by vm.notice.collectAsState()
+        notice?.let {
+            Spacer(Modifier.height(16.dp))
+            Note(it)
+        }
         if (message != null) {
             Spacer(Modifier.height(16.dp))
             Note(message!!, bad = true)
+        }
+        val base = session?.baseUrl.orEmpty()
+        if (base.startsWith("http")) {
+            Spacer(Modifier.height(20.dp))
+            androidx.compose.material3.TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$base/privacy"))) }) {
+                Text("Privacy policy", color = Wv.c.text2)
+            }
         }
     }
 }
@@ -453,15 +465,16 @@ fun SettingsScreen(vm: AppViewModel) {
                 }
             }
         }
+        item { AppLockCard(vm, s.lock) }
         item {
             WvCard {
                 Label("Account")
                 Text(s.email, style = Wv.body, color = Wv.c.text)
-                Text("Server: ${s.baseUrl}", style = Wv.small, color = Wv.c.text3)
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(onClick = { vm.signOut() }, shape = RoundedCornerShape(10.dp)) { Text("Sign out", color = Wv.c.loss) }
             }
         }
+        item { PrivacyCard(vm, s.baseUrl) }
         item { Text("Information from your brokers, not investment advice.", style = Wv.small, color = Wv.c.text3) }
         item { Text("WealthVault for Android ${com.wealthvault.app.BuildConfig.VERSION_NAME}", style = Wv.small, color = Wv.c.text3) }
     }

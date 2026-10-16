@@ -99,6 +99,12 @@ class Api(private val prefs: Prefs) {
 
     private fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
 
+    /** Erases the signed-in user's profile and all stored data on the server. Irreversible. */
+    suspend fun deleteAccount() {
+        val body = buildJsonObject { put("confirm", "DELETE") }.toString()
+        call("DELETE", "/auth/account", body)
+    }
+
     // --- equity signals and Stage 2 -----------------------------------------------------------------------
 
     suspend fun signals(market: String): SignalsResponse = json.decodeFromString(call("GET", "/analytics/signals?market=$market"))

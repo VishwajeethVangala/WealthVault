@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     PUBLIC_BASE_URL: str = Field(default="", description="Public base URL, e.g. https://wealthvault.azurewebsites.net")
     # Fixed outbound public IP registered with Angel One SmartAPI; blank sends this machine's IP
     ANGELONE_PUBLIC_IP: str = Field(default="", description="Static public IP registered with Angel One")
+    # Shown on the privacy page as the contact for questions and data requests
+    SUPPORT_EMAIL: str = Field(default="", description="Contact email shown on the privacy page")
 
     model_config = SettingsConfigDict(
         env_file=".env",

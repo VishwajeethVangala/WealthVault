@@ -1,6 +1,7 @@
 package com.wealthvault.app.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -12,7 +13,7 @@ import kotlinx.coroutines.flow.map
 private val Context.store by preferencesDataStore("wealthvault")
 
 /** What the app keeps on the phone: the server address, the sign-in token, who is signed in, and the theme. */
-data class Session(val baseUrl: String, val token: String?, val name: String, val email: String, val theme: String)
+data class Session(val baseUrl: String, val token: String?, val name: String, val email: String, val theme: String, val lock: Boolean = false)
 
 class Prefs(private val context: Context) {
     private val baseUrl = stringPreferencesKey("base_url")
@@ -21,6 +22,7 @@ class Prefs(private val context: Context) {
     private val name = stringPreferencesKey("name")
     private val email = stringPreferencesKey("email")
     private val theme = stringPreferencesKey("theme") // system | light | dark
+    private val lock = booleanPreferencesKey("app_lock") // ask for fingerprint / face / screen lock on opening
 
     val session: Flow<Session> = context.store.data.map {
         Session(
@@ -30,6 +32,7 @@ class Prefs(private val context: Context) {
             name = it[name] ?: "",
             email = it[email] ?: "",
             theme = it[theme] ?: "system",
+            lock = it[lock] ?: false,
         )
     }
 
@@ -57,6 +60,10 @@ class Prefs(private val context: Context) {
             it.remove(name)
             it.remove(email)
         }
+    }
+
+    suspend fun saveLock(on: Boolean) {
+        context.store.edit { it[lock] = on }
     }
 
     suspend fun saveTheme(value: String) {

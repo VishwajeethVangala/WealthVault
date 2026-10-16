@@ -12,10 +12,12 @@ import { BrokerSync } from './pages/BrokerSync'
 import { MomentumAnalyzer } from './pages/MomentumAnalyzer'
 import { SwingStrategy } from './pages/SwingStrategy'
 import { Login } from './pages/Login'
+import { Account } from './pages/Account'
+import { DeleteAccountInfo, PrivacyPolicy } from './pages/Legal'
 import { getToken, getStoredUser, verifySession } from './utils/api'
 import type { User } from './types'
 
-export const App: React.FC = () => {
+const SignedInApp: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(getStoredUser())
   const [isVerifying, setIsVerifying] = useState(true)
 
@@ -80,6 +82,7 @@ export const App: React.FC = () => {
             <Route path="/momentum" element={<MomentumAnalyzer />} />
             <Route path="/strategy" element={<SwingStrategy />} />
             <Route path="/brokers" element={<BrokerSync />} />
+            <Route path="/account" element={<Account />} />
             <Route path="/sync" element={<Navigate to="/brokers" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -89,6 +92,14 @@ export const App: React.FC = () => {
     </PrivacyProvider>
     </ThemeProvider>
   )
+}
+
+export const App: React.FC = () => {
+  // Public pages Google Play links to; they work without signing in
+  const publicPath = window.location.pathname.replace(/\/+$/, '')
+  if (publicPath === '/privacy') return <PrivacyPolicy />
+  if (publicPath === '/delete-account') return <DeleteAccountInfo />
+  return <SignedInApp />
 }
 
 export default App

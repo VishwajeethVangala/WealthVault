@@ -41,7 +41,7 @@ jobs:
 
       - name: Package
         run: |
-          zip -rq release.zip . -x ".git/*" "web/node_modules/*" "tests/*" ".github/*" "*/__pycache__/*" "storage/blobs/*token*" "storage/blobs/*session*" "storage/blobs/indmoney_client.json"
+          zip -rq release.zip . -x ".git/*" "android/*" "web/node_modules/*" "tests/*" ".github/*" "*/__pycache__/*" "storage/blobs/*token*" "storage/blobs/*session*" "storage/blobs/indmoney_client.json"
 
       - uses: azure/webapps-deploy@v3
         with:
