@@ -39,6 +39,22 @@ client ID the server uses (`GOOGLE_CLIENT_ID`):
 Nothing changes on the server: the app asks Google for an ID token for the web client ID (read from
 `/api/v1/auth/config`) and sends it to `/api/v1/auth/google`, exactly as the web app does.
 
+## Release build and Play Store
+
+`gradlew.bat assembleRelease bundleRelease` makes the signed, shrunk app (`app-release.apk`, about 2.7 MB) and the
+Play bundle (`app-release.aab`, about 5.3 MB). It signs with the upload key at
+`D:\Gravityndroid-tools\keys\wealthvault-upload.jks`; `android/keystore.properties` (not committed) holds its
+path and passwords. **Back both files up somewhere safe: losing the key means losing the ability to update the app.**
+`gradlew.bat assembleReleaseCheck` makes a debuggable copy of the shrunk build, for testing it on an emulator.
+
+Upload key fingerprints (not secret):
+SHA-1 `10:F1:D8:14:75:41:D8:36:84:99:04:82:EE:62:67:FC:8D:F9:DE:C2`
+SHA-256 `0A:FA:4C:19:48:B4:D1:A6:37:7F:43:3D:F8:99:B7:7F:BD:E1:6B:BE:24:F5:20:6A:6D:12:80:DE:33:FB:F9:DE`
+
+For Google sign-in, an Android OAuth client is needed for each signing key: the debug key (testing), this upload key
+(a release APK installed directly) and the key Play App Signing uses (shown in Play Console under App integrity).
+Play links needed: `<server>/privacy` and `<server>/delete-account`.
+
 ## Tested
 
 On an Android 15 emulator (Pixel 7 size) against a local server with real data, light and dark: every tab,
