@@ -49,11 +49,23 @@ const short = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 
 const weekday = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { weekday: 'short' })
 const longDate = (iso: string) => `${weekday(iso)} ${short(iso)}`
 
-/** The most recent `n` sessions seen across all stocks (each stock reports its own). */
+/** Today's date when the signals were rebuilt on a live price (today's bar is still forming), else null. */
+export const liveSessionDate = (sources: CallSource[]): string | null => {
+  const days = sources.map((s) => s.sig?.live_date).filter(Boolean) as string[]
+  return days.length > 0 ? days.sort().slice(-1)[0] : null
+}
+
+/**
+ * The window for "last `n` sessions": the `n` most recent FINISHED sessions seen across all stocks (each stock
+ * reports its own), plus today when live prices are in. Today never pushes a finished session out of the window.
+ */
 export const latestSessions = (sources: CallSource[], n = 2): string[] => {
-  const all = new Set<string>()
-  sources.forEach((s) => s.sig?.last_sessions?.forEach((d) => all.add(d)))
-  return [...all].sort().slice(-n)
+  const live = new Set(sources.map((s) => s.sig?.live_date).filter(Boolean) as string[])
+  const done = new Set<string>()
+  sources.forEach((s) => s.sig?.last_sessions?.forEach((d) => !live.has(d) && done.add(d)))
+  const finished = [...done].sort().slice(-n)
+  const last = finished[finished.length - 1] ?? ''
+  return [...finished, ...[...live].filter((d) => d > last).sort()]
 }
 
 const signed = (v: number | null | undefined) => (v == null ? DASH : `${v < 0 ? '−' : '+'}${Math.abs(v).toFixed(1)}%`)
@@ -339,6 +351,7 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
   const pool = useMemo(() => (mine ? sources.filter((s) => s.held) : sources), [sources, mine])
   const s2 = useMemo(() => latestSessions(sources, 2), [sources])
   const s7 = useMemo(() => latestSessions(sources, 7), [sources])
+  const today = useMemo(() => liveSessionDate(sources), [sources])
   const hasDetail = sources.some((s) => s.sig?.last_sessions?.length)
 
   const buys = useMemo(() => buildBuys(pool, window === 7 ? s7 : s2, window, fmt, sessionOpen), [pool, window, s2, s7, fmt, sessionOpen])
@@ -366,7 +379,12 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
   const filled = rows.filter((r) => !r.waiting)
   const waiting = rows.filter((r) => r.waiting)
   const anyLive = rows.some((r) => r.live)
-  const windowLabel = window === 'open' ? 'Every position that is open now' : `Buys filled in the last ${window} sessions (${s7.slice(-window).map(longDate).join(', ')})`
+  const inWindow = window === 7 ? s7 : s2
+  const todayNote = today && inWindow.includes(today) ? ` plus today, live (${longDate(today)})` : ''
+  const windowLabel =
+    window === 'open'
+      ? 'Every position that is open now'
+      : `Buys filled in the last ${window} sessions${todayNote} (${inWindow.map(longDate).join(', ')})`
 
   return (
     <div className="calls">
@@ -408,7 +426,7 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
       <p className="calls-intro">
         {side === 'buy'
           ? `${windowLabel}. Signals use today's live price as the latest bar. ${anyLive ? 'Calls tagged Live fired in the session that is still open and can change before the 15:30 close.' : ''}`
-          : `Positions the strategies closed in the last 7 sessions (${s7.map(longDate).join(', ')}). ${anyLive ? 'Calls tagged Live fired in the session that is still open.' : ''}`}
+          : `Positions the strategies closed in the last 7 sessions${today && s7.includes(today) ? ' plus today, live' : ''} (${s7.map(longDate).join(', ')}). ${anyLive ? 'Calls tagged Live fired in the session that is still open.' : ''}`}
       </p>
       {side === 'sell' && !hasExitData && <p className="calls-intro">Sell details are not in the saved signals yet. Press Refresh once to load them.</p>}
 

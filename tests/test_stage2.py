@@ -105,3 +105,11 @@ def test_snapshot_payload_is_split_into_chunks_and_rejoined():
     assert saved["parts"] >= 3
     assert all(len(saved[f"part{i}"]) <= ScreenerSnapshotRepository.CHUNK for i in range(saved["parts"]))
     assert ScreenerSnapshotRepository._decode(saved) == json.loads(json.dumps(payload))
+
+
+def test_cache_key_is_the_same_for_a_chartink_code_and_an_exchange_id():
+    from apps.api.routers.stage2 import _key_of
+
+    assert _key_of("infy") == "NSE:INFY"
+    assert _key_of("NSE:INFY") == "NSE:INFY"
+    assert _key_of("nse:mtartech-be") == "NSE:MTARTECH-BE"

@@ -4,7 +4,7 @@ Takes the stock list from a saved Chartink screener (the Stage 2 trend template)
 the same momentum / Swing V2.1 / ATH-breakout signals as the Equity signals page.
 
 - GET  /api/v1/analytics/stage2          the stored list, what changed since the previous day, cached signals
-- POST /api/v1/analytics/stage2/refresh  re-read Chartink, then recompute signals in the background
+- POST /api/v1/analytics/stage2/refresh  re-read Chartink, then recompute signals (list + Indian holdings) in the background
 - GET  /api/v1/analytics/stage2/live     live Kite prices for the listed stocks
 
 Signals are cached per stock exactly like Equity signals, so a stock that is also in the portfolio is not computed twice.
@@ -44,31 +44,50 @@ def _code_key(nsecode: str) -> str:
     return f"NSE:{nsecode.upper()}"
 
 
+def _key_of(symbol: str) -> str:
+    """Cache key of a stock given either a bare Chartink code ('INFY') or an exchange id ('NSE:INFY')."""
+    return symbol.upper() if ":" in symbol else _code_key(symbol)
+
+
 async def _run_job(owner_id: str, job: Job) -> None:
+    """One refresh for the whole Signals page: re-read the Chartink list, then compute signals for every stock on it
+    AND every Indian stock the user holds (a stock that is both is computed once)."""
     cache = SignalCacheRepository()
     snapshots = ScreenerSnapshotRepository()
     try:
+        chartink_error: Optional[str] = None
+        result = None
         try:
             result = await fetch_screener(SLUG)
+            if not result.rows:
+                chartink_error = "The Chartink screener returned no stocks right now."
+                result = None
         except ScreenerError as exc:
-            job.state = "error"
-            job.message = str(exc)
-            return
-        if not result.rows:
-            job.state = "error"
-            job.message = "The Chartink screener returned no stocks right now."
-            return
+            chartink_error = str(exc)
 
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        await snapshots.save(
-            SLUG,
-            today,
-            {"title": result.title, "fetched_at": result.fetched_at, "extra_columns": result.extra_columns, "rows": result.rows},
-        )
+        if result:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            await snapshots.save(
+                SLUG,
+                today,
+                {"title": result.title, "fetched_at": result.fetched_at, "extra_columns": result.extra_columns, "rows": result.rows},
+            )
 
         client = await get_user_kite_client(owner_id)
-        codes = [r["nsecode"] for r in result.rows]
-        job.total = len(codes)
+
+        # cache key -> what to hand compute_stock_signals; the list first, then holdings that are not on it
+        work: Dict[str, str] = {}
+        for r in (result.rows if result else []):
+            work.setdefault(_key_of(r["nsecode"]), r["nsecode"])
+        holdings = await HoldingsRepository().get_holdings(owner_id=owner_id)
+        for inst in sorted(set((await _equity_symbol_map(holdings, client)).values())):
+            work.setdefault(_key_of(inst), inst)
+
+        if not work:
+            job.state = "error"
+            job.message = chartink_error or "There are no stocks to analyse yet."
+            return
+        job.total = len(work)
 
         benchmark = None
         try:
@@ -76,31 +95,31 @@ async def _run_job(owner_id: str, job: Job) -> None:
         except KiteAuthRequiredError:
             raise
         except Exception as exc:
-            logger.warning("Benchmark unavailable for Stage 2 signals: %s", exc)
+            logger.warning("Benchmark unavailable for signals: %s", exc)
 
         # A re-run shortly after an interrupted one resumes: rows computed in the last RESUME_MINUTES are kept
         recent_cutoff = datetime.now(timezone.utc) - timedelta(minutes=RESUME_MINUTES)
-        fresh_codes = set()
-        for key, cached in (await cache.get_many([_code_key(c) for c in codes])).items():
+        fresh_keys = set()
+        for key, cached in (await cache.get_many(list(work))).items():
             try:
                 computed = datetime.fromisoformat(cached.get("computed_at", ""))
             except ValueError:
                 continue
             if computed >= recent_cutoff and not cached.get("errors", {}).get("all"):
-                fresh_codes.add(key.split(":", 1)[1])
-        job.done = len(fresh_codes)
-        codes = [c for c in codes if c.upper() not in fresh_codes]
+                fresh_keys.add(key)
+        job.done = len(fresh_keys)
+        todo = [k for k in work if k not in fresh_keys]
 
         sem = asyncio.Semaphore(CONCURRENCY)
         auth_error: List[KiteAuthRequiredError] = []
         retry: List[str] = []
 
-        async def attempt(code: str) -> bool:
+        async def attempt(key: str) -> bool:
             try:
-                row = await compute_stock_signals(client, code, benchmark)
+                row = await compute_stock_signals(client, work[key], benchmark)
                 await cache.save(row["instrument"], row)
-                if row["instrument"] != _code_key(code):
-                    await cache.save(_code_key(code), row)  # alias, so lookups by Chartink code always hit
+                if row["instrument"].upper() != key:
+                    await cache.save(key, row)  # alias, so lookups by Chartink code or holding symbol always hit
                 return True
             except KiteAuthRequiredError as exc:
                 # Kite reports some per-stock failures like an expired login; confirm before stopping the run
@@ -108,29 +127,29 @@ async def _run_job(owner_id: str, job: Job) -> None:
                     auth_error.append(exc)
                 return False
             except Exception as exc:
-                logger.warning("Stage 2 signals failed for %s: %s", code, exc)
+                logger.warning("Signals failed for %s: %s", key, exc)
                 return False
 
-        async def one(code: str) -> None:
+        async def one(key: str) -> None:
             async with sem:
                 if auth_error:
                     return
-                if await attempt(code):
+                if await attempt(key):
                     job.done += 1
                 else:
-                    retry.append(code)
+                    retry.append(key)
 
-        await asyncio.gather(*(one(c) for c in codes))
+        await asyncio.gather(*(one(k) for k in todo))
 
-        for code in retry:
+        for key in retry:
             if auth_error:
                 break
             await asyncio.sleep(1.0)
-            if not await attempt(code) and not auth_error:
+            if not await attempt(key) and not auth_error:
                 job.failed += 1
                 await cache.save(
-                    _code_key(code),
-                    {"instrument": _code_key(code), "momentum": None, "swing": None, "ath": None, "errors": {"all": "Price history unavailable"}},
+                    key,
+                    {"instrument": key, "momentum": None, "swing": None, "ath": None, "errors": {"all": "Price history unavailable"}},
                 )
             job.done += 1
 
@@ -138,6 +157,9 @@ async def _run_job(owner_id: str, job: Job) -> None:
             job.state = "error"
             job.message = "Kite needs today's login to fetch price history."
             job.auth_url = auth_error[0].auth_url
+        elif chartink_error:
+            job.state = "error"
+            job.message = f"{chartink_error} Your holdings were refreshed."
         else:
             job.state = "done"
     except KiteAuthRequiredError as exc:
@@ -145,14 +167,14 @@ async def _run_job(owner_id: str, job: Job) -> None:
         job.message = "Kite needs today's login to fetch price history."
         job.auth_url = exc.auth_url
     except Exception as exc:
-        logger.error("Stage 2 refresh failed: %s", exc, exc_info=True)
+        logger.error("Signals refresh failed: %s", exc, exc_info=True)
         job.state = "error"
         job.message = f"Refresh failed: {exc}"
     finally:
         job.finished_at = datetime.now(timezone.utc).isoformat()
 
 
-@router.post("/refresh", status_code=status.HTTP_202_ACCEPTED, summary="Re-read the Chartink screener and recompute signals")
+@router.post("/refresh", status_code=status.HTTP_202_ACCEPTED, summary="Re-read the Chartink screener and recompute signals for it and for the user's holdings")
 async def refresh_stage2(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
     job = _jobs.get(current_user_id)
     if job and job.state == "running":
