@@ -138,6 +138,7 @@ export const Signals: React.FC = () => {
   const [sector, setSector] = useState('all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'align', dir: -1 })
   const [shown, setShown] = useState(PAGE)
+  const [showBreak, setShowBreak] = useState(false)
   const [view, setView] = useState<'calls' | 'table'>(searchParams.get('view') === 'table' || startFilter ? 'table' : 'calls')
   const timer = useRef<number | undefined>(undefined)
 
@@ -430,6 +431,18 @@ export const Signals: React.FC = () => {
     </th>
   )
 
+  // Chartink + holdings - on both = total, counted once. While a refresh runs the job reports it; otherwise it comes from the rows.
+  const breakdown = useMemo(() => {
+    const fromJob = !isUs && running && (job?.total ?? 0) > 0
+    const chartink = fromJob ? job!.list_count ?? 0 : rows.filter((r) => r.s2).length
+    const held = fromJob ? job!.holdings_count ?? 0 : rows.filter((r) => r.inst).length
+    const both = fromJob ? job!.overlap ?? 0 : rows.filter((r) => r.s2 && r.inst).length
+    return { chartink, held, both, total: chartink + held - both }
+  }, [rows, job, running, isUs])
+  const breakdownText = isUs
+    ? `Holdings ${breakdown.held}`
+    : `Chartink ${breakdown.chartink} + Holdings ${breakdown.held}${breakdown.both > 0 ? ` − ${breakdown.both} on both` : ''} = ${breakdown.total}`
+
   const pctDone = job && job.total > 0 ? Math.round((job.done / job.total) * 100) : 0
   const extras = !isUs && source !== 'held' ? list?.extra_columns ?? [] : []
   const showVolume = !isUs && source !== 'held' && hasList
@@ -551,8 +564,12 @@ export const Signals: React.FC = () => {
               <span className="sub num">
                 {job!.done} of {job!.total}
               </span>
+              {!isUs && (job!.list_count ?? 0) + (job!.holdings_count ?? 0) > 0 && <span className="sub num">· {breakdownText}</span>}
             </>
           )}
+          <button type="button" className="btn" aria-expanded={showBreak} onClick={() => setShowBreak((v) => !v)} title="Where the stocks on this page come from">
+            Breakdown
+          </button>
           {isUs && <span className={`badge ${usClosed ? 'off' : 'ok'}`}>{usClosed ? 'US market closed' : 'US market open'}</span>}
           {!running && <FreshnessChip status={liveStatus} broker={isUs ? 'INDmoney' : 'Kite'} sessionOpen={sessionLive} storedAt={isUs ? computedAt : job?.finished_at ?? computedAt} />}
           {!running && list && (
@@ -571,6 +588,19 @@ export const Signals: React.FC = () => {
           </button>
         </div>
       </section>
+
+      {showBreak && (
+        <div className="card" role="status" style={{ padding: '12px 16px', marginBottom: 12 }}>
+          <div className="num" style={{ fontWeight: 600 }}>
+            {breakdownText}
+          </div>
+          <div className="sub" style={{ marginTop: 4 }}>
+            {isUs
+              ? 'Your US stocks and ETFs.'
+              : `Chartink is your Stage 2 screener list; Holdings are the Indian stocks and ETFs you own. A stock on both is counted once, so the total is the number of different stocks analysed${running ? ' (as counted by the refresh that is running)' : ''}.`}
+          </div>
+        </div>
+      )}
 
       {nothingYet ? (
         <div className="card">

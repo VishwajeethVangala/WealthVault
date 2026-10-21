@@ -55,6 +55,10 @@ class Job:
     finished_at: Optional[str] = None
     message: Optional[str] = None
     auth_url: Optional[str] = None
+    # where the stocks come from (Signals page): on the Chartink list, held, and on both (counted once in total)
+    list_count: int = 0
+    holdings_count: int = 0
+    overlap: int = 0
 
 
 _jobs: Dict[str, Job] = {}

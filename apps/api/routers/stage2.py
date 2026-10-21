@@ -79,9 +79,13 @@ async def _run_job(owner_id: str, job: Job) -> None:
         work: Dict[str, str] = {}
         for r in (result.rows if result else []):
             work.setdefault(_key_of(r["nsecode"]), r["nsecode"])
+        list_keys = set(work)
         holdings = await HoldingsRepository().get_holdings(owner_id=owner_id)
+        held_keys = set()
         for inst in sorted(set((await _equity_symbol_map(holdings, client)).values())):
+            held_keys.add(_key_of(inst))
             work.setdefault(_key_of(inst), inst)
+        job.list_count, job.holdings_count, job.overlap = len(list_keys), len(held_keys), len(list_keys & held_keys)
 
         if not work:
             job.state = "error"

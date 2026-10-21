@@ -513,6 +513,10 @@ export interface SignalsJob {
   finished_at: string | null
   message: string | null
   auth_url: string | null
+  /** where the stocks come from: on the Chartink list, held, and on both (counted once in `total`) */
+  list_count?: number
+  holdings_count?: number
+  overlap?: number
 }
 
 export interface SignalsResponse {
