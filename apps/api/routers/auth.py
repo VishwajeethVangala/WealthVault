@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from apps.api.routers.accounts import get_current_user
 from core.account_deletion import delete_user_data
 from core.config import get_settings
-from core.models import GoogleAuthRequest, TokenResponse, User
+from core.demo_account import check_demo_login, ensure_demo_account
+from core.models import DemoLoginRequest, GoogleAuthRequest, TokenResponse, User
 from core.security import create_access_token, sanitize_key, verify_google_id_token
 from storage.tables.repositories import UserRepository
 
@@ -31,6 +32,7 @@ async def get_auth_config():
         "google_client_id": settings.GOOGLE_CLIENT_ID,
         "environment": settings.ENVIRONMENT,
         "support_email": settings.SUPPORT_EMAIL,
+        "demo_login": bool(settings.DEMO_USERNAME and settings.DEMO_PASSWORD),
     }
 
 
@@ -114,3 +116,22 @@ async def authenticate_google(payload: GoogleAuthRequest) -> TokenResponse:
         token_type="bearer",
         user=user,
     )
+
+
+@router.post(
+    "/demo",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Sign in to the sample account (for app-store reviewers)",
+    description="Only works when DEMO_USERNAME and DEMO_PASSWORD are set on the server; otherwise it answers 404.",
+)
+async def authenticate_demo(payload: DemoLoginRequest) -> TokenResponse:
+    """Issue a session for the sample account when the demo username and password match."""
+    settings = get_settings()
+    if not settings.DEMO_USERNAME or not settings.DEMO_PASSWORD:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
+    if not check_demo_login(payload.username, payload.password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Wrong username or password.")
+    user = await ensure_demo_account()
+    token = create_access_token(data={"sub": user.user_id, "email": user.email, "name": user.name})
+    return TokenResponse(access_token=token, token_type="bearer", user=user)

@@ -147,6 +147,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         prefs.signIn(com.wealthvault.app.data.TokenResponse(token, com.wealthvault.app.data.User("test", "test@local", "Test")))
     }
 
+    /** Username-and-password sign-in for the sample account (store reviewers cannot use Google sign-in). */
+    fun signInDemo(username: String, password: String) {
+        if (signingIn.value) return
+        signingIn.value = true
+        message.value = null
+        viewModelScope.launch {
+            try {
+                prefs.signIn(api.signInDemo(username, password))
+            } catch (e: Exception) {
+                message.value = if (e.message?.contains("401") == true) "Wrong username or password." else (e.message ?: "Sign-in failed.")
+            } finally {
+                signingIn.value = false
+            }
+        }
+    }
+
     fun signOut() = viewModelScope.launch {
         prefs.signOut()
         summary.value = Load()

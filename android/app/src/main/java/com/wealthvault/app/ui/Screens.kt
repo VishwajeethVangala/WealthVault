@@ -120,6 +120,38 @@ fun SignInScreen(vm: AppViewModel) {
             if (askForUrl) vm.saveBaseUrl(url)
             vm.signIn(context)
         }
+        // for store reviewers, who cannot use Google sign-in: one username and password for the sample account
+        var demoOpen by remember { mutableStateOf(false) }
+        var demoUser by remember { mutableStateOf("") }
+        var demoPass by remember { mutableStateOf("") }
+        TextButton(onClick = { demoOpen = true }, enabled = !busy && url.startsWith("http")) {
+            Text("Sign in with a username", color = Wv.c.text2)
+        }
+        if (demoOpen) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { demoOpen = false },
+                containerColor = Wv.c.surface,
+                title = { Text("Sign in with a username", color = Wv.c.text) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(demoUser, { demoUser = it }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(
+                            demoPass, { demoPass = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(enabled = demoUser.isNotBlank() && demoPass.isNotEmpty(), onClick = {
+                        demoOpen = false
+                        if (askForUrl) vm.saveBaseUrl(url)
+                        vm.signInDemo(demoUser, demoPass)
+                        demoPass = ""
+                    }) { Text("Sign in", color = Wv.c.accent) }
+                },
+                dismissButton = { TextButton(onClick = { demoOpen = false }) { Text("Cancel", color = Wv.c.text2) } },
+            )
+        }
         val notice by vm.notice.collectAsState()
         notice?.let {
             Spacer(Modifier.height(16.dp))

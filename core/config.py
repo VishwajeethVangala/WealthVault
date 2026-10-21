@@ -74,6 +74,9 @@ class Settings(BaseSettings):
     ANGELONE_PUBLIC_IP: str = Field(default="", description="Static public IP registered with Angel One")
     # Shown on the privacy page as the contact for questions and data requests
     SUPPORT_EMAIL: str = Field(default="", description="Contact email shown on the privacy page")
+    # Store-review demo login (off unless both are set); opens one sample account, see core/demo_account.py
+    DEMO_USERNAME: str = Field(default="", description="Username of the app-store reviewer demo login")
+    DEMO_PASSWORD: str = Field(default="", description="Password of the app-store reviewer demo login")
 
     model_config = SettingsConfigDict(
         env_file=".env",

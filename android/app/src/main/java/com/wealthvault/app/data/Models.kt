@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /** Shapes returned by the WealthVault API (the same server the web app uses). Unknown fields are ignored. */
 
 @Serializable
-data class AuthConfig(val google_client_id: String = "", val environment: String = "")
+data class AuthConfig(val google_client_id: String = "", val environment: String = "", val demo_login: Boolean = false)
 
 @Serializable
 data class User(val user_id: String, val email: String = "", val name: String = "", val picture: String? = null)

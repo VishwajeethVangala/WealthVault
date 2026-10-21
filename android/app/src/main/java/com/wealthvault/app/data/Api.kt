@@ -77,6 +77,12 @@ class Api(private val prefs: Prefs) {
         return json.decodeFromString(call("POST", "/auth/google", body, auth = false))
     }
 
+    /** The app-store reviewer sample account (the server answers 404 unless it is switched on). */
+    suspend fun signInDemo(username: String, password: String): TokenResponse {
+        val body = buildJsonObject { put("username", username); put("password", password) }.toString()
+        return json.decodeFromString(call("POST", "/auth/demo", body, auth = false))
+    }
+
     /** The latest portfolio snapshot, or null before the first sync. */
     suspend fun summary(): Summary? = try {
         json.decodeFromString<Summary>(call("GET", "/portfolio/summary"))

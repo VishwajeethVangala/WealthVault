@@ -154,6 +154,13 @@ class PortfolioSnapshot(BaseModel):
 
 # --- API Request & Response Schemas ---
 
+class DemoLoginRequest(BaseModel):
+    """Username and password for the app-store reviewer demo account."""
+
+    username: str
+    password: str
+
+
 class GoogleAuthRequest(BaseModel):
     """Payload for Google OAuth ID token verification."""
 
