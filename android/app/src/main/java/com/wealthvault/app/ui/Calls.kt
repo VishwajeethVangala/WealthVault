@@ -82,9 +82,19 @@ data class CallRow(
     val sinceRef: Since?,
 )
 
-/** The most recent `n` sessions seen across all stocks (each stock reports its own). */
-fun latestSessions(sources: List<CallSource>, n: Int): List<String> =
-    sources.flatMap { it.sig?.last_sessions.orEmpty() }.toSortedSet().toList().takeLast(n)
+/** Today's date when the signals were rebuilt on a live price (today's bar is still forming), else null. */
+fun liveSessionDate(sources: List<CallSource>): String? = sources.mapNotNull { it.sig?.live_date }.maxOrNull()
+
+/**
+ * The window for "last `n` sessions": the `n` most recent FINISHED sessions seen across all stocks (each stock
+ * reports its own), plus today when live prices are in. Today never pushes a finished session out of the window.
+ */
+fun latestSessions(sources: List<CallSource>, n: Int): List<String> {
+    val live = sources.mapNotNull { it.sig?.live_date }.toSet()
+    val finished = sources.flatMap { it.sig?.last_sessions.orEmpty() }.filter { it !in live }.toSortedSet().toList().takeLast(n)
+    val last = finished.lastOrNull().orEmpty()
+    return finished + live.filter { it > last }.sorted()
+}
 
 fun buildBuys(sources: List<CallSource>, sessions: List<String>, window: BuyWindow, fmt: PriceFmt, sessionOpen: Boolean): List<CallRow> {
     val out = mutableListOf<CallRow>()
@@ -223,7 +233,9 @@ fun LazyListScope.callsView(
     val pool = if (state.mine) sources.filter { it.held } else sources
     val s2 = latestSessions(sources, 2)
     val s7 = latestSessions(sources, 7)
-    val buys = buildBuys(pool, if (state.window == 7) s7 else s2, state.window, fmt, sessionOpen)
+    val today = liveSessionDate(sources)
+    val inWindow = if (state.window == 7) s7 else s2
+    val buys = buildBuys(pool, inWindow, state.window, fmt, sessionOpen)
     val sells = buildSells(pool, s7, fmt, sessionOpen)
     val counts = mapOf(
         2 to buildBuys(pool, s2, 2, fmt, sessionOpen).count { !it.waiting },
@@ -250,11 +262,12 @@ fun LazyListScope.callsView(
                     Text("Only my holdings", style = Wv.sub, color = Wv.c.text2)
                 }
             }
-            val windowLabel = if (state.window == OPEN_WINDOW) "Every position that is open now" else "Buys filled in the last ${state.window} sessions (${s7.takeLast(state.window).joinToString(", ") { weekdayDate(it) }})"
+            val todayNote = if (today != null && today in inWindow) " plus today, live (${weekdayDate(today)})" else ""
+            val windowLabel = if (state.window == OPEN_WINDOW) "Every position that is open now" else "Buys filled in the last ${state.window} sessions$todayNote (${inWindow.joinToString(", ") { weekdayDate(it) }})"
             Text(
                 if (state.side == "buy") "$windowLabel. Signals use today's live price as the latest bar." +
                     (if (rows.any { it.live }) " Calls tagged Live fired in the session that is still open and can change before the 15:30 close." else "")
-                else "Positions the strategies closed in the last 7 sessions (${s7.joinToString(", ") { weekdayDate(it) }}).",
+                else "Positions the strategies closed in the last 7 sessions${if (today != null && today in s7) " plus today, live" else ""} (${s7.joinToString(", ") { weekdayDate(it) }}).",
                 style = Wv.small, color = Wv.c.text3,
             )
         }

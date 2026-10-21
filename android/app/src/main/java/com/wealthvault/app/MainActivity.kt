@@ -19,7 +19,6 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.foundation.layout.Box
-import androidx.compose.material.icons.automirrored.outlined.TrendingUp
 import androidx.compose.material.icons.outlined.CandlestickChart
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Radar
@@ -40,7 +39,6 @@ import com.wealthvault.app.ui.AnalysisViewModel
 import com.wealthvault.app.ui.MomentumScreen
 import com.wealthvault.app.ui.PageTitle
 import com.wealthvault.app.ui.SignalsScreen
-import com.wealthvault.app.ui.Stage2Screen
 import com.wealthvault.app.ui.StrategyScreen
 import com.wealthvault.app.ui.WvCard
 import com.wealthvault.app.ui.pagePad
@@ -77,7 +75,6 @@ private val TABS = listOf(
     Tab("overview", "Overview", Icons.Outlined.GridView),
     Tab("holdings", "Holdings", Icons.Outlined.AccountBalanceWallet),
     Tab("signals", "Signals", Icons.Outlined.Radar),
-    Tab("stage2", "Stage 2", Icons.AutoMirrored.Outlined.TrendingUp),
     Tab("more", "More", Icons.Outlined.MoreHoriz),
 )
 
@@ -182,7 +179,6 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
             composable("overview") { OverviewScreen(vm, avm) { nav.navigate("signals") { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } } }
             composable("holdings") { HoldingsScreen(vm) { openStock("momentum", it) } }
             composable("signals") { SignalsScreen(vm, avm) { openStock("momentum", it) } }
-            composable("stage2") { Stage2Screen(avm) { openStock("momentum", it) } }
             composable("more") { MoreScreen { nav.navigate(it) } }
             composable("momentum?symbol={symbol}", arguments = listOf(navArgument("symbol") { nullable = true; defaultValue = null })) { e ->
                 SubPage({ nav.popBackStack() }) { MomentumScreen(vm, avm, e.arguments?.getString("symbol")) { openStock("strategy", it) } }

@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,6 +41,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.wealthvault.app.data.Holding
 import com.wealthvault.app.data.LiveQuote
+import com.wealthvault.app.data.SignalsResponse
+import com.wealthvault.app.data.Stage2Response
+import com.wealthvault.app.data.Stage2Row
 import com.wealthvault.app.data.StockSignals
 
 /** One stock, with every broker's lots of it added together (as the web app's holdings model does). */
@@ -86,10 +90,6 @@ fun buildInstruments(holdings: List<Holding>, us: Boolean): List<Instrument> =
             )
         }
 
-private data class SigRow(val inst: Instrument, val sig: StockSignals?, val ltp: Double, val live: LiveQuote?, val reading: Reading)
-
-private enum class SigFilter(val label: String) { All("All"), Bull("All bullish"), Mixed("Mixed"), Bear("All bearish"), Trade("In a trade") }
-
 /** Opens a broker login page (Kite's daily login) in the browser. */
 @Composable
 fun LoginLinkButton(url: String, label: String = "Log in to Kite") {
@@ -130,10 +130,108 @@ fun KpiGrid(tiles: List<Triple<String, String, String?>>, tones: List<androidx.c
                         if (foot != null) Text(foot, style = Wv.small, color = Wv.c.text3)
                     }
                 }
-                if (pair.size == 1) Box(Modifier.weight(1f))
             }
         }
     }
+}
+
+/**
+ * One row of the Signals page: a stock you hold, a stock on the Chartink Stage 2 list, or both (shown once).
+ * [open] is what the Momentum page is opened with.
+ */
+private data class SigRow(
+    val key: String,
+    val code: String,
+    val name: String,
+    val inst: Instrument?,
+    val s2: Stage2Row?,
+    val sig: StockSignals?,
+    val ltp: Double,
+    val dayPct: Double?,
+    val live: LiveQuote?,
+    val fresh: Boolean,
+    val reading: Reading,
+    val open: String,
+)
+
+private enum class Source(val label: String) { All("Everything"), Held("My holdings"), Stage2("Stage 2"), New("New on Stage 2") }
+
+private enum class SigFilter(val label: String) { All("All"), Bull("All bullish"), Mixed("Mixed"), Bear("All bearish"), Trade("In a trade"), Fresh("Fresh entries") }
+
+private const val FRESH_DAYS = 10
+private const val PAGE = 60
+
+private fun titleCase(v: String) = v.split(' ').joinToString(" ") { w -> w.replaceFirstChar(Char::uppercase) }
+
+/** Exchange id "NSE:INFY" -> "INFY"; also drops the trade-for-trade series suffix, so "MTARTECH-BE" matches "MTARTECH". */
+private fun codeOf(id: String) = id.substringAfter(':').uppercase().replace(Regex("-(BE|BZ|BL|IL)$"), "")
+
+private fun isFresh(sig: StockSignals?) =
+    (sig?.swing?.state == "IN_POSITION" && (sig.swing.bars_held ?: 999) <= FRESH_DAYS) || (sig?.ath?.state == "IN_POSITION" && (sig.ath.bars_held ?: 999) <= FRESH_DAYS)
+
+/** Chartink + holdings - on both = total, counted once. */
+private data class Breakdown(val chartink: Int, val held: Int, val both: Int) {
+    val total get() = chartink + held - both
+    fun text(us: Boolean) = if (us) "Holdings $held" else "Chartink $chartink + Holdings $held" + (if (both > 0) " − $both on both" else "") + " = $total"
+}
+
+private fun buildRows(
+    holdings: List<Holding>,
+    held: SignalsResponse?,
+    heldLive: Map<String, StockSignals>,
+    stage2: Stage2Response?,
+    stage2Live: Map<String, StockSignals>,
+    quotes: Map<String, LiveQuote>,
+    usLive: Map<String, LiveQuote>,
+    us: Boolean,
+): List<SigRow> {
+    val map = held?.symbol_map.orEmpty()
+    val heldSigs = held?.signals.orEmpty() + heldLive
+    // the same stock at two brokers (e.g. "IDEAFORGE" and INDmoney's "INDS26287 (...)") is one row when the signals know both as one exchange id
+    val instruments = buildInstruments(holdings, us).groupBy { inst -> inst.symbols.firstNotNullOfOrNull { map[it] } ?: inst.key }.values.map { group ->
+        if (group.size == 1) group.first() else group.first().copy(
+            symbols = group.flatMap { it.symbols }.distinct(),
+            brokers = group.flatMap { it.brokers }.distinct(),
+            qty = group.sumOf { it.qty }, inv = group.sumOf { it.inv }, cur = group.sumOf { it.cur },
+            sym = group.map { it.sym }.minBy { it.length },
+        )
+    }
+
+    if (us) {
+        return instruments.map { inst ->
+            val id = inst.symbols.firstNotNullOfOrNull { map[it] }
+            val sig = id?.let { heldSigs[it] }
+            val lq = usLive[inst.key]
+            val ltp = lq?.price ?: sig?.momentum?.last_price ?: 0.0
+            SigRow("us:${inst.key}", inst.sym, sig?.name ?: inst.sym, inst, null, sig, ltp, lq?.day_change_pct ?: inst.dayPct, lq, false, readSignals(sig, ltp), inst.key)
+        }
+    }
+
+    val out = mutableListOf<SigRow>()
+    val byCode = mutableMapOf<String, Int>()
+    stage2?.list?.rows.orEmpty().forEach { row ->
+        val code = row.nsecode.uppercase()
+        val sig = stage2Live[code] ?: stage2?.signals?.get(code)
+        val lq = quotes[row.nsecode]
+        val ltp = lq?.price ?: row.close
+        byCode[code] = out.size
+        out += SigRow("s2:$code", row.nsecode, row.name, null, row, sig, ltp, lq?.day_change_pct ?: row.per_chg, null, isFresh(sig), readSignals(sig, ltp), sig?.instrument?.ifBlank { null } ?: "NSE:${row.nsecode}")
+    }
+    instruments.forEach { inst ->
+        val id = inst.symbols.firstNotNullOfOrNull { map[it] }
+        val at = id?.let { byCode[codeOf(it)] }
+        if (at != null) {
+            // on both lists: keep the Chartink row, attach the position
+            val m = out[at]
+            val sig = m.sig ?: id?.let { heldSigs[it] }
+            val ltp = quotes[m.code]?.price ?: inst.ltp
+            out[at] = m.copy(inst = inst, sig = sig, ltp = ltp, fresh = isFresh(sig), reading = readSignals(sig, ltp))
+        } else {
+            val sig = id?.let { heldSigs[it] }
+            out += SigRow("held:${inst.key}", inst.key, sig?.name ?: inst.sym, inst, null, sig, inst.ltp, inst.dayPct, null, isFresh(sig), readSignals(sig, inst.ltp), sig?.instrument?.ifBlank { null } ?: tickerOf(inst.symbols.first()))
+        }
+    }
+    return out
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,79 +243,110 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
     val live by avm.liveSignals.collectAsState()
     val usLive by avm.usLive.collectAsState()
     val usClosed by avm.usClosed.collectAsState()
-    var view by rememberSaveable { mutableStateOf("table") }
+    val s2Res by avm.stage2.collectAsState()
+    val quotes by avm.stage2Quotes.collectAsState()
+    val s2Live by avm.stage2Live.collectAsState()
+    var view by rememberSaveable { mutableStateOf("calls") }
+    var source by rememberSaveable { mutableStateOf(Source.All) }
     var filter by rememberSaveable { mutableStateOf(SigFilter.All) }
+    var sector by rememberSaveable { mutableStateOf("all") }
     var q by rememberSaveable { mutableStateOf("") }
+    var showBreak by rememberSaveable { mutableStateOf(false) }
+    var shown by remember { mutableIntStateOf(PAGE) }
     val calls = rememberCallsState(defaultWindow = OPEN_WINDOW)
     val us = market == "us"
     val fmt = remember(us) { PriceFmt(us) }
+    val context = LocalContext.current
 
-    LaunchedEffect(Unit) { if (avm.signals.value.data == null) avm.loadSignals() }
+    LaunchedEffect(Unit) { avm.ensureLoaded() }
 
     val all = holdings.data.orEmpty()
-    val counts = mapOf("in" to buildInstruments(all, false).size, "us" to buildInstruments(all, true).size)
     val data = res.data
-    val rows = remember(all, data, live, usLive, us) {
-        val map = data?.symbol_map.orEmpty()
-        val sigs = data?.signals.orEmpty() + live
-        // the same stock at two brokers (e.g. "IDEAFORGE" and INDmoney's "INDS26287 (...)") is one row when the signals know both as one exchange id
-        buildInstruments(all, us).groupBy { inst -> inst.symbols.firstNotNullOfOrNull { map[it] } ?: inst.key }.values.map { group ->
-            if (group.size == 1) group.first() else group.first().copy(
-                symbols = group.flatMap { it.symbols }.distinct(),
-                brokers = group.flatMap { it.brokers }.distinct(),
-                qty = group.sumOf { it.qty }, inv = group.sumOf { it.inv }, cur = group.sumOf { it.cur },
-                sym = group.map { it.sym }.minBy { it.length },
-            )
-        }.map { inst ->
-            val id = inst.symbols.firstNotNullOfOrNull { map[it] }
-            val sig = id?.let { sigs[it] }
-            val lq = if (us) usLive[inst.key] else null
-            val ltp = if (us) lq?.price ?: sig?.momentum?.last_price ?: 0.0 else inst.ltp
-            SigRow(inst, sig, ltp, lq, readSignals(sig, ltp))
+    val s2Data = if (us) null else s2Res.data
+    val list = s2Data?.list
+    val rows = remember(all, data, live, s2Data, s2Live, quotes, usLive, us) { buildRows(all, data, live, s2Data, s2Live, quotes, usLive, us) }
+    val scoped = rows.filter { r ->
+        when (source) {
+            Source.All -> true
+            Source.Held -> r.inst != null
+            Source.Stage2 -> r.s2 != null
+            Source.New -> r.s2?.is_new == true
         }
     }
-    val withM = rows.filter { it.sig?.momentum != null }
+    val sourceCounts = mapOf(Source.All to rows.size, Source.Held to rows.count { it.inst != null }, Source.Stage2 to rows.count { it.s2 != null }, Source.New to rows.count { it.s2?.is_new == true })
+
+    // India's job covers the Chartink list and the holdings; the US job is the holdings job
+    val job = if (us) data?.job else s2Data?.job
+    val running = job?.state == "running"
+    val breakdown = if (!us && running && (job?.total ?: 0) > 0) Breakdown(job!!.list_count, job.holdings_count, job.overlap)
+    else Breakdown(rows.count { it.s2 != null }, rows.count { it.inst != null }, rows.count { it.s2 != null && it.inst != null })
+
+    val withM = scoped.filter { it.sig?.momentum != null }
     val up = withM.count { momentumLean(it.sig!!.momentum!!) == Lean.Bull }
     val down = withM.count { momentumLean(it.sig!!.momentum!!) == Lean.Bear }
-    val swingIn = rows.filter { it.sig?.swing?.state == "IN_POSITION" }
-    val athIn = rows.filter { it.sig?.ath?.state == "IN_POSITION" }
-    val review = rows.filter { it.reading.alignment == Agreement.AllBear }
-    val covered = rows.count { hasAnySignal(it.sig) }
-    val job = data?.job
-    val running = job?.state == "running"
-    val visible = rows.filter { r ->
-        val needle = q.trim().lowercase()
-        (needle.isEmpty() || "${r.inst.sym} ${r.sig?.name.orEmpty()}".lowercase().contains(needle)) && when (filter) {
-            SigFilter.All -> true
-            SigFilter.Bull -> r.reading.alignment == Agreement.AllBull
-            SigFilter.Mixed -> r.reading.alignment == Agreement.Mixed
-            SigFilter.Bear -> r.reading.alignment == Agreement.AllBear
-            SigFilter.Trade -> r.sig?.swing?.state == "IN_POSITION" || r.sig?.ath?.state == "IN_POSITION"
-        }
-    }.sortedByDescending { it.inst.cur }
-    val sources = rows.map { CallSource(code = it.inst.key, name = it.sig?.name ?: it.inst.sym, held = true, sig = it.sig, ltp = it.ltp) }
+    val covered = scoped.count { hasAnySignal(it.sig) }
+    val bull = scoped.filter { it.reading.alignment == Agreement.AllBull }
+    val reviewHeld = scoped.count { it.inst != null && it.reading.alignment == Agreement.AllBear }
+    val needle = q.trim().lowercase()
+    val sectors = scoped.mapNotNull { it.s2?.sector?.takeIf(String::isNotBlank) }.groupingBy { it }.eachCount().entries.sortedByDescending { it.value }
+    val visible = scoped.filter { r ->
+        (needle.isEmpty() || "${r.name} ${r.code}".lowercase().contains(needle)) &&
+            (sector == "all" || r.s2?.sector == sector) &&
+            when (filter) {
+                SigFilter.All -> true
+                SigFilter.Bull -> r.reading.alignment == Agreement.AllBull
+                SigFilter.Mixed -> r.reading.alignment == Agreement.Mixed
+                SigFilter.Bear -> r.reading.alignment == Agreement.AllBear
+                SigFilter.Trade -> r.sig?.swing?.state == "IN_POSITION" || r.sig?.ath?.state == "IN_POSITION"
+                SigFilter.Fresh -> r.fresh
+            }
+    }.sortedWith(compareByDescending<SigRow> { if (it.sig != null) it.reading.alignment.order else -1 }.thenByDescending { it.inst?.cur ?: 0.0 }.thenByDescending { it.dayPct ?: -999.0 })
+    val sources = scoped.map {
+        CallSource(code = it.s2?.nsecode ?: it.code, name = it.name, sector = it.s2?.sector?.let(::titleCase), held = it.inst != null, isNew = it.s2?.is_new == true, sig = it.sig, ltp = it.ltp)
+    }
+    val byOpen = scoped.associateBy { it.s2?.nsecode ?: it.code }
 
-    PullToRefreshBox(isRefreshing = res.loading && !running, onRefresh = { avm.loadSignals() }) {
+    PullToRefreshBox(isRefreshing = (res.loading || s2Res.loading) && !running, onRefresh = { avm.loadAll() }) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { PageTitle("Equity signals", "Momentum, Swing V2.1 and the ATH breakout on each stock you hold") }
+            item { PageTitle("Signals", "Momentum, Swing V2.1 and the ATH breakout on the stocks you hold and your Chartink Stage 2 list") }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Seg(listOf("in" to "India  ${counts["in"]}", "us" to "US  ${counts["us"]}"), market) { avm.setMarket(it) }
-                        Seg(listOf("table" to "Holdings", "calls" to "Calls"), view) { view = it }
+                        Seg(listOf("in" to "India", "us" to "US"), market) { avm.setMarket(it); shown = PAGE }
+                        Seg(listOf("calls" to "Calls", "table" to "All stocks  ${scoped.size}"), view) { view = it }
+                    }
+                    if (!us && list != null) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Source.entries.forEach { src -> Chip("${src.label} ${sourceCounts[src]}", source == src) { source = src; shown = PAGE } }
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PrimaryButton(if (running) "Refreshing…" else "Refresh signals", busy = running) { avm.refreshSignals() }
+                        PrimaryButton(if (running) "Refreshing…" else if (us) "Refresh signals" else "Refresh from Chartink", busy = running) { avm.refreshAll() }
+                        OutlinedButton(onClick = { showBreak = !showBreak }, shape = RoundedCornerShape(10.dp)) { Text("Breakdown", color = Wv.c.text) }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (us) Badge(if (usClosed) "US market closed" else "US market open", if (usClosed) Tone.Off else Tone.Ok)
-                        else if (live.isNotEmpty()) Badge("On live prices", Tone.Ok)
+                        else if (live.isNotEmpty() || s2Live.isNotEmpty()) Badge("On live prices", Tone.Ok)
+                        else Badge("Stored prices", Tone.Off)
                     }
                     if (running && job != null) {
                         ProgressTrack(job.done, job.total)
-                        Text("${job.done} of ${job.total} stocks", style = Wv.small, color = Wv.c.text3)
+                        Text("${job.done} of ${job.total} stocks" + if (!us && job.list_count + job.holdings_count > 0) " · ${breakdown.text(false)}" else "", style = Wv.small, color = Wv.c.text3)
+                    }
+                    if (showBreak) {
+                        WvCard(padding = 12) {
+                            Text(breakdown.text(us), style = Wv.title.copy(fontFeatureSettings = "tnum"), color = Wv.c.text)
+                            Text(
+                                if (us) "Your US stocks and ETFs."
+                                else "Chartink is your Stage 2 screener list; Holdings are the Indian stocks and ETFs you own. A stock on both is counted once, so the total is the number of different stocks analysed.",
+                                style = Wv.small, color = Wv.c.text3,
+                            )
+                        }
                     }
                 }
             }
             res.problem?.let { item { ProblemNote(it) } }
+            s2Res.problem?.takeIf { !us }?.let { item { ProblemNote(it) } }
             if (job?.state == "error") item { ProblemNote(Problem("Refresh stopped. ${job.message.orEmpty()}", job.auth_url)) }
             if (holdings.loading && all.isEmpty()) item { Note("Loading your holdings…") }
             holdings.error?.let { e ->
@@ -233,43 +362,86 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
                 item {
                     KpiGrid(
                         listOf(
-                            Triple("Stocks covered", "$covered / ${rows.size}", if (rows.size - covered > 0) "${rows.size - covered} without signals" else "All analysed"),
+                            Triple(if (us) "US stocks you hold" else "Stocks in view", "${scoped.size}",
+                                if (us) (if (scoped.size - covered > 0) "${scoped.size - covered} without signals" else "All analysed")
+                                else "${scoped.count { it.inst != null }} held · ${scoped.count { it.s2 != null }} on Stage 2 · ${scoped.count { it.inst != null && it.s2 != null }} both"),
                             Triple("Momentum", "$up / ${withM.size - up - down} / $down", "Uptrend / neutral / downtrend"),
-                            Triple("In a Swing trade", "${swingIn.size}", "${compact(swingIn.sumOf { it.inst.cur })} of holdings"),
-                            Triple("In an ATH trade", "${athIn.size}", "${compact(athIn.sumOf { it.inst.cur })} of holdings"),
-                            Triple("Review: all bearish", "${review.size}", "${compact(review.sumOf { it.inst.cur })} of holdings"),
+                            Triple("In a Swing trade", "${scoped.count { it.sig?.swing?.state == "IN_POSITION" }}", "${scoped.count { it.fresh }} opened in the last $FRESH_DAYS days (either strategy)"),
+                            Triple("In an ATH trade", "${scoped.count { it.sig?.ath?.state == "IN_POSITION" }}", "Near or at highs after a 200-DMA reclaim"),
+                            Triple("All three bullish", "${bull.size}", "${bull.count { it.inst != null }} held" + if (reviewHeld > 0) " · $reviewHeld held all bearish" else ""),
                         ),
-                        listOf(null, null, null, null, if (review.isNotEmpty()) Wv.c.loss else null),
+                        listOf(null, null, null, null, if (bull.isNotEmpty()) Wv.c.gain else null),
                     )
                 }
             }
 
             when {
-                rows.isEmpty() && !holdings.loading && holdings.error == null -> item {
-                    Note(if (us) "No US stocks or ETFs in your portfolio." else "No stock holdings. Indian-listed stocks and ETFs show here; mutual funds, NPS and gold are not included.")
+                rows.isEmpty() && !holdings.loading && holdings.error == null && !res.loading && !s2Res.loading -> item {
+                    Note(if (us) "No US stocks or ETFs in your portfolio." else "Nothing to analyse yet. Press Refresh from Chartink: it reads your Stage 2 screener, then runs it and every Indian stock you hold through the three signals.")
                 }
-                covered == 0 && !running && !res.loading && data != null -> item {
-                    Note("Signals have not been computed yet. Press Refresh signals to analyse your ${rows.size} stocks. Results are saved, so the page opens instantly after that.")
+                covered == 0 && !running && !res.loading && !s2Res.loading && data != null && rows.isNotEmpty() -> item {
+                    Note("Signals have not been computed yet. Press ${if (us) "Refresh signals" else "Refresh from Chartink"} to analyse ${rows.size} stocks. Results are saved, so the page opens instantly after that.")
                 }
-                view == "calls" -> callsView(sources, fmt, if (us) usSessionOpen() else indiaSessionOpen(), calls) { if (!us) onStock(it.sig?.instrument ?: it.code) }
+                view == "calls" -> callsView(sources, fmt, if (us) usSessionOpen() else indiaSessionOpen(), calls) { c ->
+                    if (!us) onStock(byOpen[c.code]?.open ?: c.sig?.instrument ?: "NSE:${c.code}")
+                }
                 else -> {
-                    item {
-                        OutlinedTextField(q, { q = it }, placeholder = { Text("Search a stock") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                    }
+                    item { OutlinedTextField(q, { q = it; shown = PAGE }, placeholder = { Text("Search a stock") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
                     item {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            SigFilter.entries.forEach { f -> Chip(f.label, filter == f) { filter = f } }
+                            SigFilter.entries.forEach { f -> Chip(f.label, filter == f) { filter = f; shown = PAGE } }
                         }
                     }
-                    items(visible, key = { it.inst.key }) { r -> SignalCard(r, fmt, us) { if (!us) onStock(r.sig?.instrument?.ifBlank { null } ?: tickerOf(r.inst.symbols.first())) } }
+                    if (sectors.isNotEmpty()) {
+                        item {
+                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Chip("All sectors", sector == "all") { sector = "all"; shown = PAGE }
+                                sectors.forEach { (name, n) -> Chip("${titleCase(name)} $n", sector == name) { sector = name; shown = PAGE } }
+                            }
+                        }
+                    }
+                    items(visible.take(shown), key = { it.key }) { r -> SignalCard(r, fmt, us) { if (!us) onStock(r.open) } }
                     if (visible.isEmpty()) item { Note("No stocks match this filter.") }
+                    if (visible.size > shown) {
+                        item {
+                            OutlinedButton(onClick = { shown += PAGE }, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                Text("Show ${minOf(PAGE, visible.size - shown)} more of ${visible.size - shown}", color = Wv.c.text)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!us && list != null) {
+                if (view == "table" && list.dropped.isNotEmpty() && source != Source.Held) {
+                    item {
+                        WvCard {
+                            Label("Dropped out of Stage 2 since ${list.previous_date ?: "the last read"}")
+                            Text(list.dropped.joinToString(", ") { it.name.ifBlank { it.nsecode } }, style = Wv.sub, color = Wv.c.text2)
+                        }
+                    }
+                }
+                item {
+                    WvCard {
+                        Label("Stage 2 screener")
+                        Text(
+                            "Stage 2 stocks come from your saved Chartink screener, read ${longDate(list.date)}. Edit it on Chartink and press Refresh; the app reads its current definition each time.",
+                            style = Wv.sub, color = Wv.c.text2,
+                        )
+                        list.url?.let { url ->
+                            OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }, shape = RoundedCornerShape(10.dp)) {
+                                Text("Open Chartink", color = Wv.c.text)
+                            }
+                        }
+                    }
                 }
             }
             item {
                 Text(
-                    "Swing V2.1 and ATH entries are the strategies' own signals on daily candles, not your actual buys. \"Since entry\" compares today's price with the strategy entry price, per share" +
-                        (if (us) ", in US dollars; invested, current and P&L stay in rupees" else "") +
-                        ". Bullish: uptrend, a strategy in position, or a buy signal. Bearish: downtrend, a failing Swing trend filter, a sell signal or an exit. This is a rules-based reading of past prices, not advice.",
+                    "Swing V2.1 and ATH entries are the strategies' own signals on daily candles, not your actual buys. \"Since entry\" compares the live price with the strategy entry price, per share" +
+                        (if (us) ", in US dollars; position values stay in rupees" else "") +
+                        ". Signals use today's live price as the latest bar, so they can change until the close; the \"last sessions\" windows are the finished sessions plus today. " +
+                        "Bullish: uptrend, a strategy in position, or a buy signal. Bearish: downtrend, a failing Swing trend filter, a sell signal or an exit. This is a rules-based reading of past prices, not advice.",
                     style = Wv.small, color = Wv.c.text3,
                 )
             }
@@ -283,19 +455,29 @@ private fun SignalCard(r: SigRow, fmt: PriceFmt, us: Boolean, onOpen: () -> Unit
     WvCard(padding = 14, modifier = if (!us) Modifier.clickable(onClick = onOpen) else Modifier) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
-                Text(r.sig?.name?.takeIf { us } ?: inst.sym, style = Wv.title, color = Wv.c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("${inst.brokers.joinToString(" + ")} · ${trimQty(inst.qty)} @ ${price(inst.avg)}", style = Wv.small, color = Wv.c.text3)
-                Row {
-                    Text("LTP ${fmt.price(r.ltp)}", style = Wv.small.copy(fontFeatureSettings = "tnum"), color = Wv.c.text2)
-                    val day = r.live?.day_change_pct ?: if (!us) inst.dayPct else null
-                    day?.let { Text("  ${pct(it)}", style = Wv.small.copy(fontFeatureSettings = "tnum"), color = toneOf(it)) }
+                Text(r.name, style = Wv.title, color = Wv.c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (inst != null) Badge("Held", Tone.Ok)
+                    if (r.s2 != null) Badge("Stage 2", Tone.Off)
+                    if (r.s2?.is_new == true) Badge("New", Tone.Info)
                 }
+                Text(
+                    listOfNotNull(r.code, r.s2?.sector?.takeIf(String::isNotBlank)?.let(::titleCase)).joinToString(" · "),
+                    style = Wv.small, color = Wv.c.text3, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                if (inst != null) Text("${inst.brokers.joinToString(" + ")} · ${trimQty(inst.qty)} @ ${price(inst.avg)}", style = Wv.small, color = Wv.c.text3)
                 if (r.sig?.history_status == "partial") Text("Partial price history", style = Wv.small, color = Wv.c.warn)
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text(money(inst.cur), style = Wv.num.copy(fontWeight = FontWeight.SemiBold), color = Wv.c.text)
-                Text(signedMoney(inst.pnl), style = Wv.small.copy(fontFeatureSettings = "tnum"), color = toneOf(inst.pnl))
-                Text(pct(inst.pnlPct), style = Wv.small.copy(fontFeatureSettings = "tnum"), color = toneOf(inst.pnlPct))
+                Text(fmt.price(r.ltp), style = Wv.num.copy(fontWeight = FontWeight.SemiBold), color = Wv.c.text)
+                Text(pct(r.dayPct), style = Wv.small.copy(fontFeatureSettings = "tnum"), color = toneOf(r.dayPct))
+            }
+        }
+        if (inst != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Your position", style = Wv.small, color = Wv.c.text3, modifier = Modifier.weight(1f))
+                Text(money(inst.cur), style = Wv.small.copy(fontFeatureSettings = "tnum", fontWeight = FontWeight.SemiBold), color = Wv.c.text)
+                Text("  ${signedMoney(inst.pnl)} · ${pct(inst.pnlPct)}", style = Wv.small.copy(fontFeatureSettings = "tnum"), color = toneOf(inst.pnl))
             }
         }
         HorizontalDivider(color = Wv.c.border)

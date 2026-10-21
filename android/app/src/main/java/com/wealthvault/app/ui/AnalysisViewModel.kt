@@ -78,7 +78,24 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
         market.value = m
         signals.value = Res()
         liveSignals.value = emptyMap()
+        loadAll()
+    }
+
+    /** The Signals page: the holdings' signals and, for India, the Chartink Stage 2 list. */
+    fun loadAll() {
         loadSignals()
+        if (market.value == "in") loadStage2()
+    }
+
+    /** Opening the page: load whatever is missing (the Overview may already have loaded the holdings' signals, but not the Stage 2 list). */
+    fun ensureLoaded() {
+        if (signals.value.data == null && !signals.value.loading) loadSignals()
+        if (market.value == "in" && stage2.value.data == null && !stage2.value.loading) loadStage2()
+    }
+
+    /** One refresh for the page: India re-reads Chartink and computes the list and the holdings together; the US computes the holdings. */
+    fun refreshAll() {
+        if (market.value == "us") refreshSignals() else refreshStage2()
     }
 
     fun loadSignals() {
@@ -135,6 +152,11 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
                     break
                 }
                 delay(2000)
+            }
+            // the refresh job also computed the holdings, so read their signals again
+            if (market.value == "in") {
+                runCatching { api.signals("in") }.getOrNull()?.let { signals.value = Res(data = it) }
+                runCatching { api.liveSignals("in") }.getOrNull()?.let { if (market.value == "in") liveSignals.value = it.signals }
             }
             runCatching { api.stage2Live() }.getOrNull()?.let { stage2Quotes.value = it.quotes }
             runCatching { api.stage2LiveSignals() }.getOrNull()?.let { stage2Live.value = it.signals }

@@ -125,6 +125,10 @@ data class SignalsJob(
     val finished_at: String? = null,
     val message: String? = null,
     val auth_url: String? = null,
+    /** where the stocks come from: on the Chartink list, held, and on both (counted once in `total`) */
+    val list_count: Int = 0,
+    val holdings_count: Int = 0,
+    val overlap: Int = 0,
 )
 
 @Serializable
