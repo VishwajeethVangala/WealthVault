@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The mark: a white "W". Kept inside the central 66dp so any launcher mask keeps it whole. -->
+<!-- The mark from the Play Store icon: a green shield with a rising arrow. Kept inside the central 66dp so any launcher mask keeps it whole. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:strokeColor="#FFFFFF" android:strokeWidth="7" android:strokeLineJoin="round" android:strokeLineCap="round"
-        android:fillColor="#00000000" android:pathData="M34,40 L42,70 L54,48 L66,70 L74,40" />
+    <path android:strokeColor="#34D399" android:strokeWidth="4.5" android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:fillColor="#1A3F3D"
+        android:pathData="M54,30 L74,37 L74,55 C74,66 65,74 54,79 C43,74 34,66 34,55 L34,37 Z" />
+    <path android:strokeColor="#34D399" android:strokeWidth="4" android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M42,61 L49,53 L54,58 L63,48 M57,48 L63,48 L63,54" />
 </vector>
