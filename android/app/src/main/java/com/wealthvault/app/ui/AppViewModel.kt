@@ -76,15 +76,44 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadBrokers() = load(brokers) { api.sessions() }
 
+    private fun shortName(b: BrokerSession) = b.display_name.substringBefore(" — ").ifBlank { b.broker_name }
+
+    /** What went wrong with one broker's sync, or null when it synced. */
+    private fun problemOf(b: BrokerSession): String? = when {
+        b.status == "CONNECTED" -> null
+        b.status == "AUTH_REQUIRED" || b.status == "SESSION_EXPIRED" -> "${shortName(b)} needs a login"
+        else -> "${shortName(b)} could not sync"
+    }
+
+    /**
+     * Sync all runs each broker's own sync, one after another (each rewrites the stored holdings, so not in parallel),
+     * so it behaves exactly like Sync now on a broker card and says which brokers need a login or failed.
+     */
     fun syncAll() {
         if (syncing.value != null) return
         syncing.value = "all"
+        message.value = null
         viewModelScope.launch {
             try {
-                api.syncAll()
-                message.value = "Synced. Holdings and the overview are up to date."
+                val list = api.sessions()
+                val problems = mutableListOf<String>()
+                var ok = 0
+                list.forEach { b ->
+                    try {
+                        val updated = api.syncOne(b.connection_id)
+                        val p = problemOf(updated)
+                        if (p == null) ok++ else problems += p
+                    } catch (e: Exception) {
+                        problems += "${shortName(b)} failed"
+                    }
+                }
+                message.value = when {
+                    list.isEmpty() -> "No brokers linked yet. Add one on the Brokers page."
+                    problems.isEmpty() -> "Synced" + if (list.size > 1) " all ${list.size} brokers. Holdings and the overview are up to date." else ". Holdings and the overview are up to date."
+                    else -> "Synced $ok of ${list.size} · ${problems.joinToString(", ")}"
+                }
             } catch (e: Exception) {
-                message.value = e.message
+                message.value = e.message ?: "Sync failed."
             } finally {
                 syncing.value = null
                 refreshAll()
@@ -95,9 +124,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun syncOne(connectionId: String) {
         if (syncing.value != null) return
         syncing.value = connectionId
+        message.value = null
         viewModelScope.launch {
             try {
-                api.syncOne(connectionId)
+                val updated = api.syncOne(connectionId)
+                message.value = problemOf(updated)?.let { p -> updated.error_message?.takeIf { it.isNotBlank() } ?: p }
             } catch (e: Exception) {
                 message.value = e.message
             } finally {

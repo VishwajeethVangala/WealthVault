@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Eye, EyeOff, LogOut, Moon, RefreshCw, Sun } from 'lucide-react'
-import { clearToken, fetchBrokerSessions, getStoredUser, triggerPortfolioSync } from '../utils/api'
+import { clearToken, fetchBrokerSessions, getStoredUser, syncBroker } from '../utils/api'
 import { PRIVACY_READY_PATHS, SHOW_THEME_TOGGLE } from '../utils/features'
 import { Sidebar } from './Sidebar'
 import { NAV_ITEMS, isNavActive } from './navItems'
@@ -29,6 +29,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
 
   const [sessions, setSessions] = useState<BrokerSessionInfo[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
+  const [syncProgress, setSyncProgress] = useState('')
   const [syncStatus, setSyncStatus] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
 
   const loadSessions = useCallback(async () => {
@@ -72,19 +73,45 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     return { title: 'Overview', sub: syncLine }
   }, [path, lastSync, connected, sessions.length, lastRefreshedAt, dataFreshness])
 
+  // "Sync all" runs each broker's own Sync, one after another (they all rewrite the stored holdings, so not in parallel),
+  // so it behaves exactly like the Sync button on a broker card and says which brokers need a login or failed.
   const handleSync = async () => {
     setIsSyncing(true)
     setSyncStatus(null)
+    let issues = 0
     try {
-      await triggerPortfolioSync()
+      const list = await fetchBrokerSessions()
+      setSessions(list)
+      const problems: string[] = []
+      let ok = 0
+      for (let i = 0; i < list.length; i++) {
+        const name = list[i].display_name.split(' — ')[0]
+        setSyncProgress(`Syncing ${i + 1} of ${list.length}…`)
+        try {
+          const updated = await syncBroker(list[i].connection_id)
+          if (updated.status === 'CONNECTED') ok++
+          else problems.push(`${name} ${['AUTH_REQUIRED', 'SESSION_EXPIRED'].includes(updated.status) ? 'needs a login' : 'could not sync'}`)
+        } catch {
+          problems.push(`${name} failed`)
+        }
+      }
       await Promise.all([refresh(), loadSessions()])
-      setSyncStatus({ tone: 'ok', text: 'Synced' })
+      issues = problems.length
+      setSyncStatus(
+        list.length === 0
+          ? { tone: 'bad', text: 'No brokers linked yet' }
+          : problems.length === 0
+            ? { tone: 'ok', text: list.length === 1 ? 'Synced' : `Synced all ${list.length} brokers` }
+            : { tone: 'bad', text: `Synced ${ok} of ${list.length} · ${problems.join(', ')}` },
+      )
     } catch (err) {
       console.error('Sync failed:', err)
+      issues = 1
       setSyncStatus({ tone: 'bad', text: 'Sync failed' })
     } finally {
       setIsSyncing(false)
-      setTimeout(() => setSyncStatus(null), 4000)
+      setSyncProgress('')
+      setTimeout(() => setSyncStatus(null), issues > 0 ? 12000 : 4000)
     }
   }
 
@@ -135,7 +162,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
 
           <button className="btn btn-primary" type="button" onClick={handleSync} disabled={isSyncing}>
             <RefreshCw size={16} strokeWidth={1.75} className={isSyncing ? 'animate-spin' : ''} />
-            {isSyncing ? 'Syncing…' : 'Sync all'}
+            {isSyncing ? syncProgress || 'Syncing…' : 'Sync all'}
           </button>
 
           {user && (

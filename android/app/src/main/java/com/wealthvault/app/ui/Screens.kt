@@ -379,6 +379,7 @@ fun BrokersScreen(vm: AppViewModel, avm: AnalysisViewModel) {
     val syncing by vm.syncing.collectAsState()
     val catalog by avm.catalog.collectAsState()
     val problem by avm.brokerMessage.collectAsState()
+    val syncMessage by vm.message.collectAsState()
     var dialog by remember { mutableStateOf<BrokerDialog?>(null) }
     LaunchedEffect(Unit) { avm.loadCatalog() }
     val itemFor = { b: BrokerSession -> catalog.data?.firstOrNull { it.broker_name.equals(b.broker_name, ignoreCase = true) } }
@@ -393,6 +394,7 @@ fun BrokersScreen(vm: AppViewModel, avm: AnalysisViewModel) {
             }
             brokers.error?.let { item { Note(it, bad = true) } }
             problem?.let { item { Note(it.text, bad = true) } }
+            syncMessage?.let { item { Note(it, bad = true) } }
             items(brokers.data.orEmpty(), key = { it.connection_id }) { b ->
                 val item = itemFor(b)
                 BrokerCard(
