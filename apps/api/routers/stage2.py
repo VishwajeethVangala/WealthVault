@@ -13,7 +13,7 @@ Signals are cached per stock exactly like Equity signals, so a stock that is als
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -25,7 +25,7 @@ from core.market_data.history import NIFTY_50_TOKEN, get_history_service
 from core.market_data.kite_client import KiteAuthRequiredError
 from core.market_data.service import get_market_data_service
 from core.market_data.user_client import get_user_kite_client
-from core.screeners.chartink import ScreenerError, fetch_screener
+from core.screeners.chartink import ScreenerError, ScreenerResult, fetch_screener
 from storage.tables.repositories import HoldingsRepository, ScreenerSnapshotRepository, SignalCacheRepository
 
 logger = logging.getLogger("wealthvault.api.stage2")
@@ -49,21 +49,45 @@ def _key_of(symbol: str) -> str:
     return symbol.upper() if ":" in symbol else _code_key(symbol)
 
 
-async def _run_job(owner_id: str, job: Job) -> None:
+async def read_screener() -> Tuple[Optional[ScreenerResult], Optional[str]]:
+    """The Chartink list, or why it could not be read."""
+    try:
+        result = await fetch_screener(SLUG)
+    except ScreenerError as exc:
+        return None, str(exc)
+    if not result.rows:
+        return None, "The Chartink screener returned no stocks right now."
+    return result, None
+
+
+def resume_point(previous: Optional[Job]) -> Optional[datetime]:
+    """A run started soon after an interrupted one (Kite login lapsed, server restarted mid-run) keeps the rows that
+    run already computed; any other run recomputes everything."""
+    if previous is None or previous.state != "error" or not previous.started_at or not previous.finished_at:
+        return None
+    try:
+        started = datetime.fromisoformat(previous.started_at)
+        finished = datetime.fromisoformat(previous.finished_at)
+    except ValueError:
+        return None
+    return started if datetime.now(timezone.utc) - finished <= timedelta(minutes=RESUME_MINUTES) else None
+
+
+async def _run_job(
+    owner_id: str,
+    job: Job,
+    fresh_since: Optional[datetime] = None,
+    screener: Optional[Tuple[Optional[ScreenerResult], Optional[str]]] = None,
+) -> None:
     """One refresh for the whole Signals page: re-read the Chartink list, then compute signals for every stock on it
-    AND every Indian stock the user holds (a stock that is both is computed once)."""
+    AND every Indian stock the user holds (a stock that is both is computed once).
+
+    `fresh_since`: rows computed after this moment are kept as they are (a resumed run, or a scheduled run that has
+    already done them for another user). `screener`: a list already read for this run, so it is read once."""
     cache = SignalCacheRepository()
     snapshots = ScreenerSnapshotRepository()
     try:
-        chartink_error: Optional[str] = None
-        result = None
-        try:
-            result = await fetch_screener(SLUG)
-            if not result.rows:
-                chartink_error = "The Chartink screener returned no stocks right now."
-                result = None
-        except ScreenerError as exc:
-            chartink_error = str(exc)
+        result, chartink_error = screener if screener is not None else await read_screener()
 
         if result:
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -101,16 +125,15 @@ async def _run_job(owner_id: str, job: Job) -> None:
         except Exception as exc:
             logger.warning("Benchmark unavailable for signals: %s", exc)
 
-        # A re-run shortly after an interrupted one resumes: rows computed in the last RESUME_MINUTES are kept
-        recent_cutoff = datetime.now(timezone.utc) - timedelta(minutes=RESUME_MINUTES)
         fresh_keys = set()
-        for key, cached in (await cache.get_many(list(work))).items():
-            try:
-                computed = datetime.fromisoformat(cached.get("computed_at", ""))
-            except ValueError:
-                continue
-            if computed >= recent_cutoff and not cached.get("errors", {}).get("all"):
-                fresh_keys.add(key)
+        if fresh_since is not None:
+            for key, cached in (await cache.get_many(list(work))).items():
+                try:
+                    computed = datetime.fromisoformat(cached.get("computed_at", ""))
+                except ValueError:
+                    continue
+                if computed >= fresh_since and not cached.get("errors", {}).get("all"):
+                    fresh_keys.add(key)
         job.done = len(fresh_keys)
         todo = [k for k in work if k not in fresh_keys]
 
@@ -180,12 +203,12 @@ async def _run_job(owner_id: str, job: Job) -> None:
 
 @router.post("/refresh", status_code=status.HTTP_202_ACCEPTED, summary="Re-read the Chartink screener and recompute signals for it and for the user's holdings")
 async def refresh_stage2(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
-    job = _jobs.get(current_user_id)
-    if job and job.state == "running":
-        return _job_dict(job)
+    previous = _jobs.get(current_user_id)
+    if previous and previous.state == "running":
+        return _job_dict(previous)
     job = Job(state="running", started_at=datetime.now(timezone.utc).isoformat())
     _jobs[current_user_id] = job
-    task = asyncio.create_task(_run_job(current_user_id, job))
+    task = asyncio.create_task(_run_job(current_user_id, job, fresh_since=resume_point(previous)))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
     return _job_dict(job)
@@ -195,8 +218,10 @@ async def refresh_stage2(current_user_id: str = Depends(get_current_user)) -> Di
 async def get_stage2(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
     latest, previous = await ScreenerSnapshotRepository().latest_two(SLUG)
     job = _jobs.get(current_user_id) or Job()
+    from apps.api.auto_refresh import auto_status
+
     if latest is None:
-        return {"job": _job_dict(job), "list": None, "signals": {}}
+        return {"job": _job_dict(job), "list": None, "signals": {}, "auto": auto_status()}
 
     day, snap = latest
     rows: List[Dict[str, Any]] = snap.get("rows", [])
@@ -229,6 +254,7 @@ async def get_stage2(current_user_id: str = Depends(get_current_user)) -> Dict[s
             "dropped": dropped,
         },
         "signals": {k.split(":", 1)[1]: v for k, v in signals.items()},
+        "auto": auto_status(),
     }
 
 

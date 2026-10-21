@@ -100,6 +100,8 @@ class KiteMCPClient:
                     "session_id": self.session_id,
                     "auth_url": self.auth_url,
                     "is_authenticated": self.is_authenticated,
+                    "owner_id": self.owner_id,
+                    "connection_id": self.connection_id,
                 }, f, indent=2)
         except Exception as exc:
             logger.warning("Failed to save Kite session for %s: %s", self.connection_id, exc)

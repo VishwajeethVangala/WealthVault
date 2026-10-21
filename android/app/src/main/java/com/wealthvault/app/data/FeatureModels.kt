@@ -129,6 +129,8 @@ data class SignalsJob(
     val list_count: Int = 0,
     val holdings_count: Int = 0,
     val overlap: Int = 0,
+    /** "manual" (the button) or "schedule" (the market-hours auto refresh) */
+    val trigger: String = "manual",
 )
 
 @Serializable
@@ -176,7 +178,25 @@ data class Stage2List(
 )
 
 @Serializable
-data class Stage2Response(val job: SignalsJob = SignalsJob(), val list: Stage2List? = null, val signals: Map<String, StockSignals> = emptyMap())
+data class AutoRun(val slot: String = "", val at: String = "", val outcome: String = "", val message: String = "", val users: Int = 0)
+
+/** The server's market-hours auto refresh of the Signals list. */
+@Serializable
+data class AutoRefresh(
+    val enabled: Boolean = false,
+    val every_minutes: Int = 15,
+    val window: String = "",
+    val next_run: String? = null,
+    val last_run: AutoRun? = null,
+)
+
+@Serializable
+data class Stage2Response(
+    val job: SignalsJob = SignalsJob(),
+    val list: Stage2List? = null,
+    val signals: Map<String, StockSignals> = emptyMap(),
+    val auto: AutoRefresh? = null,
+)
 
 @Serializable
 data class Stage2LiveResponse(val quotes: Map<String, LiveQuote> = emptyMap())

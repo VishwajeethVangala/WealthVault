@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.wealthvault.app.data.AutoRefresh
 import com.wealthvault.app.data.Holding
 import com.wealthvault.app.data.LiveQuote
 import com.wealthvault.app.data.SignalsResponse
@@ -234,6 +235,20 @@ private fun buildRows(
     return out
 }
 
+/** "Auto refresh every 15 min in market hours, next 10:30", plus why the last run today did not run, if it did not. */
+private fun autoLine(auto: AutoRefresh?): String? {
+    if (auto == null || !auto.enabled) return null
+    val ist = java.time.ZoneId.of("Asia/Kolkata")
+    val today = java.time.LocalDate.now(ist)
+    val parse = { iso: String -> runCatching { java.time.OffsetDateTime.parse(iso).atZoneSameInstant(ist) }.getOrNull() }
+    val hm = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+    val next = auto.next_run?.let(parse)?.let { if (it.toLocalDate() == today) it.format(hm) else it.format(java.time.format.DateTimeFormatter.ofPattern("EEE HH:mm")) }
+    val last = auto.last_run?.takeIf { it.outcome != "ran" }?.let { r ->
+        parse(r.slot)?.takeIf { it.toLocalDate() == today }?.let { " (the ${it.format(hm)} run ${if (r.outcome == "skipped") "was skipped" else "failed"}: ${r.message})" }
+    }.orEmpty()
+    return "Auto refresh every ${auto.every_minutes} min in market hours" + (next?.let { ", next $it" } ?: "") + last
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) -> Unit) {
@@ -251,7 +266,6 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
     var filter by rememberSaveable { mutableStateOf(SigFilter.All) }
     var sector by rememberSaveable { mutableStateOf("all") }
     var q by rememberSaveable { mutableStateOf("") }
-    var showBreak by rememberSaveable { mutableStateOf(false) }
     var shown by remember { mutableIntStateOf(PAGE) }
     val calls = rememberCallsState(defaultWindow = OPEN_WINDOW)
     val us = market == "us"
@@ -311,38 +325,39 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
             item { PageTitle("Signals", "Momentum, Swing V2.1 and the ATH breakout on the stocks you hold and your Chartink Stage 2 list") }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Seg(listOf("in" to "India", "us" to "US"), market) { avm.setMarket(it); shown = PAGE }
-                        Seg(listOf("calls" to "Calls", "table" to "All stocks  ${scoped.size}"), view) { view = it }
-                    }
+                    // one control bar: which stocks, then the refresh; a quiet status line under it
+                    Seg(listOf("in" to "India", "us" to "US"), market) { avm.setMarket(it); shown = PAGE }
                     if (!us && list != null) {
                         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Source.entries.forEach { src -> Chip("${src.label} ${sourceCounts[src]}", source == src) { source = src; shown = PAGE } }
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PrimaryButton(if (running) "Refreshing…" else if (us) "Refresh signals" else "Refresh from Chartink", busy = running) { avm.refreshAll() }
-                        OutlinedButton(onClick = { showBreak = !showBreak }, shape = RoundedCornerShape(10.dp)) { Text("Breakdown", color = Wv.c.text) }
+                    PrimaryButton(
+                        when {
+                            running && job?.trigger == "schedule" -> "Auto refresh running…"
+                            running -> "Refreshing…"
+                            us -> "Refresh signals"
+                            else -> "Refresh Momentum Stocks"
+                        },
+                        busy = running, modifier = Modifier.fillMaxWidth(),
+                    ) { avm.refreshAll() }
+                    if (running && job != null) {
+                        ProgressTrack(job.done, job.total)
+                        Text("${job.done} of ${job.total} stocks", style = Wv.small, color = Wv.c.text3)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (us) Badge(if (usClosed) "US market closed" else "US market open", if (usClosed) Tone.Off else Tone.Ok)
                         else if (live.isNotEmpty() || s2Live.isNotEmpty()) Badge("On live prices", Tone.Ok)
                         else Badge("Stored prices", Tone.Off)
                     }
-                    if (running && job != null) {
-                        ProgressTrack(job.done, job.total)
-                        Text("${job.done} of ${job.total} stocks" + if (!us && job.list_count + job.holdings_count > 0) " · ${breakdown.text(false)}" else "", style = Wv.small, color = Wv.c.text3)
-                    }
-                    if (showBreak) {
-                        WvCard(padding = 12) {
-                            Text(breakdown.text(us), style = Wv.title.copy(fontFeatureSettings = "tnum"), color = Wv.c.text)
-                            Text(
-                                if (us) "Your US stocks and ETFs."
-                                else "Chartink is your Stage 2 screener list; Holdings are the Indian stocks and ETFs you own. A stock on both is counted once, so the total is the number of different stocks analysed.",
-                                style = Wv.small, color = Wv.c.text3,
-                            )
-                        }
-                    }
+                    Text(
+                        listOfNotNull(
+                            breakdown.text(us),
+                            list?.takeIf { !us }?.let { "list read ${longDate(it.date)}" },
+                            if (us) null else autoLine(s2Data?.auto),
+                        ).joinToString(" · "),
+                        style = Wv.small, color = Wv.c.text3,
+                    )
                 }
             }
             res.problem?.let { item { ProblemNote(it) } }
@@ -373,14 +388,15 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
                         listOf(null, null, null, null, if (bull.isNotEmpty()) Wv.c.gain else null),
                     )
                 }
+                item { Seg(listOf("calls" to "Buy & sell calls", "table" to "All stocks  ${scoped.size}"), view, Modifier.fillMaxWidth()) { view = it } }
             }
 
             when {
                 rows.isEmpty() && !holdings.loading && holdings.error == null && !res.loading && !s2Res.loading -> item {
-                    Note(if (us) "No US stocks or ETFs in your portfolio." else "Nothing to analyse yet. Press Refresh from Chartink: it reads your Stage 2 screener, then runs it and every Indian stock you hold through the three signals.")
+                    Note(if (us) "No US stocks or ETFs in your portfolio." else "Nothing to analyse yet. Press Refresh Momentum Stocks: it reads your Chartink Stage 2 screener, then runs it and every Indian stock you hold through the three signals.")
                 }
                 covered == 0 && !running && !res.loading && !s2Res.loading && data != null && rows.isNotEmpty() -> item {
-                    Note("Signals have not been computed yet. Press ${if (us) "Refresh signals" else "Refresh from Chartink"} to analyse ${rows.size} stocks. Results are saved, so the page opens instantly after that.")
+                    Note("Signals have not been computed yet. Press ${if (us) "Refresh signals" else "Refresh Momentum Stocks"} to analyse ${rows.size} stocks. Results are saved, so the page opens instantly after that.")
                 }
                 view == "calls" -> callsView(sources, fmt, if (us) usSessionOpen() else indiaSessionOpen(), calls) { c ->
                     if (!us) onStock(byOpen[c.code]?.open ?: c.sig?.instrument ?: "NSE:${c.code}")

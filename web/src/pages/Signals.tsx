@@ -138,7 +138,6 @@ export const Signals: React.FC = () => {
   const [sector, setSector] = useState('all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'align', dir: -1 })
   const [shown, setShown] = useState(PAGE)
-  const [showBreak, setShowBreak] = useState(false)
   const [view, setView] = useState<'calls' | 'table'>(searchParams.get('view') === 'table' || startFilter ? 'table' : 'calls')
   const timer = useRef<number | undefined>(undefined)
 
@@ -186,6 +185,16 @@ export const Signals: React.FC = () => {
     timer.current = window.setInterval(load, 2000)
     return () => window.clearInterval(timer.current)
   }, [running, load])
+
+  // The server refreshes on its own every few minutes in market hours; an open page picks that up (and shows its
+  // progress) by re-reading every 2 minutes while the session runs. Paused while the tab is hidden.
+  useEffect(() => {
+    if (isUs || running) return
+    const t = window.setInterval(() => {
+      if (!document.hidden && indiaSessionActive()) loadStage2()
+    }, 120_000)
+    return () => window.clearInterval(t)
+  }, [isUs, running, loadStage2])
 
   const list = isUs ? null : stage2?.list ?? null
   const hasList = !!list
@@ -415,7 +424,7 @@ export const Signals: React.FC = () => {
 
   const computedAt = useMemo(() => {
     const times = [...Object.values(held?.signals ?? {}), ...Object.values(stage2?.signals ?? {})].map((s) => s.computed_at).filter(Boolean) as string[]
-    return times.sort()[0]
+    return times.sort().slice(-1)[0] // the latest refresh, not the oldest stock left in the cache
   }, [held, stage2])
 
   const sortBy = (key: SortKey) => {
@@ -442,6 +451,28 @@ export const Signals: React.FC = () => {
   const breakdownText = isUs
     ? `Holdings ${breakdown.held}`
     : `Chartink ${breakdown.chartink} + Holdings ${breakdown.held}${breakdown.both > 0 ? ` − ${breakdown.both} on both` : ''} = ${breakdown.total}`
+
+  const auto = isUs ? undefined : stage2?.auto
+  const clock = (iso: string) => new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const autoText = (() => {
+    if (!auto?.enabled) return null
+    const next = auto.next_run ? new Date(auto.next_run) : null
+    const sameDay = next && next.toDateString() === new Date().toDateString()
+    const nextText = next ? (sameDay ? clock(auto.next_run!) : next.toLocaleString('en-IN', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })) : ''
+    const last = auto.last_run
+    const lastNote =
+      last && last.outcome !== 'ran' && new Date(last.slot).toDateString() === new Date().toDateString()
+        ? ` (the ${clock(last.slot)} run ${last.outcome === 'skipped' ? 'was skipped' : 'failed'}: ${last.message})`
+        : ''
+    return `Auto refresh every ${auto.every_minutes} min in market hours${nextText ? `, next ${nextText}` : ''}${lastNote}`
+  })()
+  const statusLine = [
+    breakdownText,
+    !isUs && list ? `list read ${new Date(list.fetched_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}` : null,
+    autoText,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   const pctDone = job && job.total > 0 ? Math.round((job.done / job.total) * 100) : 0
   const extras = !isUs && source !== 'held' ? list?.extra_columns ?? [] : []
@@ -482,6 +513,62 @@ export const Signals: React.FC = () => {
         </div>
       )}
 
+      <section className="sg-bar" aria-label="Stocks and refresh">
+        <div className="sg-bar-l">
+          <div className="seg" role="group" aria-label="Market">
+            {([['in', 'India'], ['us', 'US']] as const).map(([id, label]) => (
+              <button key={id} type="button" className={market === id ? 'on' : ''} aria-pressed={market === id} onClick={() => setSearchParams(id === 'us' ? { market: 'us' } : {}, { replace: true })}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {!isUs && hasList && (
+            <div className="seg" role="group" aria-label="Stocks from">
+              {(
+                [
+                  ['all', 'Everything'],
+                  ['held', 'My holdings'],
+                  ['stage2', 'Stage 2'],
+                  ['new', 'New on Stage 2'],
+                ] as const
+              ).map(([id, label]) => (
+                <button key={id} type="button" className={source === id ? 'on' : ''} aria-pressed={source === id} onClick={() => { setSource(id); setShown(PAGE) }}>
+                  {label}
+                  <span className="cnt num">{sourceCounts[id]}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="sg-run">
+          {running && (
+            <>
+              <div className="sg-progress" role="progressbar" aria-valuenow={pctDone} aria-valuemin={0} aria-valuemax={100} aria-label="Refresh progress">
+                <span style={{ width: `${pctDone}%` }} />
+              </div>
+              <span className="sub num">
+                {job!.done} of {job!.total}
+              </span>
+            </>
+          )}
+          <button
+            className="btn btn-primary"
+            onClick={startRefresh}
+            disabled={running || starting}
+            title={isUs ? 'Recompute signals for your US stocks' : 'Re-read the Chartink Stage 2 screener, then recompute signals for it and for your holdings'}
+          >
+            <RefreshCw size={16} strokeWidth={1.75} className={running ? 'spin' : ''} />
+            {running ? (job?.trigger === 'schedule' ? 'Auto refresh running…' : 'Refreshing…') : isUs ? 'Refresh signals' : 'Refresh Momentum Stocks'}
+          </button>
+        </div>
+      </section>
+
+      <div className="sg-status">
+        {!running && <FreshnessChip status={liveStatus} broker={isUs ? 'INDmoney' : 'Kite'} sessionOpen={sessionLive} storedAt={isUs ? computedAt : job?.finished_at ?? computedAt} />}
+        {isUs && <span className={`badge ${usClosed ? 'off' : 'ok'}`}>{usClosed ? 'US market closed' : 'US market open'}</span>}
+        <span aria-live="polite">{statusLine}</span>
+      </div>
+
       <section className="sum" aria-label="Signal summary">
         <div className="card">
           <div className="lbl">{isUs ? 'US stocks you hold' : 'Stocks in view'}</div>
@@ -520,87 +607,15 @@ export const Signals: React.FC = () => {
         </div>
       </section>
 
-      <section className="viewbar" aria-label="View">
-        <div className="seg" role="group" aria-label="View">
-          <button type="button" className={view === 'calls' ? 'on' : ''} aria-pressed={view === 'calls'} onClick={() => setView('calls')}>
-            Buy &amp; sell calls
-          </button>
-          <button type="button" className={view === 'table' ? 'on' : ''} aria-pressed={view === 'table'} onClick={() => setView('table')}>
-            All stocks
-            <span className="cnt num">{scoped.length}</span>
-          </button>
-        </div>
-        <div className="seg" role="group" aria-label="Market">
-          {([['in', 'India'], ['us', 'US']] as const).map(([id, label]) => (
-            <button key={id} type="button" className={market === id ? 'on' : ''} aria-pressed={market === id} onClick={() => setSearchParams(id === 'us' ? { market: 'us' } : {}, { replace: true })}>
-              {label}
-            </button>
-          ))}
-        </div>
-        {!isUs && hasList && (
-          <div className="seg" role="group" aria-label="Stocks from">
-            {(
-              [
-                ['all', 'Everything'],
-                ['held', 'My holdings'],
-                ['stage2', 'Stage 2'],
-                ['new', 'New on Stage 2'],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} type="button" className={source === id ? 'on' : ''} aria-pressed={source === id} onClick={() => { setSource(id); setShown(PAGE) }}>
-                {label}
-                <span className="cnt num">{sourceCounts[id]}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <span className="spacer" style={{ flex: 1 }} />
-        <div className="sg-run">
-          {running && (
-            <>
-              <div className="sg-progress" role="progressbar" aria-valuenow={pctDone} aria-valuemin={0} aria-valuemax={100}>
-                <span style={{ width: `${pctDone}%` }} />
-              </div>
-              <span className="sub num">
-                {job!.done} of {job!.total}
-              </span>
-              {!isUs && (job!.list_count ?? 0) + (job!.holdings_count ?? 0) > 0 && <span className="sub num">· {breakdownText}</span>}
-            </>
-          )}
-          <button type="button" className="btn" aria-expanded={showBreak} onClick={() => setShowBreak((v) => !v)} title="Where the stocks on this page come from">
-            Breakdown
-          </button>
-          {isUs && <span className={`badge ${usClosed ? 'off' : 'ok'}`}>{usClosed ? 'US market closed' : 'US market open'}</span>}
-          {!running && <FreshnessChip status={liveStatus} broker={isUs ? 'INDmoney' : 'Kite'} sessionOpen={sessionLive} storedAt={isUs ? computedAt : job?.finished_at ?? computedAt} />}
-          {!running && list && (
-            <span className="sub">
-              Screener read {new Date(list.fetched_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false })}
-            </span>
-          )}
-          <button
-            className="btn btn-primary"
-            onClick={startRefresh}
-            disabled={running || starting}
-            title={isUs ? 'Recompute signals for your US stocks' : 'Re-read the Chartink screener, then recompute signals for it and for your holdings'}
-          >
-            <RefreshCw size={16} strokeWidth={1.75} className={running ? 'spin' : ''} />
-            {running ? 'Refreshing…' : isUs ? 'Refresh signals' : 'Refresh from Chartink'}
-          </button>
-        </div>
-      </section>
-
-      {showBreak && (
-        <div className="card" role="status" style={{ padding: '12px 16px', marginBottom: 12 }}>
-          <div className="num" style={{ fontWeight: 600 }}>
-            {breakdownText}
-          </div>
-          <div className="sub" style={{ marginTop: 4 }}>
-            {isUs
-              ? 'Your US stocks and ETFs.'
-              : `Chartink is your Stage 2 screener list; Holdings are the Indian stocks and ETFs you own. A stock on both is counted once, so the total is the number of different stocks analysed${running ? ' (as counted by the refresh that is running)' : ''}.`}
-          </div>
-        </div>
-      )}
+      <div className="sg-tabs" role="tablist" aria-label="View">
+        <button type="button" role="tab" className={view === 'calls' ? 'on' : ''} aria-selected={view === 'calls'} onClick={() => setView('calls')}>
+          Buy &amp; sell calls
+        </button>
+        <button type="button" role="tab" className={view === 'table' ? 'on' : ''} aria-selected={view === 'table'} onClick={() => setView('table')}>
+          All stocks
+          <span className="cnt num">{scoped.length}</span>
+        </button>
+      </div>
 
       {nothingYet ? (
         <div className="card">
@@ -608,14 +623,14 @@ export const Signals: React.FC = () => {
           <p className="card-s">
             {isUs
               ? 'No US stocks or ETFs in your portfolio.'
-              : 'Press Refresh from Chartink. It reads your saved Stage 2 screener, then runs it and every Indian stock you hold through momentum, Swing V2.1 and ATH breakout. The first run takes a few minutes; results are saved, so the page opens instantly after that.'}
+              : 'Press Refresh Momentum Stocks. It reads your saved Chartink Stage 2 screener, then runs it and every Indian stock you hold through momentum, Swing V2.1 and ATH breakout. The first run takes a few minutes; results are saved, so the page opens instantly after that.'}
           </p>
         </div>
       ) : notComputed ? (
         <div className="card">
           <p className="card-t">Signals have not been computed yet</p>
           <p className="card-s">
-            Press {isUs ? 'Refresh signals' : 'Refresh from Chartink'} to analyse {rows.length} stocks.{' '}
+            Press {isUs ? 'Refresh signals' : 'Refresh Momentum Stocks'} to analyse {rows.length} stocks.{' '}
             {isUs ? 'The first run builds each stock’s full price history and stores it; later runs only add the latest days.' : 'The first run takes a few minutes.'} Results are saved, so the page opens instantly after that.
           </p>
         </div>

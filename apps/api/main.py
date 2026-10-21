@@ -100,7 +100,11 @@ async def lifespan(app: FastAPI):
         if problems:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
 
+    from apps.api.auto_refresh import start_auto_refresh, stop_auto_refresh
+
+    start_auto_refresh()
     yield
+    await stop_auto_refresh()
 
     logger.info("Shutting down %s...", settings.APP_NAME)
     from core.market_data.indmoney_client import IndmoneyMCPClient

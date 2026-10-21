@@ -40,6 +40,7 @@ Notes
 - `CREDENTIAL_ENCRYPTION_KEY` must be the **same key** you use locally, or the stored Groww and Angel One credentials cannot be decrypted. Keep a backup.
 - The app refuses to start in production with the default `JWT_SECRET`, a missing encryption key or Google client id, or `ALLOWED_ORIGINS` of `*`.
 - Use a custom domain? Put it in both `PUBLIC_BASE_URL` and `ALLOWED_ORIGINS`.
+- **Auto refresh of the Signals list:** in production the server runs "Refresh Momentum Stocks" every 15 minutes from 09:15 to 15:30 IST, Monday to Friday, for every user logged in to Kite that day (holidays are skipped). It runs inside the app, so **Always On** (set above) must stay on, or the app unloads and the timer stops. `AUTO_REFRESH_ENABLED=false` turns it off; `AUTO_REFRESH_MINUTES` changes the interval (5 to 120).
 
 ## 3. Google Cloud console
 APIs & Services, Credentials, your OAuth 2.0 Web client: add `https://<APP>.azurewebsites.net` under **Authorized JavaScript origins**. No redirect URI is needed (Google Sign-In uses an ID token). If the consent screen is in Testing, add your account as a test user.

@@ -59,6 +59,8 @@ class Job:
     list_count: int = 0
     holdings_count: int = 0
     overlap: int = 0
+    # 'manual' (the button) or 'schedule' (the market-hours auto refresh)
+    trigger: str = "manual"
 
 
 _jobs: Dict[str, Job] = {}

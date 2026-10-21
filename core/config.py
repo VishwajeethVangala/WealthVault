@@ -7,7 +7,7 @@ allowing zero-code transition from local ASGI to production Azure App Service.
 
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -77,6 +77,10 @@ class Settings(BaseSettings):
     # Store-review demo login (off unless both are set); opens one sample account, see core/demo_account.py
     DEMO_USERNAME: str = Field(default="", description="Username of the app-store reviewer demo login")
     DEMO_PASSWORD: str = Field(default="", description="Password of the app-store reviewer demo login")
+    # Refresh Momentum Stocks on a timer during NSE market hours (see apps/api/auto_refresh.py).
+    # Unset = on in production, off elsewhere (a local server shares the same Azure tables).
+    AUTO_REFRESH_ENABLED: Optional[bool] = Field(default=None, description="Run the market-hours auto refresh")
+    AUTO_REFRESH_MINUTES: int = Field(default=15, ge=5, le=120, description="Minutes between auto refreshes")
 
     model_config = SettingsConfigDict(
         env_file=".env",

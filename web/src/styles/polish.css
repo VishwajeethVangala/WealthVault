@@ -337,3 +337,86 @@ body {
     font-size: 22px;
   }
 }
+
+
+/* ---- Signals page: one control bar, a status line, then the views as tabs ---- */
+.sg-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+.sg-bar-l {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+.sg-bar .sg-run {
+  margin-left: auto;
+}
+.sg-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: -4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+.sg-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sg-tabs::-webkit-scrollbar {
+  display: none;
+}
+.sg-tabs button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sg-tabs button:hover {
+  color: var(--text);
+}
+.sg-tabs button.on {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.sg-tabs button .cnt {
+  color: var(--text-3);
+  font-weight: 500;
+}
+.sg-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 6px 6px 0 0;
+}
+@media (max-width: 640px) {
+  .sg-bar .sg-run {
+    margin-left: 0;
+    width: 100%;
+  }
+  .sg-bar .sg-run .btn {
+    margin-left: auto;
+  }
+}

@@ -517,6 +517,8 @@ export interface SignalsJob {
   list_count?: number
   holdings_count?: number
   overlap?: number
+  /** 'manual' (the button) or 'schedule' (the market-hours auto refresh) */
+  trigger?: 'manual' | 'schedule'
 }
 
 export interface SignalsResponse {
@@ -567,6 +569,16 @@ export interface Stage2Response {
     dropped: { nsecode: string; name?: string }[]
   } | null
   signals: Record<string, StockSignals>
+  /** the market-hours auto refresh */
+  auto?: AutoRefresh
+}
+
+export interface AutoRefresh {
+  enabled: boolean
+  every_minutes: number
+  window: string
+  next_run: string | null
+  last_run: { slot: string; at: string; outcome: 'ran' | 'skipped' | 'failed'; message: string; users: number } | null
 }
 
 export interface Stage2LiveResponse {
