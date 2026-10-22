@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 /** Shapes returned by the WealthVault API (the same server the web app uses). Unknown fields are ignored. */
 
 @Serializable
-data class AuthConfig(val google_client_id: String = "", val environment: String = "", val demo_login: Boolean = false)
+data class AuthConfig(val google_client_id: String = "", val environment: String = "", val demo_login: Boolean = false, val support_email: String = "")
 
 @Serializable
 data class User(val user_id: String, val email: String = "", val name: String = "", val picture: String? = null)
@@ -43,7 +43,11 @@ data class Holding(
     val pnl: Double? = null,
     val day_pnl: Double? = null,
     val day_change_percentage: Double? = null,
+    /** per-share day change, when the broker sends that instead of day_pnl */
+    val day_change: Double? = null,
     val currency: String = "INR",
+    /** "live" when refreshed from a broker quote, "cached" when it is the stored price */
+    val data_freshness: String = "live",
 ) {
     val invested: Double get() = quantity * average_price
     val pnlPct: Double? get() = if (invested > 0) ((current_value / invested) - 1) * 100 else null
@@ -64,6 +68,9 @@ data class BrokerSession(
     val total_valuation: Double = 0.0,
     val error_message: String? = null,
     val auth_url: String? = null,
+    val session_expires_at: String? = null,
+    val mcp_server_url: String = "",
+    val credentials_saved: Boolean = false,
 )
 
 /** Readable names for the server's asset classes. */
@@ -72,6 +79,7 @@ val ASSET_CLASS_LABEL = mapOf(
     "MUTUAL_FUND" to "Mutual funds",
     "US_STOCKS" to "US stocks",
     "GOLD" to "Gold",
-    "NPS" to "NPS",
+    "NPS" to "Retirement",
     "DEBT" to "Debt",
+    "OTHER" to "Other",
 )

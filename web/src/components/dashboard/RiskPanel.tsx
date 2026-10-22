@@ -58,7 +58,7 @@ export const RiskPanel: React.FC<Props> = ({ concentration, drawdown, usdPct }) 
       ) : (
         <p className="empty-s">
           {data
-            ? `Beta and volatility need stored price history for your stocks (${data.measured_stocks} of ${data.total_stocks} have it). Press Refresh on the Equity signals page once.`
+            ? `Beta and volatility need stored price history for your stocks (${data.measured_stocks} of ${data.total_stocks} have it). Press Refresh Momentum Stocks on the Signals page once.`
             : 'Risk figures are not available right now.'}
         </p>
       )}

@@ -56,13 +56,15 @@ def test_delete_user_data_wipes_every_table_and_profile_last():
     ), patch.object(account_deletion, "TargetAllocationRepository", lambda: repo("targets")), patch.object(
         account_deletion, "BrokerCredentialRepository", lambda: repo("credentials")
     ), patch.object(account_deletion, "BrokerConnectionRepository", lambda: repo("connections")), patch.object(
+        account_deletion, "FeedbackRepository", lambda: repo("feedback")
+    ), patch.object(
         account_deletion, "UserRepository", lambda: repo("profile")
     ), patch.object(account_deletion, "_forget_broker_sessions", AsyncMock(return_value=2)), patch.object(
         account_deletion, "purge_owner_blobs", AsyncMock(return_value=5)
     ):
         out = asyncio.run(account_deletion.delete_user_data("google_111"))
     assert order[-1] == "profile"
-    assert set(order) == {"holdings", "snapshots", "targets", "credentials", "connections", "profile"}
+    assert set(order) == {"holdings", "snapshots", "targets", "credentials", "connections", "feedback", "profile"}
     assert out["session_files"] == 2 and out["archived_payloads"] == 5
 
 
@@ -73,8 +75,8 @@ def test_blob_failure_does_not_stop_deletion():
         account_deletion, "TargetAllocationRepository"
     ) as t, patch.object(account_deletion, "BrokerCredentialRepository") as c, patch.object(
         account_deletion, "BrokerConnectionRepository"
-    ) as b, patch.object(account_deletion, "UserRepository") as u:
-        for m in (h, s, t, c, b, u):
+    ) as b, patch.object(account_deletion, "FeedbackRepository") as f, patch.object(account_deletion, "UserRepository") as u:
+        for m in (h, s, t, c, b, f, u):
             m.return_value.delete_partition = AsyncMock(return_value=1)
             m.return_value.close = AsyncMock()
         out = asyncio.run(account_deletion.delete_user_data("google_111"))

@@ -88,14 +88,15 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
     const sells = [...a.sells, ...b.sells].sort((x, y) => y.date.localeCompare(x.date))
     const buys = [...a.buys, ...b.buys].filter((r) => !r.waiting).sort((x, y) => y.date.localeCompare(x.date))
     const waitingBuys = [...a.buys, ...b.buys].filter((r) => r.waiting)
-    // the same "all bearish" reading the Equity signals page filters on, so the count matches what the link opens
+    // the same "all bearish" reading the Signals page filters on, so the count matches what the link opens
     const review = all.filter((s) => readSignals(s.sig, s.ltp).alignment === 'all-bear')
     const covered = all.filter((s) => s.sig && (s.sig.momentum || s.sig.swing || s.sig.ath)).length
     const market = (rows: { src: CallSource }[]) => (rows.length > 0 && rows.every((r) => inSrc.includes(r.src) === false) ? 'us' : 'in')
     const links = {
-      sells: `/signals?view=calls&side=sell${market(sells) === 'us' ? '&market=us' : ''}`,
-      buys: `/signals?view=calls&side=buy&window=2${market(buys) === 'us' ? '&market=us' : ''}`,
-      review: `/signals?filter=all-bear${review.length > 0 && review.every((r) => usSrc.includes(r)) ? '&market=us' : ''}`,
+      // source=held: these counts are your holdings only, so the page opens on them
+      sells: `/signals?view=calls&side=sell&source=held${market(sells) === 'us' ? '&market=us' : ''}`,
+      buys: `/signals?view=calls&side=buy&window=2&source=held${market(buys) === 'us' ? '&market=us' : ''}`,
+      review: `/signals?filter=all-bear&source=held${review.length > 0 && review.every((r) => usSrc.includes(r)) ? '&market=us' : ''}`,
     }
     return { links, sells, buys, waitingBuys, review, covered, total: all.length, hasExit: all.some((s) => s.sig?.swing?.exits || s.sig?.ath?.exits), s7 }
   }, [base, liveIn.signals, liveUs.signals, instruments, stockHref])
@@ -127,7 +128,7 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
 
       {failed || model.covered === 0 ? (
         <p className="empty-s">
-          {failed ? 'Signals could not be loaded.' : 'No signals saved yet. Press Refresh on the Equity signals page once.'}
+          {failed ? 'Signals could not be loaded.' : 'No signals saved yet. Press Refresh Momentum Stocks on the Signals page once.'}
         </p>
       ) : (
         <div className="bx-sig">

@@ -21,8 +21,8 @@ android {
         applicationId = "com.vangala.wealthvault" // the name registered on Google Play; code stays in com.wealthvault.app
         minSdk = 26
         targetSdk = 36 // Google Play requires the latest API level
-        versionCode = 11
-        versionName = "0.3.8"
+        versionCode = 12
+        versionName = "0.3.9"
         buildConfigField("String", "DEFAULT_BASE_URL", "\"${(project.findProperty("wvBaseUrl") as String?) ?: ""}\"")
     }
 
@@ -78,6 +78,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.5")
+    // Google Play's in-app review dialog (asked after a few openings)
+    implementation("com.google.android.play:review:2.0.2")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.biometric:biometric:1.1.0")

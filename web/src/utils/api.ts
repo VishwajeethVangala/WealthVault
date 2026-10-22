@@ -235,6 +235,11 @@ export async function fetchHistory(days = 365): Promise<HistoryPoint[]> {
   return fetchApi<HistoryPoint[]>(`/api/v1/portfolio/history?days=${days}`)
 }
 
+// Feedback (the same form as the Android app; kept on the server with the sender's account)
+export async function sendFeedback(category: 'idea' | 'problem' | 'praise' | 'other', message: string): Promise<{ status: string; id: string }> {
+  return fetchApi('/api/v1/feedback', { method: 'POST', body: JSON.stringify({ category, message, platform: 'web' }) })
+}
+
 // Equity signals
 export async function fetchSignals(market: 'in' | 'us' = 'in'): Promise<SignalsResponse> {
   return fetchApi<SignalsResponse>(`/api/v1/analytics/signals?market=${market}`)

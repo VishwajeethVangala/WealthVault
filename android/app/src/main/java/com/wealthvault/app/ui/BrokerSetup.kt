@@ -58,11 +58,11 @@ sealed interface BrokerDialog {
  * enter its API keys (Groww, Angel One) or log in on the broker's own page (Zerodha, INDmoney).
  */
 @Composable
-fun BrokerDialogs(dialog: BrokerDialog?, avm: AnalysisViewModel, existing: List<BrokerSession>, onDialog: (BrokerDialog?) -> Unit, onChanged: () -> Unit) {
+fun BrokerDialogs(dialog: BrokerDialog?, avm: AnalysisViewModel, existing: List<BrokerSession>, onDialog: (BrokerDialog?) -> Unit, onChanged: () -> Unit, onSync: (String) -> Unit = {}) {
     val catalog by avm.catalog.collectAsState()
     val busy by avm.brokerBusy.collectAsState()
     val context = LocalContext.current
-    val open = { url: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    val open = { url: String -> openLink(context, url) }
 
     when (dialog) {
         null -> Unit
@@ -108,6 +108,7 @@ fun BrokerDialogs(dialog: BrokerDialog?, avm: AnalysisViewModel, existing: List<
             val item = dialog.item
             val count = existing.count { it.broker_name.equals(item.broker_name, ignoreCase = true) }
             var label by remember(item) { mutableStateOf(if (count > 0) "Account ${count + 1}" else "") }
+            var clientId by remember(item) { mutableStateOf("") }
             AlertDialog(
                 onDismissRequest = { onDialog(null) },
                 containerColor = Wv.c.surface,
@@ -115,7 +116,8 @@ fun BrokerDialogs(dialog: BrokerDialog?, avm: AnalysisViewModel, existing: List<
                 text = {
                     Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(item.description, style = Wv.sub, color = Wv.c.text2)
-                        OutlinedTextField(label, { label = it }, label = { Text("Account name (optional)") }, placeholder = { Text("Primary Account") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(label, { label = it }, label = { Text("Account label") }, placeholder = { Text("e.g. Personal, Family HUF") }, supportingText = { Text("Tells this account apart from other ${item.display_name.substringBefore(" — ")} accounts.") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(clientId, { clientId = it.trim() }, label = { Text("Client ID (optional)") }, placeholder = { Text("Shown on the card for reference") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         if (item.setup_steps.isNotEmpty()) {
                             Label("Before you start")
                             item.setup_steps.forEachIndexed { i, step -> Text("${i + 1}. $step", style = Wv.small, color = Wv.c.text2) }
@@ -130,7 +132,7 @@ fun BrokerDialogs(dialog: BrokerDialog?, avm: AnalysisViewModel, existing: List<
                 },
                 confirmButton = {
                     TextButton(enabled = !busy, onClick = {
-                        avm.addConnection(item, label) { created ->
+                        avm.addConnection(item, label, clientId) { created ->
                             onChanged()
                             if (item.credential_fields.isNotEmpty()) onDialog(BrokerDialog.Keys(created, item))
                             else {
@@ -178,7 +180,12 @@ fun BrokerDialogs(dialog: BrokerDialog?, avm: AnalysisViewModel, existing: List<
                 confirmButton = {
                     if (result == null) {
                         TextButton(enabled = ready && !busy, onClick = {
-                            avm.saveCredentials(dialog.session.connection_id, values.filterValues { it.isNotBlank() }) { result = it; onChanged() }
+                            avm.saveCredentials(dialog.session.connection_id, values.filterValues { it.isNotBlank() }) {
+                                result = it
+                                onChanged()
+                                // the keys work: pull the holdings now, as the web does
+                                if (it.login_ok) onSync(dialog.session.connection_id)
+                            }
                         }) { Text(if (busy) "Saving…" else "Save", color = if (ready) Wv.c.accent else Wv.c.text3) }
                     } else {
                         TextButton(onClick = { onDialog(null) }) { Text("Done", color = Wv.c.accent) }
@@ -188,22 +195,34 @@ fun BrokerDialogs(dialog: BrokerDialog?, avm: AnalysisViewModel, existing: List<
             )
         }
 
-        is BrokerDialog.Remove -> AlertDialog(
-            onDismissRequest = { onDialog(null) },
-            containerColor = Wv.c.surface,
-            title = { Text("Remove this connection?", color = Wv.c.text) },
-            text = {
-                Text(
-                    "${brokerName(dialog.session)} (${dialog.session.account_label ?: "account"}) and its ${dialog.session.holdings_count} holdings are removed from WealthVault, and its stored files are wiped. Your account at the broker is not touched. You can add it again later.",
-                    style = Wv.sub, color = Wv.c.text2,
-                )
-            },
-            confirmButton = {
-                TextButton(enabled = !busy, onClick = { avm.removeConnection(dialog.session.connection_id) { onDialog(null); onChanged() } }) {
-                    Text(if (busy) "Removing…" else "Remove", color = Wv.c.loss)
-                }
-            },
-            dismissButton = { TextButton(onClick = { onDialog(null) }) { Text("Cancel", color = Wv.c.text2) } },
-        )
+        is BrokerDialog.Remove -> {
+            var wipe by remember(dialog) { mutableStateOf(true) }
+            AlertDialog(
+                onDismissRequest = { onDialog(null) },
+                containerColor = Wv.c.surface,
+                title = { Text("Disconnect ${brokerName(dialog.session)}?", color = Wv.c.text) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("This removes the connection and its synced data from your vault. Your account at the broker is not touched, and you can add it again later.", style = Wv.sub, color = Wv.c.text2)
+                        dialog.session.account_label?.let { StatLine("Account", it) }
+                        StatLine("Holdings removed", "${dialog.session.holdings_count}")
+                        StatLine("Value removed from net worth", compact(dialog.session.total_valuation))
+                        Row(verticalAlignment = Alignment.Top, modifier = Modifier.clickable { wipe = !wipe }) {
+                            androidx.compose.material3.Checkbox(wipe, { wipe = it }, colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = Wv.c.accent, uncheckedColor = Wv.c.text3))
+                            Column(Modifier.padding(top = 12.dp)) {
+                                Text("Also delete archived raw broker responses", style = Wv.sub.copy(fontWeight = FontWeight.SemiBold), color = Wv.c.text)
+                                Text("The JSON snapshots kept in storage for this connection.", style = Wv.small, color = Wv.c.text3)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(enabled = !busy, onClick = { avm.removeConnection(dialog.session.connection_id, wipe) { onDialog(null); onChanged() } }) {
+                        Text(if (busy) "Disconnecting…" else "Disconnect", color = Wv.c.loss)
+                    }
+                },
+                dismissButton = { TextButton(onClick = { onDialog(null) }) { Text("Cancel", color = Wv.c.text2) } },
+            )
+        }
     }
 }

@@ -854,3 +854,45 @@ class ScreenerSnapshotRepository(BaseTableStorage):
         while len(out) < 2:
             out.append(None)
         return out[0], out[1]
+
+
+class FeedbackRepository(BaseTableStorage):
+    """Messages people send from the "Send feedback" form.
+
+    PartitionKey = owner_id (so an account deletion removes them)
+    RowKey = '<UTC time>_<random>' so a partition lists oldest first
+    """
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="feedback", connection_string=connection_string)
+
+    async def save_feedback(
+        self,
+        owner_id: str,
+        category: str,
+        message: str,
+        platform: str,
+        app_version: Optional[str] = None,
+        email: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        row_id = f"{now.strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        data = {
+            "id": row_id,
+            "owner_id": owner_id,
+            "email": email or "",
+            "category": category,
+            "message": message,
+            "platform": platform,
+            "app_version": app_version or "",
+            "created_at": now.isoformat(),
+            "status": "new",
+        }
+        await self.upsert_entity(user_id=owner_id, entity_id=row_id, data=data, mode="replace")
+        return data
+
+    async def list_feedback(self, owner_id: str) -> List[Dict[str, Any]]:
+        rows = await self.query_entities(user_id=owner_id)
+        keys = ("id", "category", "message", "platform", "app_version", "created_at", "status")
+        return [{k: r.get(k) for k in keys} for r in sorted(rows, key=lambda r: r.get("RowKey", ""), reverse=True)]
+

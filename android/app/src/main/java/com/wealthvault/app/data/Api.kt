@@ -105,6 +105,17 @@ class Api(private val prefs: Prefs) {
 
     private fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
 
+    /** Sends a message from the feedback form; it is kept on the server with the sender's account. */
+    suspend fun sendFeedback(category: String, message: String, appVersion: String) {
+        val body = buildJsonObject {
+            put("category", category)
+            put("message", message)
+            put("platform", "android")
+            put("app_version", appVersion)
+        }.toString()
+        call("POST", "/feedback", body)
+    }
+
     /** Erases the signed-in user's profile and all stored data on the server. Irreversible. */
     suspend fun deleteAccount() {
         val body = buildJsonObject { put("confirm", "DELETE") }.toString()
@@ -137,18 +148,23 @@ class Api(private val prefs: Prefs) {
 
     suspend fun momentum(symbol: String): MomentumAnalysis = json.decodeFromString(call("GET", "/analytics/momentum?symbol=${enc(symbol)}"))
 
-    suspend fun swingStrategy(symbol: String): StrategyResult = json.decodeFromString(call("GET", "/analytics/strategy/swing-v21?symbol=${enc(symbol)}"))
+    suspend fun swingStrategy(symbol: String, o: SwingOptions = SwingOptions()): StrategyResult = json.decodeFromString(
+        call("GET", "/analytics/strategy/swing-v21?symbol=${enc(symbol)}&years=${o.years}&ut_key=${o.utKey}&ut_atr_period=${o.utAtrPeriod}&use_stop=${o.useStop}&stop_atr_mult=${o.stopMult}"),
+    )
 
-    suspend fun athStrategy(symbol: String): StrategyResult = json.decodeFromString(call("GET", "/analytics/strategy/ath-breakout?symbol=${enc(symbol)}"))
+    suspend fun athStrategy(symbol: String, o: AthOptions = AthOptions()): StrategyResult = json.decodeFromString(
+        call("GET", "/analytics/strategy/ath-breakout?symbol=${enc(symbol)}&start_date=${o.startDate}&dma_length=${o.dmaLength}&window_bars=${o.windowBars}&capital_per_trade=${o.capital.toLong()}"),
+    )
 
     // --- brokers -------------------------------------------------------------------------------------------
 
     suspend fun brokerCatalog(): List<BrokerCatalogItem> = json.decodeFromString(call("GET", "/portfolio/brokers/catalog"))
 
-    suspend fun addConnection(brokerName: String, label: String?): BrokerSession {
+    suspend fun addConnection(brokerName: String, label: String?, accountId: String? = null): BrokerSession {
         val body = buildJsonObject {
             put("broker_name", brokerName)
             if (!label.isNullOrBlank()) put("account_label", label)
+            if (!accountId.isNullOrBlank()) put("account_id", accountId)
         }.toString()
         return json.decodeFromString(call("POST", "/portfolio/connections", body))
     }
@@ -158,8 +174,9 @@ class Api(private val prefs: Prefs) {
         return json.decodeFromString(call("PUT", "/portfolio/connections/${enc(connectionId)}/credentials", body))
     }
 
-    suspend fun deleteConnection(connectionId: String) {
-        call("DELETE", "/portfolio/connections/${enc(connectionId)}?wipe_blobs=true")
+    /** Removes a connection and its holdings; [wipeArchive] also deletes the raw broker responses kept for it. */
+    suspend fun deleteConnection(connectionId: String, wipeArchive: Boolean = true) {
+        call("DELETE", "/portfolio/connections/${enc(connectionId)}?wipe_blobs=$wipeArchive")
     }
 
     // --- overview panels -----------------------------------------------------------------------------------
@@ -174,4 +191,8 @@ class Api(private val prefs: Prefs) {
     }
 
     suspend fun risk(): RiskResponse = json.decodeFromString(call("GET", "/analytics/signals/risk"))
+
+    /** Live quotes for exchange ids such as "NSE:NIFTY 50" (the Overview sets your day against the Nifty). */
+    suspend fun quotes(instruments: List<String>): MarketQuotesResponse =
+        json.decodeFromString(call("GET", "/portfolio/quotes?instruments=${enc(instruments.joinToString(","))}"))
 }

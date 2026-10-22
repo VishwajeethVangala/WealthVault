@@ -44,6 +44,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -164,95 +166,8 @@ fun SignInScreen(vm: AppViewModel) {
         val base = session?.baseUrl.orEmpty()
         if (base.startsWith("http")) {
             Spacer(Modifier.height(20.dp))
-            androidx.compose.material3.TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$base/privacy"))) }) {
+            androidx.compose.material3.TextButton(onClick = { openLink(context, "$base/privacy") }) {
                 Text("Privacy policy", color = Wv.c.text2)
-            }
-        }
-    }
-}
-
-// --- overview ------------------------------------------------------------------------------------------
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun OverviewScreen(vm: AppViewModel, avm: AnalysisViewModel, onSignals: () -> Unit = {}) {
-    val signals by avm.signals.collectAsState()
-    val liveSignals by avm.liveSignals.collectAsState()
-    val history by avm.history.collectAsState()
-    val targets by avm.targets.collectAsState()
-    val risk by avm.risk.collectAsState()
-    var editTargets by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { if (avm.history.value.data == null) avm.loadOverviewPanels() }
-    val summary by vm.summary.collectAsState()
-    val holdings by vm.holdings.collectAsState()
-    // the signals summary needs the saved signals; read them once the portfolio itself is on screen
-    val hasSummary = summary.data != null
-    LaunchedEffect(hasSummary) { if (hasSummary && avm.signals.value.data == null && !avm.signals.value.loading) avm.loadSignals() }
-    val syncing by vm.syncing.collectAsState()
-    val message by vm.message.collectAsState()
-    val s = summary.data?.snapshot
-
-    PullToRefreshBox(isRefreshing = summary.loading, onRefresh = { vm.refreshAll(); avm.loadOverviewPanels() }) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { PageTitle("Overview", if (s != null) "As of ${s.as_of_date}" else "Your whole portfolio") }
-                    PrimaryButton(if (syncing == "all") "Syncing" else "Sync all", busy = syncing == "all") { vm.syncAll() }
-                }
-            }
-            message?.let { item { Note(it) } }
-            summary.error?.let { item { Note(it, bad = true) } }
-            if (s == null && !summary.loading && summary.error == null) {
-                item { Note("No snapshot yet. Connect a broker on the Brokers tab, then press Sync all.") }
-            }
-            if (s != null) {
-                item {
-                    Kpi("Portfolio value", compact(s.total_current_value), "Invested ${compact(s.total_invested_value)} · ${s.holdings_count} holdings")
-                }
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Kpi("Unrealised gain", signedMoney(s.total_unrealized_pnl), null, toneOf(s.total_unrealized_pnl), Modifier.weight(1f))
-                        Kpi("Return", pct(s.total_pnl_percentage), null, toneOf(s.total_pnl_percentage), Modifier.weight(1f))
-                    }
-                }
-                val dayPnl = holdings.data?.mapNotNull { it.day_pnl }?.takeIf { it.isNotEmpty() }?.sum()
-                if (dayPnl != null) {
-                    item { Kpi("Today", signedMoney(dayPnl), "Change across holdings with a live price", toneOf(dayPnl)) }
-                }
-                history.data?.let { h -> item { ValueCard(h) } }
-                history.problem?.let { p -> item { Note("Value over time did not load: ${p.text}", bad = true) } }
-                val mix = s.asset_allocation.mapValues { it.value.percentage_weight to it.value.absolute_value }
-                item { AssetMixCard(mix, targets.data.orEmpty(), s.total_current_value) { editTargets = true } }
-                // one line per company even when two brokers hold it
-                val movers = holdings.data?.filter { it.day_change_percentage != null }?.distinctBy { displayName(it).uppercase() }?.sortedByDescending { it.day_change_percentage!! }
-                if (!movers.isNullOrEmpty()) {
-                    item { MoversCard(movers.take(3), movers.takeLast(3).reversed()) }
-                }
-                val sig = signals.data
-                if (sig != null && avm.market.value == "in" && holdings.data != null) item { SignalsSummaryCard(holdings.data!!, sig, liveSignals, onSignals) }
-                risk.data?.let { r -> item { RiskCard(r) } }
-            }
-        }
-    }
-    if (editTargets) TargetsEditor(vm, avm) { editTargets = false }
-}
-
-@Composable
-private fun TargetsEditor(vm: AppViewModel, avm: AnalysisViewModel, onDone: () -> Unit) {
-    val summary by vm.summary.collectAsState()
-    val targets by avm.targets.collectAsState()
-    val classes = (summary.data?.snapshot?.asset_allocation?.keys.orEmpty() + targets.data.orEmpty().keys).distinct()
-    TargetsDialog(classes, targets.data.orEmpty(), onSave = { avm.saveTargets(it); onDone() }, onDismiss = onDone)
-}
-
-@Composable
-private fun MoversCard(up: List<Holding>, down: List<Holding>) {
-    WvCard {
-        Label("Today's movers")
-        (up + down.filter { d -> up.none { it.holding_id == d.holding_id } }).forEach { h ->
-            Row(Modifier.padding(vertical = 3.dp)) {
-                Text(displayName(h), style = Wv.body, color = Wv.c.text, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(pct(h.day_change_percentage), style = Wv.num, color = toneOf(h.day_change_percentage))
             }
         }
     }
@@ -271,66 +186,6 @@ private fun ticker(h: Holding): String? {
     return if (sym.endsWith(")") && '(' in sym) sym.substringBefore('(').trim().takeIf { it.isNotBlank() && !it.startsWith("INDS") } else null
 }
 
-// --- holdings ------------------------------------------------------------------------------------------
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
-    val holdings by vm.holdings.collectAsState()
-    var query by rememberSaveable { mutableStateOf("") }
-    var cls by rememberSaveable { mutableStateOf<String?>(null) }
-    var sort by rememberSaveable { mutableStateOf("value") }
-    val all = holdings.data.orEmpty()
-    val classes = all.map { it.asset_class }.distinct().sortedBy { ASSET_CLASS_LABEL.keys.indexOf(it) }
-    val rows = all
-        .filter { cls == null || it.asset_class == cls }
-        .filter { query.isBlank() || it.instrument_symbol.contains(query.trim(), ignoreCase = true) || displayName(it).contains(query.trim(), ignoreCase = true) }
-        .let { l ->
-            when (sort) {
-                "gain" -> l.sortedByDescending { it.pnlPct ?: -999.0 }
-                "today" -> l.sortedByDescending { it.day_change_percentage ?: -999.0 }
-                "name" -> l.sortedBy { displayName(it).lowercase() }
-                else -> l.sortedByDescending { it.current_value }
-            }
-        }
-    val shownValue = rows.sumOf { it.current_value }
-    val shownGain = rows.sumOf { it.pnl ?: (it.current_value - it.invested) }
-
-    PullToRefreshBox(isRefreshing = holdings.loading, onRefresh = { vm.refreshAll() }) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { PageTitle("Holdings", "${all.size} holdings · ${compact(all.sumOf { it.current_value })}") }
-            item {
-                OutlinedTextField(value = query, onValueChange = { query = it }, placeholder = { Text("Search a holding") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            }
-            if (classes.size > 1) {
-                item {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                        Chip("All", cls == null) { cls = null }
-                        classes.forEach { c -> Chip(ASSET_CLASS_LABEL[c] ?: c, cls == c) { cls = c } }
-                    }
-                }
-            }
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Sort", style = Wv.small, color = Wv.c.text3)
-                    listOf("value" to "Value", "gain" to "Gain %", "today" to "Today", "name" to "Name").forEach { (k, label) -> Chip(label, sort == k) { sort = k } }
-                }
-            }
-            if (cls != null || query.isNotBlank()) {
-                item {
-                    Text("${rows.size} shown · ${compact(shownValue)} · ${signedMoney(shownGain)}", style = Wv.small.copy(fontFeatureSettings = "tnum"), color = toneOf(shownGain))
-                }
-            }
-            holdings.error?.let { item { Note(it, bad = true) } }
-            items(rows, key = { it.holding_id }) { h ->
-                // stocks open their Momentum page; funds, gold and NPS have no price history there
-                HoldingRow(h, if (h.asset_class == "EQUITY" && !tickerOf(h.instrument_symbol).startsWith("INDS")) ({ onStock(tickerOf(h.instrument_symbol)) }) else null)
-            }
-            if (rows.isEmpty() && !holdings.loading && holdings.error == null) item { Note(if (all.isEmpty()) "No holdings yet. Sync your brokers first." else "Nothing matches.") }
-        }
-    }
-}
-
 @Composable
 fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
     Text(
@@ -342,30 +197,9 @@ fun Chip(text: String, on: Boolean, onClick: () -> Unit) {
             .clip(RoundedCornerShape(8.dp))
             .background(if (on) Wv.c.accentWeak else Wv.c.surface2)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp),
+            // a little taller than the text: easier to hit with a thumb
+            .padding(horizontal = 12.dp, vertical = 9.dp),
     )
-}
-
-@Composable
-private fun HoldingRow(h: Holding, onOpen: (() -> Unit)?) {
-    val us = h.currency.equals("USD", ignoreCase = true)
-    WvCard(padding = 14, modifier = if (onOpen != null) Modifier.clickable(onClick = onOpen) else Modifier) {
-        Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(displayName(h), style = Wv.title, color = Wv.c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(
-                    "${listOfNotNull(ticker(h), ASSET_CLASS_LABEL[h.asset_class] ?: h.asset_class).distinct().joinToString(" · ")} · ${trimQty(h.quantity)} at ${if (us) "$" + String.format("%.2f", h.average_price) else price(h.average_price)}",
-                    style = Wv.small,
-                    color = Wv.c.text3,
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(money(h.current_value), style = Wv.num.copy(fontWeight = FontWeight.SemiBold), color = Wv.c.text)
-                Text("${signedMoney(h.pnl ?: (h.current_value - h.invested))} · ${pct(h.pnlPct, 1)}", style = Wv.small, color = toneOf(h.pnlPct))
-                if (h.day_change_percentage != null) Text("today ${pct(h.day_change_percentage, 1)}", style = Wv.small, color = toneOf(h.day_change_percentage))
-            }
-        }
-    }
 }
 
 fun trimQty(q: Double) = if (q % 1.0 == 0.0) q.toLong().toString() else String.format("%.3f", q).trimEnd('0').trimEnd('.')
@@ -381,52 +215,138 @@ fun BrokersScreen(vm: AppViewModel, avm: AnalysisViewModel) {
     val problem by avm.brokerMessage.collectAsState()
     val syncMessage by vm.message.collectAsState()
     var dialog by remember { mutableStateOf<BrokerDialog?>(null) }
+    val context = LocalContext.current
     LaunchedEffect(Unit) { avm.loadCatalog() }
     val itemFor = { b: BrokerSession -> catalog.data?.firstOrNull { it.broker_name.equals(b.broker_name, ignoreCase = true) } }
+    val usesKeys = { b: BrokerSession -> (itemFor(b)?.credential_fields?.size ?: 0) > 0 }
+    val list = brokers.data.orEmpty()
+    // a login link, or the keys form for brokers that use API keys
+    val reconnect = { b: BrokerSession ->
+        val item = itemFor(b)
+        when {
+            item != null && item.credential_fields.isNotEmpty() -> dialog = BrokerDialog.Keys(b, item)
+            !b.auth_url.isNullOrBlank() -> openLink(context, b.auth_url.orEmpty())
+            else -> vm.syncOne(b.connection_id) // a sync asks the broker for a fresh login link
+        }
+    }
 
     PullToRefreshBox(isRefreshing = brokers.loading, onRefresh = { vm.loadBrokers(); avm.loadCatalog() }) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.weight(1f)) { PageTitle("Brokers", "Your connections. Sync, log in, or add another broker.") }
+                    Box(Modifier.weight(1f)) { PageTitle("Brokers", "Read-only access. Nothing here can place orders or move money.") }
+                    EyeButton(vm)
                     PrimaryButton("Add") { avm.brokerMessage.value = null; dialog = BrokerDialog.Pick }
                 }
             }
             brokers.error?.let { item { Note(it, bad = true) } }
             problem?.let { item { Note(it.text, bad = true) } }
             syncMessage?.let { item { Note(it, bad = true) } }
-            items(brokers.data.orEmpty(), key = { it.connection_id }) { b ->
-                val item = itemFor(b)
+            if (list.isNotEmpty()) {
+                item {
+                    val connected = list.count { it.status == "CONNECTED" }
+                    val attention = list.count { needsLogin(it) }
+                    val lastSync = list.mapNotNull { it.last_sync_time }.maxOrNull()
+                    KpiGrid(
+                        listOf(
+                            Triple("Connected", "$connected / ${list.size}", if (attention > 0) "$attention needs attention" else "All healthy"),
+                            Triple("Value synced", compact(list.sumOf { it.total_valuation }), "Holdings across all brokers"),
+                            Triple("Positions", "${list.sumOf { it.holdings_count }}", "Before merging across brokers"),
+                            Triple("Last sync", relativeTime(lastSync), lastSync?.let { localTime(it) } ?: "Run a sync to pull holdings"),
+                        ),
+                    )
+                }
+            }
+            list.filter { needsLogin(it) }.forEach { b ->
+                item(key = "attn-${b.connection_id}") {
+                    WvCard {
+                        Text(
+                            "${brokerName(b)} ${if (b.status == "SESSION_EXPIRED") "session expired." else "needs a login."}",
+                            style = Wv.sub.copy(fontWeight = FontWeight.SemiBold), color = Wv.c.warn,
+                        )
+                        Text(
+                            (if (b.holdings_count > 0) "Its ${b.holdings_count} holdings are shown from the last successful sync${b.last_sync_time?.let { " (${localTime(it)})" } ?: ""} and may be stale. " else "") +
+                                (b.error_message?.takeIf { it.isNotBlank() } ?: if (usesKeys(b)) "Check your API credentials and try again." else "Log in again to resume syncing."),
+                            style = Wv.small, color = Wv.c.text2,
+                        )
+                        PrimaryButton("Reconnect ${brokerName(b)}") { reconnect(b) }
+                    }
+                }
+            }
+            items(list, key = { it.connection_id }) { b ->
                 BrokerCard(
-                    b, syncing,
+                    b, syncing, usesKeys(b),
                     onSync = { vm.syncOne(b.connection_id) },
-                    onKeys = if (item != null && item.credential_fields.isNotEmpty()) ({ dialog = BrokerDialog.Keys(b, item) }) else null,
+                    onReconnect = { reconnect(b) },
+                    onKeys = itemFor(b)?.takeIf { it.credential_fields.isNotEmpty() }?.let { item -> { dialog = BrokerDialog.Keys(b, item) } },
                     onRemove = { dialog = BrokerDialog.Remove(b) },
                 )
             }
-            if (brokers.data?.isEmpty() == true) item { Note("No broker connections yet. Press Add to connect your first broker.") }
+            if (brokers.data?.isEmpty() == true) item { Note("No brokers connected. Press Add to link your first account.") }
+            item {
+                WvCard {
+                    Text("How your data is handled", style = Wv.title, color = Wv.c.text)
+                    Text("Applies to every connection on this page", style = Wv.small, color = Wv.c.text3)
+                    listOf(
+                        "Only read endpoints are called: holdings and prices. No order placement is ever requested.",
+                        "API secrets and session tokens are encrypted before they are stored, and are never shown again after saving.",
+                        "Daily-expiring sessions (Kite, Groww, SmartAPI) ask you to log in again instead of keeping a password.",
+                        "Disconnecting deletes that broker's stored credentials and its synced holdings.",
+                    ).forEach { t ->
+                        Row(verticalAlignment = Alignment.Top) {
+                            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Outlined.CheckCircle, contentDescription = null, tint = Wv.c.gain, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(t, style = Wv.small, color = Wv.c.text2)
+                        }
+                    }
+                }
+            }
         }
     }
-    BrokerDialogs(dialog, avm, brokers.data.orEmpty(), onDialog = { dialog = it }, onChanged = { vm.refreshAll() })
+    BrokerDialogs(dialog, avm, list, onDialog = { dialog = it }, onChanged = { vm.refreshAll() }, onSync = { vm.syncOne(it) })
+}
+
+/** "Just now", "12 min ago", "3 hr ago", "2d ago" */
+fun relativeTime(iso: String?): String {
+    if (iso.isNullOrBlank()) return "Never"
+    val t = runCatching { java.time.OffsetDateTime.parse(iso).toInstant() }.getOrNull() ?: return "—"
+    val mins = java.time.Duration.between(t, java.time.Instant.now()).toMinutes()
+    return when {
+        mins < 1 -> "Just now"
+        mins < 60 -> "$mins min ago"
+        mins < 60 * 24 -> "${mins / 60} hr ago"
+        else -> "${mins / (60 * 24)}d ago"
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BrokerCard(b: BrokerSession, syncing: String?, onSync: () -> Unit, onKeys: (() -> Unit)?, onRemove: () -> Unit) {
-    val context = LocalContext.current
-    val (label, tone) = when (b.status) {
-        "CONNECTED" -> "Connected" to Tone.Ok
-        "SYNCING" -> "Syncing" to Tone.Info
-        "AUTH_REQUIRED" -> "Login needed" to Tone.Warn
-        "SESSION_EXPIRED" -> "Session expired" to Tone.Warn
-        "DISCONNECTED" -> "Disconnected" to Tone.Off
+private fun BrokerCard(b: BrokerSession, syncing: String?, usesKeys: Boolean, onSync: () -> Unit, onReconnect: () -> Unit, onKeys: (() -> Unit)?, onRemove: () -> Unit) {
+    val (label, tone) = when {
+        syncing == b.connection_id -> "Syncing" to Tone.Info
+        b.status == "CONNECTED" -> "Connected" to Tone.Ok
+        b.status == "SESSION_EXPIRED" -> "Session expired" to Tone.Warn
+        b.status == "AUTH_REQUIRED" -> "Login needed" to Tone.Warn
+        b.status == "DISCONNECTED" -> "Disconnected" to Tone.Off
         else -> "Problem" to Tone.Bad
     }
+    val attn = needsLogin(b)
+    val key = brokerKeyOf(b.connection_id).ifBlank { b.broker_name.lowercase() }
     WvCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(BROKER_COLORS[key] ?: Wv.c.text3), contentAlignment = Alignment.Center) {
+                Text(brokerKeyLabel(key).take(1), style = Wv.title, color = androidx.compose.ui.graphics.Color.White)
+            }
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(brokerName(b), style = Wv.title, color = Wv.c.text)
-                Text(listOfNotNull(b.account_label, b.account_id.ifBlank { null }).joinToString(" · "), style = Wv.small, color = Wv.c.text3)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(brokerName(b), style = Wv.title, color = Wv.c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Badge(if (usesKeys) "API" else "MCP", Tone.Off)
+                }
+                Text(
+                    listOfNotNull(b.account_label, b.account_id.ifBlank { null }?.let { "Client $it" }, hostOf(b.mcp_server_url)).joinToString(" · "),
+                    style = Wv.small, color = Wv.c.text3, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
             Badge(label, tone)
         }
@@ -442,26 +362,31 @@ private fun BrokerCard(b: BrokerSession, syncing: String?, onSync: () -> Unit, o
             }
             Column(Modifier.weight(1.4f)) {
                 Text("Last sync", style = Wv.small, color = Wv.c.text3)
-                Text(localTime(b.last_sync_time), style = Wv.small, color = Wv.c.text2)
+                Text(relativeTime(b.last_sync_time), style = Wv.small, color = Wv.c.text2)
             }
         }
-        b.error_message?.takeIf { it.isNotBlank() }?.let { Note(it, bad = true) }
+        // the session: why it needs attention, or how long it lasts
+        Text(
+            when {
+                attn -> b.error_message?.takeIf { it.isNotBlank() } ?: if (usesKeys) "API credentials needed" else "Login required"
+                !b.session_expires_at.isNullOrBlank() -> "Session valid until ${localTime(b.session_expires_at)}"
+                else -> b.auth_type
+            },
+            style = Wv.small, color = if (attn) Wv.c.warn else Wv.c.text3,
+        )
+        if (!attn) b.error_message?.takeIf { it.isNotBlank() }?.let { Note(it, bad = true) }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
+            if (attn) PrimaryButton(if (usesKeys) "Enter credentials" else "Reconnect", enabled = syncing == null) { onReconnect() }
             OutlinedButton(onClick = onSync, enabled = syncing == null, shape = RoundedCornerShape(10.dp)) {
                 Text(if (syncing == b.connection_id) "Syncing…" else "Sync now", color = Wv.c.text)
             }
-            if (!b.auth_url.isNullOrBlank() && b.status != "CONNECTED") {
-                OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(b.auth_url))) }, shape = RoundedCornerShape(10.dp)) {
-                    Text("Log in", color = Wv.c.accent)
-                }
-            }
-            if (onKeys != null) {
-                OutlinedButton(onClick = onKeys, shape = RoundedCornerShape(10.dp)) { Text("Keys", color = Wv.c.text) }
-            }
-            TextButton(onClick = onRemove) { Text("Remove", color = Wv.c.loss) }
+            if (onKeys != null && !attn) OutlinedButton(onClick = onKeys, shape = RoundedCornerShape(10.dp)) { Text("Credentials", color = Wv.c.text) }
+            TextButton(onClick = onRemove) { Text("Disconnect", color = Wv.c.loss) }
         }
     }
 }
+
+private fun hostOf(url: String): String? = url.takeIf { it.isNotBlank() }?.let { runCatching { Uri.parse(it).host }.getOrNull() ?: it }
 
 /** "Zerodha Kite Connect — Primary Account" without the account part, which is shown on the line below. */
 fun brokerName(b: BrokerSession): String {
@@ -496,6 +421,20 @@ fun SettingsScreen(vm: AppViewModel) {
                     listOf("system" to "Like the phone", "light" to "Light", "dark" to "Dark").forEach { (value, text) ->
                         Chip(text, s.theme == value) { vm.setTheme(value) }
                     }
+                }
+            }
+        }
+        item {
+            WvCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Label("Hide amounts")
+                        Text("Show every rupee amount as ₹ •••• (percentages stay). The eye button at the top of each page does the same.", style = Wv.small, color = Wv.c.text2)
+                    }
+                    androidx.compose.material3.Switch(
+                        s.hideAmounts, { vm.setHideAmounts(it) },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Wv.c.accent, checkedThumbColor = Wv.c.onAccent, uncheckedTrackColor = Wv.c.surface2, uncheckedThumbColor = Wv.c.text3, uncheckedBorderColor = Wv.c.borderStrong),
+                    )
                 }
             }
         }

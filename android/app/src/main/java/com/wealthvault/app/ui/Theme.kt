@@ -46,6 +46,15 @@ private val classColors = mapOf(
     "GOLD" to Color(0xFFC9A227),
     "DEBT" to Color(0xFF64748B),
     "NPS" to Color(0xFFD2557A),
+    "OTHER" to Color(0xFFA3ADBB),
+)
+
+/** Each broker's colour, as on the web (tiles and badges carry the name too, never colour alone). */
+val BROKER_COLORS = mapOf(
+    "zerodha" to Color(0xFF2F5BD3),
+    "groww" to Color(0xFF0B8A6A),
+    "angelone" to Color(0xFFB5651D),
+    "indmoney" to Color(0xFF6B4FD8),
 )
 
 val LightWv = WvColors(

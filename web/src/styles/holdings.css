@@ -366,12 +366,17 @@
   .gr {
     padding: 10px 16px;
   }
+  /* class name on the left, its subtotal on the right of the same line */
+  .gr .c0 {
+    grid-column: auto;
+  }
   .gr .c {
     display: none;
   }
   .gr .c.c-keep {
     display: block;
     text-align: right;
+    align-self: center;
   }
   .tf .c {
     text-align: left;

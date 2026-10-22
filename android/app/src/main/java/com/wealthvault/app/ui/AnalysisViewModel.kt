@@ -181,9 +181,13 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
 
     fun analyse(symbol: String) = run(momentum, keep = false) { api.momentum(symbol.trim().uppercase()) }
 
+    /** The inputs each strategy runs with; the Strategies page edits them. */
+    val swingOpts = MutableStateFlow(com.wealthvault.app.data.SwingOptions())
+    val athOpts = MutableStateFlow(com.wealthvault.app.data.AthOptions())
+
     fun runStrategy(kind: String, symbol: String) =
-        if (kind == "ath") run(ath, keep = false) { api.athStrategy(symbol.trim().uppercase()) }
-        else run(swing, keep = false) { api.swingStrategy(symbol.trim().uppercase()) }
+        if (kind == "ath") run(ath, keep = false) { api.athStrategy(symbol.trim().uppercase(), athOpts.value) }
+        else run(swing, keep = false) { api.swingStrategy(symbol.trim().uppercase(), swingOpts.value) }
 
     // --- brokers ---------------------------------------------------------------------------------------------
 
@@ -194,10 +198,10 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
     fun loadCatalog() = run(catalog) { api.brokerCatalog() }
 
     /** Adds a connection and hands back what to do next: a credentials form, a login link, or nothing. */
-    fun addConnection(item: BrokerCatalogItem, label: String, then: (BrokerSession) -> Unit) = viewModelScope.launch {
+    fun addConnection(item: BrokerCatalogItem, label: String, accountId: String, then: (BrokerSession) -> Unit) = viewModelScope.launch {
         brokerBusy.value = true
         try {
-            val created = api.addConnection(item.broker_name, label)
+            val created = api.addConnection(item.broker_name, label, accountId)
             loadCatalog()
             then(created)
         } catch (e: Exception) {
@@ -218,10 +222,10 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun removeConnection(connectionId: String, then: () -> Unit) = viewModelScope.launch {
+    fun removeConnection(connectionId: String, wipeArchive: Boolean, then: () -> Unit) = viewModelScope.launch {
         brokerBusy.value = true
         try {
-            api.deleteConnection(connectionId)
+            api.deleteConnection(connectionId, wipeArchive)
             loadCatalog()
             then()
         } catch (e: Exception) {
@@ -236,12 +240,52 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
     val history = MutableStateFlow(Res<List<HistoryPoint>>())
     val targets = MutableStateFlow(Res<Map<String, Double>>())
     val risk = MutableStateFlow(Res<RiskResponse>())
+    /** Nifty 50's change today (%), to set the portfolio's day against; null until Kite answers. */
+    val nifty = MutableStateFlow<Double?>(null)
 
     fun loadOverviewPanels() {
-        run(history) { api.history(365) }
+        run(history) { api.history(3650) } // every snapshot, so "All" reaches back to the start
         run(targets) { api.targets().targets }
         run(risk) { api.risk() }
+        loadNifty()
+        loadDashSignals()
     }
+
+    fun loadNifty() = viewModelScope.launch {
+        runCatching { api.quotes(listOf("NSE:NIFTY 50")) }.getOrNull()?.let { res ->
+            val q = res.quotes["NSE:NIFTY 50"] ?: res.quotes.values.firstOrNull()
+            val prev = q?.ohlc?.close
+            if (q != null && prev != null && prev > 0) nifty.value = (q.last_price - prev) / prev * 100
+        }
+    }
+
+    // --- the Overview's own read of the signals on your holdings (India and US), apart from the Signals tab's market
+
+    val dashIn = MutableStateFlow<SignalsResponse?>(null)
+    val dashUs = MutableStateFlow<SignalsResponse?>(null)
+    val dashLiveIn = MutableStateFlow<Map<String, StockSignals>>(emptyMap())
+    val dashLiveUs = MutableStateFlow<Map<String, StockSignals>>(emptyMap())
+    /** live US quotes, for "x% in USD today" on the US stocks card */
+    val dashUsQuotes = MutableStateFlow<Map<String, LiveQuote>>(emptyMap())
+    val dashFailed = MutableStateFlow(false)
+
+    fun loadDashSignals() = viewModelScope.launch {
+        try {
+            dashIn.value = api.signals("in")
+            dashFailed.value = false
+        } catch (e: Exception) {
+            dashFailed.value = dashIn.value == null
+        }
+        runCatching { api.signals("us") }.getOrNull()?.let { dashUs.value = it }
+        runCatching { api.liveSignals("in") }.getOrNull()?.let { dashLiveIn.value = it.signals }
+        if (dashUs.value?.symbol_map?.isNotEmpty() == true) {
+            runCatching { api.liveSignals("us") }.getOrNull()?.let { dashLiveUs.value = it.signals }
+            runCatching { api.usLive() }.getOrNull()?.let { dashUsQuotes.value = it.quotes }
+        }
+    }
+
+    /** Where a tap on the Overview's signal tiles should land on the Signals tab (read once, then cleared). */
+    val signalsPreset = MutableStateFlow<SignalsPreset?>(null)
 
     fun saveTargets(values: Map<String, Double>) = run(targets) { api.saveTargets(values).targets }
 }

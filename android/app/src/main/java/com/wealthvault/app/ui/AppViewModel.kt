@@ -42,6 +42,37 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val notice = MutableStateFlow<String?>(null)
     val signingIn = MutableStateFlow(false)
 
+    /** The broker and asset-class filters, shared by the Overview and Holdings (the web keeps them in the URL). */
+    val brokerFilter = MutableStateFlow<Set<String>>(emptySet())
+    val classFilter = MutableStateFlow<Set<String>>(emptySet())
+
+    fun setHideAmounts(on: Boolean) = viewModelScope.launch { prefs.saveHideAmounts(on) }
+
+    // --- the feedback form ---
+    val feedbackSending = MutableStateFlow(false)
+    /** (sent, message): true once received; false with the reason when it failed */
+    val feedbackResult = MutableStateFlow<Pair<Boolean, String>?>(null)
+    val supportEmail = MutableStateFlow("")
+
+    fun sendFeedback(category: String, message: String) {
+        if (feedbackSending.value || message.isBlank()) return
+        feedbackSending.value = true
+        viewModelScope.launch {
+            feedbackResult.value = try {
+                api.sendFeedback(category, message.trim(), com.wealthvault.app.BuildConfig.VERSION_NAME)
+                true to "Received"
+            } catch (e: Exception) {
+                false to (e.message ?: "Could not send. Please try again.")
+            } finally {
+                feedbackSending.value = false
+            }
+        }
+    }
+
+    fun loadSupportEmail() = viewModelScope.launch {
+        runCatching { api.authConfig() }.getOrNull()?.let { supportEmail.value = it.support_email }
+    }
+
     private fun <T> load(target: MutableStateFlow<Load<T>>, block: suspend () -> T) {
         target.value = target.value.copy(loading = true, error = null)
         viewModelScope.launch {

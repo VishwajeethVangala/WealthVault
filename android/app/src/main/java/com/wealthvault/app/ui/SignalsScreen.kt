@@ -95,7 +95,7 @@ fun buildInstruments(holdings: List<Holding>, us: Boolean): List<Instrument> =
 @Composable
 fun LoginLinkButton(url: String, label: String = "Log in to Kite") {
     val context = LocalContext.current
-    OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }, shape = RoundedCornerShape(10.dp)) {
+    OutlinedButton(onClick = { openLink(context, url) }, shape = RoundedCornerShape(10.dp)) {
         Text(label, color = Wv.c.accent)
     }
 }
@@ -136,6 +136,16 @@ fun KpiGrid(tiles: List<Triple<String, String, String?>>, tones: List<androidx.c
     }
 }
 
+/** Where to land on the Signals tab when another screen links to it (the web passes these in the URL). */
+data class SignalsPreset(
+    val view: String = "calls",
+    val side: String? = null,
+    val window: Int? = null,
+    val filter: String? = null,
+    val source: String? = null,
+    val market: String? = null,
+)
+
 /**
  * One row of the Signals page: a stock you hold, a stock on the Chartink Stage 2 list, or both (shown once).
  * [open] is what the Momentum page is opened with.
@@ -156,6 +166,14 @@ private data class SigRow(
 )
 
 private enum class Source(val label: String) { All("Everything"), Held("My holdings"), Stage2("Stage 2"), New("New on Stage 2") }
+
+private enum class SSort(val label: String) { Align("Agreement"), Day("Day change"), Momentum("Momentum"), Position("Your position"), Name("Name"), Cap("Market cap") }
+
+private fun marketCap(v: Double?) = when {
+    v == null || v <= 0 -> null
+    v >= 1e5 -> String.format("₹%.2f L Cr", v / 1e5)
+    else -> "₹" + price(v).removePrefix("₹").substringBefore('.') + " Cr"
+}
 
 private enum class SigFilter(val label: String) { All("All"), Bull("All bullish"), Mixed("Mixed"), Bear("All bearish"), Trade("In a trade"), Fresh("Fresh entries") }
 
@@ -266,6 +284,7 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
     var filter by rememberSaveable { mutableStateOf(SigFilter.All) }
     var sector by rememberSaveable { mutableStateOf("all") }
     var q by rememberSaveable { mutableStateOf("") }
+    var sort by rememberSaveable { mutableStateOf(SSort.Align) }
     var shown by remember { mutableIntStateOf(PAGE) }
     val calls = rememberCallsState(defaultWindow = OPEN_WINDOW)
     val us = market == "us"
@@ -273,6 +292,22 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
     val context = LocalContext.current
 
     LaunchedEffect(Unit) { avm.ensureLoaded() }
+    val preset by avm.signalsPreset.collectAsState()
+    LaunchedEffect(preset) {
+        val p = preset ?: return@LaunchedEffect
+        p.market?.let { if (it != avm.market.value) avm.setMarket(it) }
+        view = p.view
+        source = when (p.source) { "held" -> Source.Held; "stage2" -> Source.Stage2; "new" -> Source.New; else -> Source.All }
+        filter = when (p.filter) { "all-bear" -> SigFilter.Bear; "all-bull" -> SigFilter.Bull; "mixed" -> SigFilter.Mixed; "trade" -> SigFilter.Trade; else -> SigFilter.All }
+        p.side?.let { side ->
+            calls.side = side
+            calls.window = p.window ?: OPEN_WINDOW
+            // a link to calls opens their sections, as the web does
+            listOf("$side-${Kind.Swing}-${calls.window}", "$side-${Kind.Ath}-${calls.window}", "$side-waiting").forEach { calls.open[it] = true }
+        }
+        shown = PAGE
+        avm.signalsPreset.value = null
+    }
 
     val all = holdings.data.orEmpty()
     val data = res.data
@@ -314,7 +349,16 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
                 SigFilter.Trade -> r.sig?.swing?.state == "IN_POSITION" || r.sig?.ath?.state == "IN_POSITION"
                 SigFilter.Fresh -> r.fresh
             }
-    }.sortedWith(compareByDescending<SigRow> { if (it.sig != null) it.reading.alignment.order else -1 }.thenByDescending { it.inst?.cur ?: 0.0 }.thenByDescending { it.dayPct ?: -999.0 })
+    }.let { l ->
+        when (sort) {
+            SSort.Align -> l.sortedWith(compareByDescending<SigRow> { if (it.sig != null) it.reading.alignment.order else -1 }.thenByDescending { it.inst?.cur ?: 0.0 }.thenByDescending { it.dayPct ?: -999.0 })
+            SSort.Day -> l.sortedByDescending { it.dayPct ?: -999.0 }
+            SSort.Momentum -> l.sortedByDescending { it.sig?.momentum?.let { m -> m.score.toDouble() / (m.max.takeIf { x -> x > 0 } ?: 1) } ?: -1.0 }
+            SSort.Position -> l.sortedByDescending { it.inst?.cur ?: -1.0 }
+            SSort.Name -> l.sortedBy { it.name.lowercase() }
+            SSort.Cap -> l.sortedByDescending { it.s2?.market_cap ?: -1.0 }
+        }
+    }
     val sources = scoped.map {
         CallSource(code = it.s2?.nsecode ?: it.code, name = it.name, sector = it.s2?.sector?.let(::titleCase), held = it.inst != null, isNew = it.s2?.is_new == true, sig = it.sig, ltp = it.ltp)
     }
@@ -403,16 +447,23 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
                 }
                 else -> {
                     item { OutlinedTextField(q, { q = it; shown = PAGE }, placeholder = { Text("Search a stock") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                    // filter, sort and sector chips as one group with room between the rows, so taps land where aimed
                     item {
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            SigFilter.entries.forEach { f -> Chip(f.label, filter == f) { filter = f; shown = PAGE } }
-                        }
-                    }
-                    if (sectors.isNotEmpty()) {
-                        item {
+                        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Chip("All sectors", sector == "all") { sector = "all"; shown = PAGE }
-                                sectors.forEach { (name, n) -> Chip("${titleCase(name)} $n", sector == name) { sector = name; shown = PAGE } }
+                                SigFilter.entries.forEach { f -> Chip(f.label, filter == f) { filter = f; shown = PAGE } }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Sort", style = Wv.small, color = Wv.c.text3)
+                                SSort.entries.filter { it != SSort.Cap || (!us && list != null) }.filter { it != SSort.Position || scoped.any { r -> r.inst != null } }.forEach { k ->
+                                    Chip(k.label, sort == k) { sort = k; shown = PAGE }
+                                }
+                            }
+                            if (sectors.isNotEmpty()) {
+                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Chip("All sectors", sector == "all") { sector = "all"; shown = PAGE }
+                                    sectors.forEach { (name, n) -> Chip("${titleCase(name)} $n", sector == name) { sector = name; shown = PAGE } }
+                                }
                             }
                         }
                     }
@@ -445,7 +496,7 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
                             style = Wv.sub, color = Wv.c.text2,
                         )
                         list.url?.let { url ->
-                            OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }, shape = RoundedCornerShape(10.dp)) {
+                            OutlinedButton(onClick = { openLink(context, url) }, shape = RoundedCornerShape(10.dp)) {
                                 Text("Open Chartink", color = Wv.c.text)
                             }
                         }
@@ -478,10 +529,12 @@ private fun SignalCard(r: SigRow, fmt: PriceFmt, us: Boolean, onOpen: () -> Unit
                     if (r.s2?.is_new == true) Badge("New", Tone.Info)
                 }
                 Text(
-                    listOfNotNull(r.code, r.s2?.sector?.takeIf(String::isNotBlank)?.let(::titleCase)).joinToString(" · "),
+                    listOfNotNull(r.code, r.s2?.sector?.takeIf(String::isNotBlank)?.let(::titleCase), marketCap(r.s2?.market_cap)).joinToString(" · "),
                     style = Wv.small, color = Wv.c.text3, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
-                if (inst != null) Text("${inst.brokers.joinToString(" + ")} · ${trimQty(inst.qty)} @ ${price(inst.avg)}", style = Wv.small, color = Wv.c.text3)
+                // US stocks trade before and after the session too
+                r.live?.ext_price?.takeIf { us && it != r.live.price }?.let { Text("extended ${fmt.price(it)}", style = Wv.small.copy(fontFeatureSettings = "tnum"), color = Wv.c.text3) }
+                if (inst != null) Text("${inst.brokers.joinToString(" + ")} · ${trimQty(inst.qty)} @ ${ownPrice(inst.avg)}", style = Wv.small, color = Wv.c.text3)
                 if (r.sig?.history_status == "partial") Text("Partial price history", style = Wv.small, color = Wv.c.warn)
             }
             Column(horizontalAlignment = Alignment.End) {

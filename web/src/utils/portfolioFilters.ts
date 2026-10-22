@@ -24,7 +24,8 @@ export function classifyAssetClass(h: Holding): CanonicalAssetClass {
   const sym = (h.instrument_symbol || '').toUpperCase()
   const assetClass = (h.asset_class || '').toUpperCase()
 
-  if (sym.includes('SGB')) {
+  // before the keyword rules: "Sovereign Gold Bond 2029" contains BOND but is gold
+  if (assetClass === 'GOLD' || sym.includes('SGB')) {
     return 'GOLD'
   }
   if (assetClass === 'NPS') {

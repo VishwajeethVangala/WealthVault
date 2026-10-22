@@ -73,7 +73,7 @@ fun AppLockCard(vm: AppViewModel, on: Boolean) {
 @Composable
 fun PrivacyCard(vm: AppViewModel, baseUrl: String) {
     val context = LocalContext.current
-    val open = { path: String -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(baseUrl + path))) }
+    val open = { path: String -> openLink(context, baseUrl + path) }
     WvCard {
         Label("Privacy and data")
         Text(

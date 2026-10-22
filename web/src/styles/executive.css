@@ -888,3 +888,16 @@ a.bx-who-link:hover {
   flex-wrap: wrap;
   gap: 8px 12px;
 }
+/* phone: a price-status chip gets its own line under the title instead of squeezing it into a narrow column */
+@media (max-width: 640px) {
+  .bx-ph:has(.bx-ph-r .fresh) {
+    flex-wrap: wrap;
+  }
+  .bx-ph:has(.bx-ph-r .fresh) > div:first-child,
+  .bx-ph-r:has(.fresh) {
+    flex: 1 1 100%;
+  }
+  .bx-ph-r:has(.fresh) {
+    justify-content: space-between;
+  }
+}

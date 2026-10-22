@@ -8,6 +8,8 @@ import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -16,6 +18,8 @@ import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.foundation.layout.Box
@@ -83,7 +87,9 @@ private val MORE = listOf(
     Tab("momentum", "Momentum", Icons.Outlined.ShowChart, "Trend, returns and strength of any stock"),
     Tab("strategy", "Strategies", Icons.Outlined.CandlestickChart, "Swing V2.1 and the ATH breakout, with backtests"),
     Tab("brokers", "Brokers", Icons.Outlined.Link, "Sync, log in, add or remove a broker"),
-    Tab("settings", "Settings", Icons.Outlined.Settings, "Theme and account"),
+    Tab("settings", "Settings", Icons.Outlined.Settings, "Theme, hide amounts, app lock and account"),
+    Tab("feedback", "Send feedback", Icons.Outlined.ChatBubbleOutline, "An idea, a problem, or praise"),
+    Tab("rate", "Rate WealthVault", Icons.Outlined.StarOutline, "On Google Play"),
 )
 
 class MainActivity : FragmentActivity() {
@@ -93,6 +99,8 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // count the opening (not a screen rotation), for the review prompt
+        if (savedInstanceState == null) lifecycleScope.launch { vm.prefs.countOpen() }
         // Debug builds only: tests start the app signed in with
         // `adb shell am start -n com.vangala.wealthvault/com.wealthvault.app.MainActivity --es wv_base <url> --es wv_token <jwt>`
         if (BuildConfig.DEBUG) {
@@ -109,6 +117,8 @@ class MainActivity : FragmentActivity() {
                 val bars = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
+            // the eye switch: hide every rupee amount, as the phone remembers it
+            LaunchedEffect(session?.hideAmounts) { com.wealthvault.app.ui.Privacy.hidden = session?.hideAmounts != false }
             val unlocked by vm.unlocked.collectAsState()
             val lockOn = session?.lock == true && session?.token != null
             // with the lock on, hide the screen from screenshots and the recent-apps thumbnail
@@ -141,7 +151,20 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
     val route = entry?.destination?.route?.substringBefore('?')
     val tabOf = { r: String? -> if (MORE.any { it.route == r }) "more" else r }
     val openStock = { kind: String, symbol: String -> nav.navigate("$kind?symbol=${Uri.encode(symbol)}") }
+    val goTab = { route: String ->
+        nav.navigate(route) {
+            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
     LaunchedEffect(Unit) { vm.refreshAll() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // after a few openings, ask (once in a while) for a Play Store review; Google decides whether it shows
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(20_000)
+        (context as? android.app.Activity)?.let { com.wealthvault.app.ui.maybeAskForReview(it, vm) }
+    }
     Scaffold(
         containerColor = Wv.c.bg,
         bottomBar = {
@@ -176,10 +199,18 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
         },
     ) { inner ->
         NavHost(nav, startDestination = "overview", modifier = Modifier.fillMaxSize().background(Wv.c.bg).padding(inner)) {
-            composable("overview") { OverviewScreen(vm, avm) { nav.navigate("signals") { popUpTo(nav.graph.findStartDestination().id) { saveState = true }; launchSingleTop = true; restoreState = true } } }
+            composable("overview") {
+                OverviewScreen(
+                    vm, avm,
+                    onSignals = { preset -> avm.signalsPreset.value = preset; goTab("signals") },
+                    onHoldings = { goTab("holdings") },
+                    onBrokers = { nav.navigate("brokers") },
+                    onStock = { openStock("momentum", it) },
+                )
+            }
             composable("holdings") { HoldingsScreen(vm) { openStock("momentum", it) } }
             composable("signals") { SignalsScreen(vm, avm) { openStock("momentum", it) } }
-            composable("more") { MoreScreen { nav.navigate(it) } }
+            composable("more") { MoreScreen { route -> if (route == "rate") com.wealthvault.app.ui.openPlayListing(context) else nav.navigate(route) } }
             composable("momentum?symbol={symbol}", arguments = listOf(navArgument("symbol") { nullable = true; defaultValue = null })) { e ->
                 SubPage({ nav.popBackStack() }) { MomentumScreen(vm, avm, e.arguments?.getString("symbol")) { openStock("strategy", it) } }
             }
@@ -188,6 +219,7 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
             }
             composable("brokers") { SubPage({ nav.popBackStack() }) { BrokersScreen(vm, avm) } }
             composable("settings") { SubPage({ nav.popBackStack() }) { SettingsScreen(vm) } }
+            composable("feedback") { SubPage({ nav.popBackStack() }) { com.wealthvault.app.ui.FeedbackScreen(vm) } }
         }
     }
 }

@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,6 +29,19 @@ import kotlin.math.abs
 
 private const val MINUS = "−"
 private const val DASH = "—"
+private const val MASK = "₹ ••••"
+/** joins a sign to its amount so a line never breaks between "+" and "₹3,794" */
+private const val JOIN = "⁠"
+
+/**
+ * The "hide amounts" switch (the eye button, as on the web): while it is on every rupee amount reads ₹ ••••.
+ * Percentages, weights and market prices of stocks are never hidden. Screens recompose when it flips.
+ */
+object Privacy {
+    var hidden by mutableStateOf(true)
+}
+
+private fun masked(v: Double?) = v != null && !v.isNaN() && Privacy.hidden
 
 private fun grouped(value: Double, digits: Int): String {
     val s = BigDecimal(value).setScale(digits, RoundingMode.HALF_UP).toPlainString()
@@ -37,15 +53,21 @@ private fun grouped(value: Double, digits: Int): String {
     return "$rest,$last3$frac"
 }
 
-/** ₹3,52,608 */
-fun money(v: Double?, digits: Int = 0): String = if (v == null || v.isNaN()) DASH else (if (v < 0) MINUS else "") + "₹" + grouped(abs(v), digits)
+private fun plainMoney(v: Double, digits: Int): String = (if (v < 0) MINUS else "") + "₹" + grouped(abs(v), digits)
 
-/** ₹2,938.40 */
-fun price(v: Double?): String = money(v, 2)
+/** ₹3,52,608 (hidden with the eye switch) */
+fun money(v: Double?, digits: Int = 0): String = if (v == null || v.isNaN()) DASH else if (masked(v)) MASK else plainMoney(v, digits)
 
-/** ₹70.41 L, ₹1.24 Cr; below a lakh, grouped rupees */
+/** ₹2,938.40, a stock's market price: never hidden */
+fun price(v: Double?): String = if (v == null || v.isNaN()) DASH else plainMoney(v, 2)
+
+/** ₹2,938.40 for your own figures such as an average cost: hidden with the eye switch */
+fun ownPrice(v: Double?): String = money(v, 2)
+
+/** ₹70.41 L, ₹1.24 Cr; below a lakh, grouped rupees (hidden with the eye switch) */
 fun compact(v: Double?): String {
     if (v == null || v.isNaN()) return DASH
+    if (masked(v)) return MASK
     val a = abs(v)
     val sign = if (v < 0) MINUS else ""
     return when {
@@ -55,11 +77,23 @@ fun compact(v: Double?): String {
     }
 }
 
-/** +₹63,408 / −₹4,600 */
-fun signedMoney(v: Double?): String = if (v == null || v.isNaN()) DASH else (if (v < 0) MINUS else "+") + money(abs(v)).removePrefix(MINUS)
+/** +₹63,408 / −₹4,600 (hidden with the eye switch) */
+fun signedMoney(v: Double?): String = if (v == null || v.isNaN()) DASH else if (masked(v)) MASK else (if (v < 0) MINUS else "+") + JOIN + plainMoney(abs(v), 0)
+
+/** +₹1.24 L / −₹4,600 (hidden with the eye switch) */
+fun signedCompact(v: Double?): String = if (v == null || v.isNaN()) DASH else if (masked(v)) MASK else (if (v < 0) MINUS else "+") + JOIN + compact(abs(v))
+
+/** 6.23%: a share of the whole, never signed */
+fun weightPct(v: Double?, digits: Int = 1): String = if (v == null || v.isNaN()) DASH else String.format("%.${digits}f%%", v)
 
 /** +21.93% / −4.10% */
-fun pct(v: Double?, digits: Int = 2): String = if (v == null || v.isNaN()) DASH else (if (v < 0) MINUS else "+") + String.format("%.${digits}f%%", abs(v))
+fun pct(v: Double?, digits: Int = 2): String {
+    if (v == null || v.isNaN()) return DASH
+    val s = String.format("%.${digits}f%%", abs(v))
+    // a value that rounds to zero gets no sign ("0.0%", not "+0.0%" or "−0.0%")
+    if (s.trimEnd('%').all { it == '0' || it == '.' }) return s
+    return (if (v < 0) MINUS else "+") + JOIN + s
+}
 
 @Composable
 fun toneOf(v: Double?): Color = when {

@@ -2,11 +2,12 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 
 const STORAGE_KEY = 'wv_hide_amounts'
 
+// amounts start hidden; they show only once someone has switched them on with the eye button
 const readInitial = (): boolean => {
   try {
-    return localStorage.getItem(STORAGE_KEY) === 'true'
+    return localStorage.getItem(STORAGE_KEY) !== 'false'
   } catch {
-    return false
+    return true
   }
 }
 
@@ -15,7 +16,7 @@ interface PrivacyContextValue {
   toggle: () => void
 }
 
-const PrivacyContext = createContext<PrivacyContextValue>({ hidden: false, toggle: () => {} })
+const PrivacyContext = createContext<PrivacyContextValue>({ hidden: true, toggle: () => {} })
 
 export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [hidden, setHidden] = useState<boolean>(readInitial)

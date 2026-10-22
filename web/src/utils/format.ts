@@ -88,7 +88,10 @@ export const signedCompact = (v: number | null | undefined): string => {
 /** Percent changes: 2 dp, signed (+21.93%) */
 export const pct = (v: number | null | undefined, digits = 2): string => {
   if (v == null || !Number.isFinite(v)) return EM_DASH
-  return `${v < 0 ? MINUS : '+'}${Math.abs(v).toFixed(digits)}%`
+  const s = Math.abs(v).toFixed(digits)
+  // a value that rounds to zero gets no sign ("0.0%", not "+0.0%" or "−0.0%")
+  if (Number(s) === 0) return `${s}%`
+  return `${v < 0 ? MINUS : '+'}${s}%`
 }
 
 /** Weights and shares: 2 dp, unsigned (6.23%) */

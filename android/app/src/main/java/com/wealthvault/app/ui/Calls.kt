@@ -211,7 +211,8 @@ fun <T> Seg(options: List<Pair<T, String>>, selected: T, modifier: Modifier = Mo
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (on) Wv.c.surface else Color.Transparent)
                     .clickable { onSelect(value) }
-                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                    // a little taller than the text: easier to hit with a thumb
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
             )
         }
     }
@@ -247,7 +248,8 @@ fun LazyListScope.callsView(
     val waiting = rows.filter { it.waiting }
 
     item {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // stacked toggles get room between them, so a tap cannot land on the row above or below
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Seg(listOf("buy" to "Buy calls  ${counts[state.window]}", "sell" to "Sell calls  ${sells.count { !it.waiting }}"), state.side) { state.side = it }
             if (state.side == "buy") {
                 Seg(

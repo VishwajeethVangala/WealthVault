@@ -215,19 +215,27 @@ data class MomentumAnalysis(
     val name: String? = null,
     val as_of: String = "",
     val last_price: Double = 0.0,
+    val candles_used: Int = 0,
     val live_bar: Boolean = false,
     val trend_score: Int = 0,
     val trend_max_score: Int = 0,
     val trend_verdict: String = "",
     val trend_checks: List<TrendCheck> = emptyList(),
+    val sma_20: Double? = null,
     val sma_50: Double? = null,
     val sma_200: Double? = null,
     val pct_from_sma50: Double? = null,
     val pct_from_sma200: Double? = null,
+    val sma200_slope_pct: Double? = null,
     val cross_state: String? = null,
     val days_since_cross: Int? = null,
+    val macd: Double? = null,
+    val macd_signal: Double? = null,
+    val macd_histogram: Double? = null,
     val returns: Map<String, Double?> = emptyMap(),
+    val volatility_6m: Double? = null,
     val volatility_12m: Double? = null,
+    val risk_adjusted_6m: Double? = null,
     val risk_adjusted_12m: Double? = null,
     val rsi_14: Double? = null,
     val high_52w: Double? = null,
@@ -261,6 +269,10 @@ data class StrategyStatus(
     val pct_above_dma: Double? = null,
     val dma: Double? = null,
     val prior_ath: Double? = null,
+    val close: Double? = null,
+    val days_since_below_dma: Int? = null,
+    val ut_stop: Double? = null,
+    val exit_ema: Double? = null,
 )
 
 @Serializable
@@ -280,6 +292,8 @@ data class StrategyStats(
     val profit_factor: Double? = null,
     val avg_bars_held: Double? = null,
     val exposure_pct: Double = 0.0,
+    val signal_exits: Int = 0,
+    val stop_exits: Int = 0,
 )
 
 @Serializable
@@ -295,8 +309,39 @@ data class StrategyTrade(
     val is_open: Boolean = false,
 )
 
+/** One day of a backtest: the price, the strategy's lines and signals, and both equity curves. Swing and ATH fill different fields. */
 @Serializable
-data class StrategyBar(val date: String = "", val close: Double = 0.0, val equity: Double = 0.0, val buy_hold: Double = 0.0)
+data class StrategyBar(
+    val date: String = "",
+    val high: Double = 0.0,
+    val low: Double = 0.0,
+    val close: Double = 0.0,
+    val equity: Double = 0.0,
+    val buy_hold: Double = 0.0,
+    val buy: Boolean = false,
+    val sell: Boolean = false,
+    val stop_exit: Boolean = false,
+    val stop_level: Double? = null,
+    val regime: Boolean = false,
+    val sma_fast: Double? = null,
+    val sma_slow: Double? = null,
+    val exit_ema: Double? = null,
+    val ut_stop: Double? = null,
+    val dma: Double? = null,
+    val ath: Double? = null,
+    val in_window: Boolean = false,
+)
+
+/** The settings a backtest ran with (Swing and ATH use different ones). */
+@Serializable
+data class StrategyParams(
+    val use_stop: Boolean? = null,
+    val initial_capital: Double = 0.0,
+    val commission_pct: Double? = null,
+    val capital_per_trade: Double? = null,
+    val dma_length: Int? = null,
+    val window_bars: Int? = null,
+)
 
 @Serializable
 data class StrategyResult(
@@ -307,6 +352,10 @@ data class StrategyResult(
     val test_end: String = "",
     val bars_tested: Int = 0,
     val live_bar: Boolean = false,
+    val live_price: Double? = null,
+    val partial_bar_excluded: Boolean = false,
+    val history_start: String? = null,
+    val params: StrategyParams = StrategyParams(),
     val status: StrategyStatus = StrategyStatus(),
     val stats: StrategyStats = StrategyStats(),
     val trades: List<StrategyTrade> = emptyList(),
@@ -340,8 +389,18 @@ data class CredentialSaveResponse(val saved_fields: List<String> = emptyList(), 
 
 // --- overview panels ---------------------------------------------------------------------------------------
 
+/** One day's portfolio value and money invested; `classes` is that day's value of each asset class. */
 @Serializable
-data class HistoryPoint(val date: String = "", val value: Double = 0.0, val invested: Double = 0.0)
+data class HistoryPoint(val date: String = "", val value: Double = 0.0, val invested: Double = 0.0, val classes: Map<String, Double> = emptyMap())
+
+@Serializable
+data class Ohlc(val open: Double = 0.0, val high: Double = 0.0, val low: Double = 0.0, val close: Double = 0.0)
+
+@Serializable
+data class MarketQuote(val last_price: Double = 0.0, val ohlc: Ohlc? = null)
+
+@Serializable
+data class MarketQuotesResponse(val quotes: Map<String, MarketQuote> = emptyMap())
 
 @Serializable
 data class Targets(val targets: Map<String, Double> = emptyMap())
@@ -367,3 +426,9 @@ data class PortfolioRisk(
 
 @Serializable
 data class RiskResponse(val risk: PortfolioRisk? = null, val equity_value: Double = 0.0, val measured_stocks: Int = 0, val total_stocks: Int = 0)
+
+/** Inputs for a Swing V2.1 run (the web's defaults); the rest of the script is fixed. */
+data class SwingOptions(val years: Int = 5, val utKey: Double = 1.0, val utAtrPeriod: Int = 10, val useStop: Boolean = true, val stopMult: Double = 2.0)
+
+/** Inputs for a 200-DMA ATH breakout run (the web's defaults). */
+data class AthOptions(val startDate: String = "2015-01-01", val dmaLength: Int = 200, val windowBars: Int = 200, val capital: Double = 50000.0)

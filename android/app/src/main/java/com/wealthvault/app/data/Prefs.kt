@@ -3,6 +3,7 @@ package com.wealthvault.app.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.wealthvault.app.BuildConfig
@@ -13,7 +14,7 @@ import kotlinx.coroutines.flow.map
 private val Context.store by preferencesDataStore("wealthvault")
 
 /** What the app keeps on the phone: the server address, the sign-in token, who is signed in, and the theme. */
-data class Session(val baseUrl: String, val token: String?, val name: String, val email: String, val theme: String, val lock: Boolean = false)
+data class Session(val baseUrl: String, val token: String?, val name: String, val email: String, val theme: String, val lock: Boolean = false, val hideAmounts: Boolean = true)
 
 class Prefs(private val context: Context) {
     private val baseUrl = stringPreferencesKey("base_url")
@@ -23,6 +24,9 @@ class Prefs(private val context: Context) {
     private val email = stringPreferencesKey("email")
     private val theme = stringPreferencesKey("theme") // system | light | dark
     private val lock = booleanPreferencesKey("app_lock") // ask for fingerprint / face / screen lock on opening
+    private val hideAmounts = booleanPreferencesKey("hide_amounts") // the eye switch
+    private val opens = intPreferencesKey("opens") // app openings, for the review prompt
+    private val reviewAskedAt = intPreferencesKey("review_asked_at") // the opening count when the review was last offered
 
     val session: Flow<Session> = context.store.data.map {
         Session(
@@ -33,6 +37,8 @@ class Prefs(private val context: Context) {
             email = it[email] ?: "",
             theme = it[theme] ?: "system",
             lock = it[lock] ?: false,
+            // amounts start hidden; they show only once switched on with the eye button
+            hideAmounts = it[hideAmounts] ?: true,
         )
     }
 
@@ -64,6 +70,25 @@ class Prefs(private val context: Context) {
 
     suspend fun saveLock(on: Boolean) {
         context.store.edit { it[lock] = on }
+    }
+
+    suspend fun saveHideAmounts(on: Boolean) {
+        context.store.edit { it[hideAmounts] = on }
+    }
+
+    /** Counts this opening and returns the new count. */
+    suspend fun countOpen(): Int {
+        var n = 0
+        context.store.edit { n = (it[opens] ?: 0) + 1; it[opens] = n }
+        return n
+    }
+
+    suspend fun reviewAskedAt(): Int = context.store.data.first()[reviewAskedAt] ?: 0
+
+    suspend fun opens(): Int = context.store.data.first()[opens] ?: 0
+
+    suspend fun markReviewAsked(atOpen: Int) {
+        context.store.edit { it[reviewAskedAt] = atOpen }
     }
 
     suspend fun saveTheme(value: String) {
