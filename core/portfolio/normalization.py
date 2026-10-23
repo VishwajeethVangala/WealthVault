@@ -125,7 +125,9 @@ class NormalizationService:
         else:
             # Standard Zerodha Kite Equity schema
             symbol = str(item.get("tradingsymbol", "UNKNOWN")).upper()
-            quantity = _safe_float(item.get("quantity"), 0.0)
+            # Kite lists shares bought but not yet settled separately (`t1_quantity`); they are owned, and Kite's own
+            # `pnl` already counts them, so a holding with settled quantity 0 and t1 > 0 is a real position.
+            quantity = _safe_float(item.get("quantity"), 0.0) + _safe_float(item.get("t1_quantity"), 0.0)
             average_price = _safe_float(item.get("average_price"), 0.0)
             last_price = _safe_float(item.get("last_price"), average_price)
             current_value = round(quantity * last_price, 2)

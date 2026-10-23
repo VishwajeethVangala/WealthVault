@@ -37,6 +37,44 @@ class TestIndmoneyClient(unittest.TestCase):
         self.assertIn("auth_url", status)
         self.assertIn("https://mcp.indmoney.com/authorize", status["auth_url"])
 
+    def test_capped_member_lists_are_completed(self):
+        """INDmoney lists only a member's top 25 holdings in the whole-family view; the rest is fetched per member."""
+        def stocks(n):
+            return [{"id": f"S{i}", "name": f"Stock {i}"} for i in range(n)]
+
+        overall = {"family_asset_holdings": [
+            {"name": "A", "asset": "indian_stock", "holdings": stocks(25), "holdings_omitted": 13},
+            {"name": "A", "asset": "us_stock", "holdings": stocks(3)},
+            {"name": "B", "asset": "indian_stock", "holdings": stocks(25), "holdings_omitted": 7},
+        ]}
+        calls = []
+
+        async def fake_call(name, arguments=None):
+            calls.append(dict(arguments or {}))
+            if arguments.get("family_member") is None:
+                return overall
+            n = {"A": 38, "B": 32}[arguments["family_member"]]
+            return {"family_asset_holdings": [{"name": arguments["family_member"], "asset": arguments["asset"], "holdings": stocks(n)}]}
+
+        with patch.object(self.client, "call_tool", side_effect=fake_call):
+            data = asyncio.run(self.client.get_family_asset_holdings("overall"))
+        sizes = [(m["name"], m["asset"], len(m["holdings"])) for m in data["family_asset_holdings"]]
+        self.assertEqual(sizes, [("A", "indian_stock", 38), ("A", "us_stock", 3), ("B", "indian_stock", 32)])
+        # one whole-family call, then one per capped list; the uncapped US list is not asked for again
+        self.assertEqual(len(calls), 3)
+
+    def test_capped_list_kept_when_the_full_read_fails(self):
+        overall = {"family_asset_holdings": [{"name": "A", "asset": "indian_stock", "holdings": [{"id": "S1"}], "holdings_omitted": 5}]}
+
+        async def fake_call(name, arguments=None):
+            if arguments.get("family_member") is None:
+                return overall
+            raise RuntimeError("boom")
+
+        with patch.object(self.client, "call_tool", side_effect=fake_call):
+            data = asyncio.run(self.client.get_family_asset_holdings("overall"))
+        self.assertEqual(len(data["family_asset_holdings"][0]["holdings"]), 1)
+
     def test_transform_live_payload_deduplication(self):
         raw_payload = {
             "overall": {

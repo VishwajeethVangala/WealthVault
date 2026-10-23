@@ -450,7 +450,35 @@ class IndmoneyMCPClient:
     async def get_family_asset_holdings(self, asset: str = "overall") -> Dict[str, Any]:
         """Retrieve overall family asset holdings from INDmoney MCP."""
         data = await self.call_tool("get_family_asset_holdings", {"asset": asset})
-        return data if isinstance(data, dict) else {}
+        if not isinstance(data, dict):
+            return {}
+        return await self._complete_capped_lists(data, asset)
+
+    async def _complete_capped_lists(self, data: Dict[str, Any], asset: str) -> Dict[str, Any]:
+        """INDmoney's whole-family view lists only each member's top 25 holdings by value and says how many it left
+        out (`holdings_omitted`). For every member with omitted holdings, ask again for that member alone, which
+        returns the complete list, and put it in place of the capped one."""
+        members = data.get("family_asset_holdings")
+        if not isinstance(members, list):
+            return data
+        for member in members:
+            if not isinstance(member, dict) or not member.get("holdings_omitted"):
+                continue
+            name, kind = member.get("name"), member.get("asset")
+            if not name or not kind:
+                continue
+            try:
+                full = await self.call_tool("get_family_asset_holdings", {"asset": kind, "family_member": name})
+            except Exception as exc:  # keep the capped list rather than lose the whole sync
+                logger.warning("INDmoney full %s list for %s not read: %s", kind, name, exc)
+                continue
+            for entry in (full.get("family_asset_holdings") or []) if isinstance(full, dict) else []:
+                if isinstance(entry, dict) and entry.get("name") == name and entry.get("asset") == kind and isinstance(entry.get("holdings"), list):
+                    if len(entry["holdings"]) > len(member.get("holdings") or []):
+                        member["holdings"] = entry["holdings"]
+                        member.pop("holdings_omitted", None)
+                    break
+        return data
 
     async def close(self) -> None:
         if self._http_session and not self._http_session.closed:

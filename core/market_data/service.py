@@ -15,6 +15,7 @@ import logging
 import shutil
 import time
 from typing import Any, Dict, List, Optional, Tuple, Union
+from zoneinfo import ZoneInfo
 
 from mcp import ClientSession
 from core.market_data.kite_client import get_kite_mcp_client
@@ -94,6 +95,29 @@ class MCPMarketDataService:
         if when.tzinfo is None:
             when = when.replace(tzinfo=timezone.utc)
         return (datetime.now(timezone.utc) - when).total_seconds() <= seconds
+
+    @staticmethod
+    def _bought_this_session(h: Holding) -> bool:
+        """True when the broker itself measures this holding's day from the buy price.
+
+        INDmoney reports a day change equal to the total profit for shares bought during the current session. The
+        exchange's previous close then predates the purchase (for a stock bought on its listing day it can even be
+        the issue price), so applying it would credit the holder with a move they never held through."""
+        if h.day_pnl is None or h.average_price <= 0:
+            return False
+        # a holding straight from a sync has no timestamp yet: it was read just now
+        if h.last_price_updated_at:
+            try:
+                when = datetime.fromisoformat(h.last_price_updated_at)
+            except ValueError:
+                return False
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=timezone.utc)
+            ist = ZoneInfo("Asia/Kolkata")
+            if when.astimezone(ist).date() != datetime.now(ist).date():
+                return False  # read on an earlier day: that day change belongs to that day
+        invested = h.quantity * h.average_price
+        return abs(h.day_pnl - (h.pnl or 0.0)) <= max(1.0, 0.0005 * abs(invested))
 
     @staticmethod
     def format_instrument(symbol: str, asset_class: Optional[Union[AssetClass, str]] = None) -> Optional[str]:
@@ -240,7 +264,11 @@ class MCPMarketDataService:
                 new_pnl = round(new_val - invested, 2)
                 # A zero quote change (e.g. market closed, weekend) must not erase the broker's
                 # own day change for the last session.
-                if (quote.day_change and quote.day_change != 0) or (quote.close_price or 0) > 0:
+                if self._bought_this_session(h):
+                    # day change = change since the purchase, which is the total profit
+                    day_pnl = new_pnl
+                    day_pct = round(new_pnl / invested * 100.0, 2) if invested > 0 else None
+                elif (quote.day_change and quote.day_change != 0) or (quote.close_price or 0) > 0:
                     # A real previous close makes the quote authoritative, even when the change is exactly zero
                     day_pnl = round(h.quantity * quote.day_change, 2)
                     day_pct = quote.day_change_percentage

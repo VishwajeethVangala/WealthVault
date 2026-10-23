@@ -1,6 +1,7 @@
 import asyncio
 import unittest
 import time
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 from core.models import Holding, AssetClass, QuoteItem
 from core.market_data.service import MarketQuoteCache, MCPMarketDataService
@@ -72,6 +73,37 @@ class TestMarketData(unittest.TestCase):
         self.assertEqual(h.day_pnl, 200.0)  # 10 * 20.0
         self.assertEqual(h.day_change_percentage, 1.06)
         self.assertEqual(h.data_freshness, "live")
+
+    def test_day_change_of_a_holding_bought_this_session_is_its_total_profit(self):
+        """A stock bought on listing day: the exchange's previous close is the issue price, not what the holder paid."""
+        service = MCPMarketDataService()
+        mock_quotes = {"NSE:TONBO": QuoteItem(instrument="NSE:TONBO", last_price=1133.8, day_change=433.8, day_change_percentage=61.97, close_price=700.0)}
+        service.fetch_live_quotes = AsyncMock(return_value=(mock_quotes, True))
+        now = datetime.now(timezone.utc).isoformat()
+
+        def holding(**kw):
+            base = dict(holding_id="h1", owner_id="u", connection_id="c", instrument_symbol="TONBO", asset_class=AssetClass.EQUITY,
+                        quantity=20, average_price=1113.55, current_value=22676.0, pnl=405.0, currency="INR", last_price_updated_at=now)
+            base.update(kw)
+            return Holding(**base)
+
+        # the broker's own day change equals its total profit: bought today
+        h = asyncio.run(service.enrich_holdings_with_live_quotes([holding(day_pnl=405.0, day_change_percentage=1.82)]))[0][0]
+        self.assertEqual(h.day_pnl, 405.0)
+        self.assertEqual(h.day_change_percentage, 1.82)
+
+        # straight from a sync: no timestamp yet, which means it was read just now
+        h = asyncio.run(service.enrich_holdings_with_live_quotes([holding(day_pnl=405.0, day_change_percentage=1.82, last_price_updated_at=None)]))[0][0]
+        self.assertEqual(h.day_pnl, 405.0)
+
+        # a different broker figure: held through the previous close, so the exchange's change applies
+        h = asyncio.run(service.enrich_holdings_with_live_quotes([holding(day_pnl=8676.0, day_change_percentage=61.97)]))[0][0]
+        self.assertEqual(h.day_pnl, 8676.0)
+
+        # equal figures but read on an earlier day: that day change belongs to that day, so the quote is used
+        old = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+        h = asyncio.run(service.enrich_holdings_with_live_quotes([holding(day_pnl=405.0, last_price_updated_at=old)]))[0][0]
+        self.assertEqual(h.day_pnl, 8676.0)
 
     def test_enrich_holdings_fallback_on_mcp_error(self):
         service = MCPMarketDataService()

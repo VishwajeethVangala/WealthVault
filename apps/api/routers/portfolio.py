@@ -7,6 +7,7 @@ Provides endpoints for:
 """
 
 from datetime import datetime, timezone, timedelta
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 import uuid
@@ -241,7 +242,7 @@ async def get_portfolio_holdings(
     ),
     indmoney_live: bool = Query(
         default=False,
-        description="Also re-read INDmoney holdings' prices from INDmoney (US stocks, NPS), for pages that poll live",
+        description="Kept for older clients: INDmoney holdings are now always re-read from INDmoney (prices and its own day change)",
     ),
     current_user_id: str = Depends(get_current_user),
 ) -> List[Holding]:
@@ -263,8 +264,13 @@ async def get_portfolio_holdings(
             filtered = [h for h in persisted if "indmoney" in h.connection_id.lower() or h.holding_id.startswith("hld_ind")]
 
         if refresh_live:
-            if indmoney_live:
-                filtered = await overlay_indmoney_live(current_user_id, filtered)
+            # INDmoney knows when its shares were bought, so its own prices and day change are re-read on every
+            # read (the Overview and the phone app included), not only on pages that poll live. The stored day
+            # figure can predate that knowledge. A slow INDmoney must not hold the page up: stored values stay.
+            try:
+                filtered = await asyncio.wait_for(overlay_indmoney_live(current_user_id, filtered), timeout=8.0)
+            except asyncio.TimeoutError:
+                logger.warning("INDmoney live re-read timed out; showing stored INDmoney values")
             try:
                 enriched, _ = await market_service.enrich_holdings_with_live_quotes(filtered, client=await get_user_kite_client(current_user_id))
                 return await apply_mf_day_changes(enriched)
