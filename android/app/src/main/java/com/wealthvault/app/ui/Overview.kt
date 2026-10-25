@@ -213,7 +213,6 @@ fun OverviewScreen(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { PageTitle("Overview", summary.data?.snapshot?.as_of_date?.let { "As of ${longDate(it)}" } ?: "Your whole portfolio") }
-                    EyeButton(vm)
                     PrimaryButton(if (syncing == "all") "Syncing" else "Sync all", busy = syncing == "all") { vm.syncAll() }
                 }
             }

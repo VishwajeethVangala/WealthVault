@@ -235,7 +235,6 @@ fun BrokersScreen(vm: AppViewModel, avm: AnalysisViewModel) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { PageTitle("Brokers", "Read-only access. Nothing here can place orders or move money.") }
-                    EyeButton(vm)
                     PrimaryButton("Add") { avm.brokerMessage.value = null; dialog = BrokerDialog.Pick }
                 }
             }

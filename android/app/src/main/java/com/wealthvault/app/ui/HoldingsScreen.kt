@@ -41,6 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -107,7 +110,7 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
     var asc by rememberSaveable { mutableStateOf(false) }
     var grouped by rememberSaveable { mutableStateOf(true) }
     var pnl by rememberSaveable { mutableStateOf("all") }
-    val expanded = remember { mutableStateListOf<String>() }
+    val expanded = rememberSaveable(saver = listSaver<SnapshotStateList<String>, String>(save = { it.toList() }, restore = { it.toMutableStateList() })) { mutableStateListOf<String>() }
     val context = LocalContext.current
 
     val all = holdingsRes.data.orEmpty()
@@ -136,7 +139,6 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { PageTitle("Holdings", all.map { brokerKeyOf(it.connection_id) }.distinct().size.let { n -> "Merged across $n broker${if (n == 1) "" else "s"} · ${compact(totalValue)}" }) }
-                    EyeButton(vm)
                 }
             }
             if (holdingsRes.loading && all.isEmpty()) item { Note("Loading holdings…") }

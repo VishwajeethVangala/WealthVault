@@ -58,7 +58,7 @@ private const val ASK_EVERY = 30
 
 /**
  * Asks for a Play Store review after a few openings, in Google's own in-app dialog. Google decides whether the
- * dialog actually shows (it limits how often a person sees it), so the "Rate WealthVault" link under More stays
+ * dialog actually shows (it limits how often a person sees it), so the "Rate WealthVault" link in the profile menu stays
  * as the way to rate at any time.
  */
 suspend fun maybeAskForReview(activity: Activity, vm: AppViewModel) {

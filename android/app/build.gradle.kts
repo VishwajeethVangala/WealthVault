@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -21,8 +21,8 @@ android {
         applicationId = "com.vangala.wealthvault" // the name registered on Google Play; code stays in com.wealthvault.app
         minSdk = 26
         targetSdk = 36 // Google Play requires the latest API level
-        versionCode = 12
-        versionName = "0.3.9"
+        versionCode = 13
+        versionName = "0.3.10"
         buildConfigField("String", "DEFAULT_BASE_URL", "\"${(project.findProperty("wvBaseUrl") as String?) ?: ""}\"")
     }
 

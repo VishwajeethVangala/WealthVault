@@ -139,10 +139,15 @@ private fun Loading(text: String) {
 // --- momentum ------------------------------------------------------------------------------------------------
 
 @Composable
-fun MomentumScreen(vm: AppViewModel, avm: AnalysisViewModel, symbol: String?, onStrategies: (String) -> Unit) {
+fun MomentumScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisViewModel.StockRequest?, onStrategies: (String) -> Unit) {
     val res by avm.momentum.collectAsState()
     val picks = quickPicks(vm, avm)
-    LaunchedEffect(symbol) { if (!symbol.isNullOrBlank() && avm.momentum.value.data?.instrument?.endsWith(symbol.substringAfter(':')) != true) avm.analyse(symbol) }
+    val symbol = request?.takeIf { it.kind == "momentum" }?.symbol
+    LaunchedEffect(request?.id) {
+        avm.takeStockRequest("momentum")?.let { r ->
+            if (avm.momentum.value.data?.instrument?.endsWith(r.symbol.substringAfter(':')) != true) avm.analyse(r.symbol)
+        }
+    }
     LaunchedEffect(Unit) { if (avm.signals.value.data == null) avm.loadSignals() }
     val m = res.data
 
@@ -402,14 +407,16 @@ private fun StrategyInputs(avm: AnalysisViewModel, ath: Boolean, busy: Boolean, 
 }
 
 @Composable
-fun StrategyScreen(vm: AppViewModel, avm: AnalysisViewModel, symbol: String?) {
+fun StrategyScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisViewModel.StockRequest?) {
     var tab by rememberSaveable { mutableStateOf("swing") }
-    var current by rememberSaveable { mutableStateOf(symbol.orEmpty()) }
+    var current by rememberSaveable { mutableStateOf(request?.takeIf { it.kind == "strategy" }?.symbol.orEmpty()) }
     val swing by avm.swing.collectAsState()
     val ath by avm.ath.collectAsState()
     val res = if (tab == "ath") ath else swing
     val picks = quickPicks(vm, avm)
-    LaunchedEffect(symbol) { if (!symbol.isNullOrBlank()) { current = symbol; avm.runStrategy("swing", symbol); avm.runStrategy("ath", symbol) } }
+    LaunchedEffect(request?.id) {
+        avm.takeStockRequest("strategy")?.let { r -> current = r.symbol; avm.runStrategy("swing", r.symbol); avm.runStrategy("ath", r.symbol) }
+    }
     LaunchedEffect(Unit) { if (avm.signals.value.data == null) avm.loadSignals() }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(12.dp)) {

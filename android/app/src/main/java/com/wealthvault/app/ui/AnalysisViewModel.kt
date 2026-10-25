@@ -287,5 +287,23 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
     /** Where a tap on the Overview's signal tiles should land on the Signals tab (read once, then cleared). */
     val signalsPreset = MutableStateFlow<SignalsPreset?>(null)
 
+    /** A stock another page asked to open on the Momentum or Strategy tab. Each tab reads it once, then keeps its own state. */
+    data class StockRequest(val kind: String, val symbol: String, val id: Long)
+
+    val stockRequest = MutableStateFlow<StockRequest?>(null)
+    private val handledRequest = mutableMapOf<String, Long>()
+
+    fun requestStock(kind: String, symbol: String) {
+        stockRequest.value = StockRequest(kind, symbol, System.nanoTime())
+    }
+
+    /** The pending request for this tab, or null when there is none or it was already taken. */
+    fun takeStockRequest(kind: String): StockRequest? {
+        val r = stockRequest.value ?: return null
+        if (r.kind != kind || handledRequest[kind] == r.id) return null
+        handledRequest[kind] = r.id
+        return r
+    }
+
     fun saveTargets(values: Map<String, Double>) = run(targets) { api.saveTargets(values).targets }
 }
