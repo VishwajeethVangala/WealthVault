@@ -46,7 +46,8 @@ def _score(want: Set[str], candidate_name: str) -> float:
     return sum(1 for t in cand if _matches(t, want)) / len(cand)
 
 
-async def _search(client: Any, name: str) -> List[Dict[str, Any]]:
+async def _search(client: Any, name: str) -> Optional[List[Dict[str, Any]]]:
+    """Kite's matches for a company name; None when the search itself failed (that says nothing about the stock)."""
     toks = _tokens(name)
     found: Dict[str, Dict[str, Any]] = {}
     for q in dict.fromkeys([" ".join(toks[:2]), toks[0] if toks else ""]):
@@ -56,7 +57,7 @@ async def _search(client: Any, name: str) -> List[Dict[str, Any]]:
             rows = await client.search_instruments(q, "name")
         except Exception as exc:  # network / auth: let the caller fall back
             logger.warning("Instrument search failed for %s: %s", name, exc)
-            return []
+            return None
         for r in rows:
             if r.get("instrument_type") == "EQ" and r.get("exchange") in ("NSE", "BSE"):
                 found[r.get("id") or f"{r.get('exchange')}:{r.get('tradingsymbol')}"] = r
@@ -113,7 +114,10 @@ async def resolve_indmoney_symbols(symbols: List[str], client: Optional[Any]) ->
                 pass
         if client is None:
             continue  # cache-only lookup
-        kite_id = best_match(name, await _search(client, name))
+        rows = await _search(client, name)
+        if rows is None:
+            continue  # Kite was unreachable (e.g. logged out): not a "no match", so nothing is remembered
+        kite_id = best_match(name, rows)
         try:
             await repo.save(code, kite_id or "", name)
         except Exception as exc:

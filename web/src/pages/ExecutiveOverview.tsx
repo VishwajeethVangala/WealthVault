@@ -39,6 +39,20 @@ export const ExecutiveOverview: React.FC = () => {
   const activeBroker = searchParams.get('broker') || 'all'
   const activeAssetClass = searchParams.get('assetClass') || 'all'
 
+  // The login banner must go once Kite is authorised (in another tab): re-check when the tab comes back and each minute
+  useEffect(() => {
+    const check = () => fetchBrokerSessions().then(setSessions).catch(() => {})
+    const onVisible = () => {
+      if (!document.hidden) check()
+    }
+    const t = window.setInterval(onVisible, 60_000)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.clearInterval(t)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
+
   useEffect(() => {
     fetchBrokerSessions().then(setSessions).catch(() => setSessions([]))
     fetchTargets()

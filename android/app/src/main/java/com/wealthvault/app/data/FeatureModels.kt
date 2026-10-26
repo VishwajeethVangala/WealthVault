@@ -4,6 +4,10 @@ import kotlinx.serialization.Serializable
 
 /** Shapes for the analysis features (signals, Stage 2, momentum, strategies), brokers and the overview panels. */
 
+/** A stock offered while typing in the Momentum and Strategy boxes; `symbol` is what those calls take. */
+@Serializable
+data class StockSuggestion(val symbol: String = "", val name: String = "", val exchange: String = "")
+
 // --- equity signals (same per-stock reading the web app shows) --------------------------------------------
 
 @Serializable

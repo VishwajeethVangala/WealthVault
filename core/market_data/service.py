@@ -18,11 +18,14 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from zoneinfo import ZoneInfo
 
 from mcp import ClientSession
-from core.market_data.kite_client import get_kite_mcp_client
+from core.market_data.indmoney_market import fetch_quotes as fetch_indmoney_quotes, get_user_indmoney_client
+from core.market_data.kite_client import KiteAuthRequiredError, get_kite_mcp_client
 from core.market_data.symbol_resolver import resolve_indmoney_symbols, split_indmoney_symbol
 from core.models import AssetClass, Holding, QuoteItem
 
 logger = logging.getLogger("wealthvault.market_data.service")
+
+INDMONEY_FALLBACK_SECONDS = 8.0
 
 NPX_BIN = shutil.which("npx") or shutil.which("npx.cmd") or "npx"
 
@@ -166,6 +169,7 @@ class MCPMarketDataService:
         batch_size = 250
         batches = [missing[i : i + batch_size] for i in range(0, len(missing), batch_size)]
         client = client or get_kite_mcp_client()
+        kite_login_lapsed = False
 
         for batch in batches:
             try:
@@ -216,7 +220,24 @@ class MCPMarketDataService:
                     live_fetched = True
             except Exception as exc:
                 logger.warning("Live MCP market quotes query note (%s): %s", self.server_url, exc)
+                kite_login_lapsed = isinstance(exc, KiteAuthRequiredError)
                 break
+
+        # Only when Kite's login has lapsed (it does daily): INDmoney, when connected, prices what is missing. A live
+        # Kite session is never second-guessed, and a slow INDmoney must not hold up the page.
+        owner_id = getattr(client, "owner_id", None)
+        left = [i for i in missing if i not in combined]
+        if kite_login_lapsed and left and owner_id:
+            try:
+                ind_client = await get_user_indmoney_client(owner_id)
+                if ind_client is not None:
+                    found = await asyncio.wait_for(fetch_indmoney_quotes(ind_client, left), timeout=INDMONEY_FALLBACK_SECONDS)
+                    for inst_key, item in found.items():
+                        self.cache.set(inst_key, item)
+                        combined[inst_key] = item
+                        live_fetched = True
+            except Exception as exc:
+                logger.warning("INDmoney quote fallback unavailable: %s", exc)
 
         return combined, live_fetched
 

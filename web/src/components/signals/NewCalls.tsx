@@ -127,9 +127,13 @@ export const buildBuys = (sources: CallSource[], sessions: string[], window: Buy
   return out.sort((x, y) => y.date.localeCompare(x.date) || x.src.name.localeCompare(y.src.name))
 }
 
-/** Sells: trades the strategies closed inside the window, plus Swing sells signalled and not yet filled. */
-export const buildSells = (sources: CallSource[], sessions: string[], fmt: Fmt, sessionOpen: boolean): Row[] => {
+/**
+ * Sells: trades the strategies closed inside the window, plus Swing sells signalled and not yet filled. Window
+ * 'open' means every closed trade on record (the latest few per stock and strategy), however long ago.
+ */
+export const buildSells = (sources: CallSource[], sessions: string[], fmt: Fmt, sessionOpen: boolean, window: BuyWindow = 7): Row[] => {
   const out: Row[] = []
+  const inWindow = (d: string) => window === 'open' || sessions.includes(d)
   const p = (v: number | null | undefined) => fmt.price(v)
   const ended = (entryDate: string, entryPrice: number | null | undefined, exitPrice: number | null | undefined, pnl: number | null | undefined) =>
     `Bought ${short(entryDate)} at ${p(entryPrice)}, sold ${p(exitPrice)}${pnl != null ? ` (${signed(pnl)})` : ''}`
@@ -137,7 +141,7 @@ export const buildSells = (sources: CallSource[], sessions: string[], fmt: Fmt, 
   sources.forEach((src) => {
     const { sig } = src
     sig?.swing?.exits?.forEach((e, i) => {
-      if (!sessions.includes(e.exit_date)) return
+      if (!inWindow(e.exit_date)) return
       const stop = e.reason === 'ATR STOP'
       out.push({
         key: `${src.code}-swing-exit-${i}`,
@@ -173,7 +177,7 @@ export const buildSells = (sources: CallSource[], sessions: string[], fmt: Fmt, 
       })
     }
     sig?.ath?.exits?.forEach((e, i) => {
-      if (!sessions.includes(e.exit_date)) return
+      if (!inWindow(e.exit_date)) return
       out.push({
         key: `${src.code}-ath-exit-${i}`,
         src,
@@ -355,7 +359,15 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
   const hasDetail = sources.some((s) => s.sig?.last_sessions?.length)
 
   const buys = useMemo(() => buildBuys(pool, window === 7 ? s7 : s2, window, fmt, sessionOpen), [pool, window, s2, s7, fmt, sessionOpen])
-  const sells = useMemo(() => buildSells(pool, s7, fmt, sessionOpen), [pool, s7, fmt, sessionOpen])
+  const sells = useMemo(() => buildSells(pool, window === 7 ? s7 : s2, fmt, sessionOpen, window), [pool, window, s2, s7, fmt, sessionOpen])
+  const sellCounts = useMemo(
+    () => ({
+      2: buildSells(pool, s2, fmt, sessionOpen, 2).filter((r) => !r.waiting).length,
+      7: buildSells(pool, s7, fmt, sessionOpen, 7).filter((r) => !r.waiting).length,
+      open: buildSells(pool, s2, fmt, sessionOpen, 'open').filter((r) => !r.waiting).length,
+    }),
+    [pool, s2, s7, fmt, sessionOpen],
+  )
   const counts = useMemo(
     () => ({
       2: buildBuys(pool, s2, 2, fmt, sessionOpen).filter((r) => !r.waiting).length,
@@ -386,6 +398,11 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
       ? 'Every position that is open now'
       : `Buys filled in the last ${window} sessions${todayNote} (${inWindow.map(longDate).join(', ')})`
 
+  const sellLabel =
+    window === 'open'
+      ? 'Every closed trade on record: the latest few per stock and strategy, however long ago'
+      : `Positions the strategies closed in the last ${window} sessions${todayNote} (${inWindow.map(longDate).join(', ')})`
+
   return (
     <div className="calls">
       <div className="calls-bar">
@@ -396,25 +413,23 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
           </button>
           <button type="button" className={side === 'sell' ? 'on' : ''} aria-pressed={side === 'sell'} onClick={() => setSide('sell')}>
             Sell calls
-            <span className="cnt num">{sells.filter((r) => !r.waiting).length}</span>
+            <span className="cnt num">{sellCounts[window]}</span>
           </button>
         </div>
-        {side === 'buy' && (
-          <div className="seg" role="group" aria-label="Period">
-            {(
-              [
-                [2, 'Last 2 sessions'],
-                [7, 'Last 7 sessions'],
-                ['open', 'All open'],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={String(id)} type="button" className={window === id ? 'on' : ''} aria-pressed={window === id} onClick={() => setWindow(id)}>
-                {label}
-                <span className="cnt num">{counts[id]}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="seg" role="group" aria-label="Period">
+          {(
+            [
+              [2, 'Last 2 sessions'],
+              [7, 'Last 7 sessions'],
+              ['open', side === 'buy' ? 'All open' : 'All recorded'],
+            ] as const
+          ).map(([id, label]) => (
+            <button key={String(id)} type="button" className={window === id ? 'on' : ''} aria-pressed={window === id} onClick={() => setWindow(id)}>
+              {label}
+              <span className="cnt num">{(side === 'buy' ? counts : sellCounts)[id]}</span>
+            </button>
+          ))}
+        </div>
         {hasHeld && (
           <label className="chk">
             <input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />
@@ -426,7 +441,7 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
       <p className="calls-intro">
         {side === 'buy'
           ? `${windowLabel}. Signals use today's live price as the latest bar. ${anyLive ? 'Calls tagged Live fired in the session that is still open and can change before the 15:30 close.' : ''}`
-          : `Positions the strategies closed in the last 7 sessions${today && s7.includes(today) ? ' plus today, live' : ''} (${s7.map(longDate).join(', ')}). ${anyLive ? 'Calls tagged Live fired in the session that is still open.' : ''}`}
+          : `${sellLabel}. ${anyLive ? 'Calls tagged Live fired in the session that is still open.' : ''}`}
       </p>
       {side === 'sell' && !hasExitData && <p className="calls-intro">Sell details are not in the saved signals yet. Press Refresh once to load them.</p>}
 
@@ -438,7 +453,7 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
           rows={filled.filter((r) => r.kind === kind)}
           startOpen={expand}
           fmt={fmt}
-          empty={side === 'buy' ? (window === 'open' ? 'No open positions.' : 'No buys filled in this period.') : 'No sells in the last 7 sessions.'}
+          empty={side === 'buy' ? (window === 'open' ? 'No open positions.' : 'No buys filled in this period.') : window === 'open' ? 'No closed trades on record.' : 'No sells in this period.'}
         />
       ))}
       {waiting.length > 0 && (

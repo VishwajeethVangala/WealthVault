@@ -38,6 +38,7 @@ from core.models import (
     SwingStrategyParams,
     SwingStrategyResult,
 )
+from core.market_data.stock_search import MIN_CHARS as MIN_SEARCH_CHARS, search_stocks
 from storage.tables.repositories import BrokerConnectionRepository
 
 logger = logging.getLogger("wealthvault.api.analytics")
@@ -141,6 +142,21 @@ async def _apply_live(
 
 def _qualified_symbol(instrument: Dict[str, Any]) -> str:
     return str(instrument.get("id") or f"{instrument.get('exchange')}:{instrument.get('tradingsymbol')}")
+
+
+@router.get(
+    "/search",
+    status_code=status.HTTP_200_OK,
+    summary="Stock suggestions for a partial name or symbol",
+    description="Up to 8 listed stocks and ETFs whose symbol or company name matches at least 3 typed characters; empty for less.",
+)
+async def search_symbols(
+    q: str = Query(..., max_length=40, description="What has been typed so far, e.g. 'reli'"),
+    current_user_id: str = Depends(get_current_user),
+) -> List[Dict[str, str]]:
+    if len(q.strip()) < MIN_SEARCH_CHARS:
+        return []
+    return await search_stocks(await _get_user_kite_client(current_user_id), current_user_id, q)
 
 
 @router.get(

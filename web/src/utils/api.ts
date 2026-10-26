@@ -121,6 +121,17 @@ export async function fetchPortfolioHoldings(broker = 'all', opts: { indmoneyLiv
   return fetchApi<Holding[]>(`/api/v1/portfolio/holdings${query}`)
 }
 
+export interface StockSuggestion {
+  /** what the Momentum and Strategy calls take: 'INFY', or 'BSE:CODE' for a BSE-only stock */
+  symbol: string
+  name: string
+  exchange: string
+}
+
+export async function searchStocks(q: string): Promise<StockSuggestion[]> {
+  return fetchApi<StockSuggestion[]>(`/api/v1/analytics/search?q=${encodeURIComponent(q)}`)
+}
+
 export async function triggerPortfolioSync(): Promise<any> {
   return fetchApi('/api/v1/portfolio/sync', {
     method: 'POST',

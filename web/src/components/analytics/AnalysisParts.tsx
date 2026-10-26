@@ -1,7 +1,10 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, ExternalLink, RotateCcw, Search } from 'lucide-react'
 import { usePortfolio } from '../../context/PortfolioContext'
 import { classifyAssetClass } from '../../utils/portfolioFilters'
+import { searchStocks, type StockSuggestion } from '../../utils/api'
+
+const SUGGEST_AFTER = 3
 
 // Search box plus quick-pick chips from the user's Indian equity holdings
 export const SymbolPicker: React.FC<{
@@ -14,6 +17,65 @@ export const SymbolPicker: React.FC<{
   children?: React.ReactNode
 }> = ({ value, onChange, onSubmit, loading, activeInstrument, submitLabel, children }) => {
   const { holdings } = usePortfolio()
+
+  // Suggestions appear from the third typed character. Picking one runs it; typing again clears the choice.
+  const [suggestions, setSuggestions] = useState<StockSuggestion[]>([])
+  const [active, setActive] = useState(-1)
+  const [open, setOpen] = useState(false)
+  // why the list is empty after a search, so a silent box never looks broken
+  const [hint, setHint] = useState('')
+  const typed = useRef(false)
+  useEffect(() => {
+    const q = value.trim()
+    if (!typed.current || q.length < SUGGEST_AFTER || /^[A-Z]+:/i.test(q)) {
+      setSuggestions([])
+      setHint('')
+      return
+    }
+    let stale = false
+    const t = window.setTimeout(() => {
+      searchStocks(q)
+        .then((list) => {
+          if (stale) return
+          setSuggestions(list)
+          setHint(list.length === 0 ? 'No stock matches that. Check the spelling, or type the full symbol.' : '')
+          setActive(-1)
+          setOpen(true)
+        })
+        .catch(() => {
+          if (stale) return
+          setSuggestions([])
+          setHint('Suggestions are unavailable right now. Type the full symbol instead.')
+          setOpen(true)
+        })
+    }, 200)
+    return () => {
+      stale = true
+      window.clearTimeout(t)
+    }
+  }, [value])
+  const choose = (s: StockSuggestion) => {
+    typed.current = false
+    setOpen(false)
+    setSuggestions([])
+    onChange(s.symbol)
+    onSubmit(s.symbol)
+  }
+  const onKey = (e: React.KeyboardEvent) => {
+    if (!open || suggestions.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActive((i) => (i + 1) % suggestions.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActive((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+    } else if (e.key === 'Enter' && active >= 0) {
+      e.preventDefault()
+      choose(suggestions[active])
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+    }
+  }
 
   const quickPicks = useMemo(() => {
     const seen = new Set<string>()
@@ -42,11 +104,44 @@ export const SymbolPicker: React.FC<{
           <Search className="w-4 h-4 text-wv-text-3 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="Enter a stock symbol, e.g. INFY, RELIANCE, BSE:500209"
+            onChange={(e) => {
+              typed.current = true
+              onChange(e.target.value)
+            }}
+            onKeyDown={onKey}
+            onFocus={() => setOpen(true)}
+            onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+            role="combobox"
+            aria-expanded={open && suggestions.length > 0}
+            aria-autocomplete="list"
+            autoComplete="off"
+            placeholder="Type a name or symbol (3+ letters), e.g. reli, INFY"
             aria-label="Stock symbol"
             className="w-full pl-10 pr-4 py-2.5 text-sm rounded-xl border border-wv-border bg-wv-surface-2 focus:bg-wv-surface focus:outline-none focus:ring-2 focus:ring-wv-text focus:border-wv-border-strong font-mono uppercase placeholder:normal-case placeholder:font-sans"
           />
+          {open && suggestions.length === 0 && hint && (
+            <div className="absolute z-20 left-0 right-0 top-full mt-1 rounded-xl border border-wv-border bg-wv-surface shadow-lg px-3.5 py-2.5 text-xs text-wv-text-3">{hint}</div>
+          )}
+          {open && suggestions.length > 0 && (
+            <ul role="listbox" className="absolute z-20 left-0 right-0 top-full mt-1 max-h-72 overflow-auto rounded-xl border border-wv-border bg-wv-surface shadow-lg py-1">
+              {suggestions.map((s, i) => (
+                <li
+                  key={s.symbol}
+                  role="option"
+                  aria-selected={i === active}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    choose(s)
+                  }}
+                  onMouseEnter={() => setActive(i)}
+                  className={`flex items-baseline gap-3 px-3.5 py-2 cursor-pointer ${i === active ? 'bg-wv-surface-2' : ''}`}
+                >
+                  <span className="font-mono text-xs font-bold text-wv-text shrink-0">{s.symbol}</span>
+                  <span className="text-xs text-wv-text-3 truncate">{s.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         {children}
         <button

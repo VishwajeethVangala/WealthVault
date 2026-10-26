@@ -179,6 +179,9 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
     val swing = MutableStateFlow(Res<StrategyResult>())
     val ath = MutableStateFlow(Res<StrategyResult>())
 
+    /** Stocks matching what has been typed (3+ characters); empty when the search is unavailable. */
+    suspend fun suggest(q: String): List<com.wealthvault.app.data.StockSuggestion> = runCatching { api.searchStocks(q) }.getOrDefault(emptyList())
+
     fun analyse(symbol: String) = run(momentum, keep = false) { api.momentum(symbol.trim().uppercase()) }
 
     /** The inputs each strategy runs with; the Strategies page edits them. */

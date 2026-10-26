@@ -144,15 +144,17 @@ fun buildBuys(sources: List<CallSource>, sessions: List<String>, window: BuyWind
     return out.sortedWith(compareByDescending<CallRow> { it.date }.thenBy { it.src.name })
 }
 
-fun buildSells(sources: List<CallSource>, sessions: List<String>, fmt: PriceFmt, sessionOpen: Boolean): List<CallRow> {
+/** Window OPEN_WINDOW means every closed trade on record (the latest few per stock and strategy), however long ago. */
+fun buildSells(sources: List<CallSource>, sessions: List<String>, fmt: PriceFmt, sessionOpen: Boolean, window: BuyWindow = 7): List<CallRow> {
     val out = mutableListOf<CallRow>()
+    val inWindow = { d: String -> window == OPEN_WINDOW || d in sessions }
     val ended = { entryDate: String, entryPrice: Double?, exitPrice: Double?, pnl: Double? ->
         "Bought ${shortDate(entryDate)} at ${fmt.price(entryPrice)}, sold ${fmt.price(exitPrice)}" + (pnl?.let { " (${signed1(it)})" } ?: "")
     }
     sources.forEach { src ->
         val sig = src.sig
         sig?.swing?.exits?.forEachIndexed { i, e ->
-            if (e.exit_date !in sessions) return@forEachIndexed
+            if (!inWindow(e.exit_date)) return@forEachIndexed
             val stop = e.reason == "ATR STOP"
             out += CallRow(
                 key = "${src.code}-swing-exit-$i", src = src, kind = Kind.Swing, date = e.exit_date, waiting = false, live = false,
@@ -175,7 +177,7 @@ fun buildSells(sources: List<CallSource>, sessions: List<String>, fmt: PriceFmt,
             )
         }
         sig?.ath?.exits?.forEachIndexed { i, e ->
-            if (e.exit_date !in sessions) return@forEachIndexed
+            if (!inWindow(e.exit_date)) return@forEachIndexed
             out += CallRow(
                 key = "${src.code}-ath-exit-$i", src = src, kind = Kind.Ath, date = e.exit_date, waiting = false,
                 live = sessionOpen && e.exit_date == sig.live_date,
@@ -237,7 +239,12 @@ fun LazyListScope.callsView(
     val today = liveSessionDate(sources)
     val inWindow = if (state.window == 7) s7 else s2
     val buys = buildBuys(pool, inWindow, state.window, fmt, sessionOpen)
-    val sells = buildSells(pool, s7, fmt, sessionOpen)
+    val sells = buildSells(pool, inWindow, fmt, sessionOpen, state.window)
+    val sellCounts = mapOf(
+        2 to buildSells(pool, s2, fmt, sessionOpen, 2).count { !it.waiting },
+        7 to buildSells(pool, s7, fmt, sessionOpen, 7).count { !it.waiting },
+        OPEN_WINDOW to buildSells(pool, s2, fmt, sessionOpen, OPEN_WINDOW).count { !it.waiting },
+    )
     val counts = mapOf(
         2 to buildBuys(pool, s2, 2, fmt, sessionOpen).count { !it.waiting },
         7 to buildBuys(pool, s7, 7, fmt, sessionOpen).count { !it.waiting },
@@ -250,14 +257,13 @@ fun LazyListScope.callsView(
     item {
         // stacked toggles get room between them, so a tap cannot land on the row above or below
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Seg(listOf("buy" to "Buy calls  ${counts[state.window]}", "sell" to "Sell calls  ${sells.count { !it.waiting }}"), state.side) { state.side = it }
-            if (state.side == "buy") {
-                Seg(
-                    listOf(2 to "Last 2 sessions  ${counts[2]}", 7 to "Last 7  ${counts[7]}", OPEN_WINDOW to "All open  ${counts[OPEN_WINDOW]}"),
-                    state.window,
-                    Modifier.horizontalScroll(rememberScrollState()),
-                ) { state.window = it }
-            }
+            Seg(listOf("buy" to "Buy calls  ${counts[state.window]}", "sell" to "Sell calls  ${sellCounts[state.window]}"), state.side) { state.side = it }
+            val shownCounts = if (state.side == "buy") counts else sellCounts
+            Seg(
+                listOf(2 to "Last 2 sessions  ${shownCounts[2]}", 7 to "Last 7  ${shownCounts[7]}", OPEN_WINDOW to "${if (state.side == "buy") "All open" else "All recorded"}  ${shownCounts[OPEN_WINDOW]}"),
+                state.window,
+                Modifier.horizontalScroll(rememberScrollState()),
+            ) { state.window = it }
             if (sources.any { it.held }) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { state.mine = !state.mine }) {
                     Checkbox(state.mine, { state.mine = it }, colors = CheckboxDefaults.colors(checkedColor = Wv.c.accent, uncheckedColor = Wv.c.text3))
@@ -269,7 +275,8 @@ fun LazyListScope.callsView(
             Text(
                 if (state.side == "buy") "$windowLabel. Signals use today's live price as the latest bar." +
                     (if (rows.any { it.live }) " Calls tagged Live fired in the session that is still open and can change before the 15:30 close." else "")
-                else "Positions the strategies closed in the last 7 sessions${if (today != null && today in s7) " plus today, live" else ""} (${s7.joinToString(", ") { weekdayDate(it) }}).",
+                else if (state.window == OPEN_WINDOW) "Every closed trade on record: the latest few per stock and strategy, however long ago."
+                else "Positions the strategies closed in the last ${state.window} sessions$todayNote (${inWindow.joinToString(", ") { weekdayDate(it) }}).",
                 style = Wv.small, color = Wv.c.text3,
             )
         }
@@ -279,7 +286,7 @@ fun LazyListScope.callsView(
         callSection(
             key = "${state.side}-$kind-${state.window}", title = kind.title, sub = kind.sub, accent = { if (kind == Kind.Swing) Wv.c.accent else Wv.c.gain },
             rows = list, side = state.side, fmt = fmt, state = state, onStock = onStock,
-            empty = if (state.side == "buy") (if (state.window == OPEN_WINDOW) "No open positions." else "No buys filled in this period.") else "No sells in the last 7 sessions.",
+            empty = if (state.side == "buy") (if (state.window == OPEN_WINDOW) "No open positions." else "No buys filled in this period.") else if (state.window == OPEN_WINDOW) "No closed trades on record." else "No sells in this period.",
         )
     }
     if (waiting.isNotEmpty()) {

@@ -32,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.delay
+import com.wealthvault.app.data.StockSuggestion
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,21 +72,57 @@ fun quickPicks(vm: AppViewModel, avm: AnalysisViewModel): List<Pair<String, Stri
 }
 
 @Composable
-private fun SymbolPicker(initial: String, picks: List<Pair<String, String>>, busy: Boolean, action: String, onRun: (String) -> Unit) {
+private fun SymbolPicker(
+    initial: String,
+    picks: List<Pair<String, String>>,
+    busy: Boolean,
+    action: String,
+    suggest: suspend (String) -> List<StockSuggestion>,
+    onRun: (String) -> Unit,
+) {
     var text by rememberSaveable(initial) { mutableStateOf(initial.substringAfter(':')) }
+    // suggestions come from the third typed character; a value filled in by a pick or a link asks for none
+    var typed by remember { mutableStateOf(false) }
+    var suggestions by remember { mutableStateOf<List<StockSuggestion>>(emptyList()) }
+    var searched by remember { mutableStateOf(false) }
+    LaunchedEffect(text, typed) {
+        val q = text.trim()
+        if (!typed || q.length < 3 || ':' in q) { suggestions = emptyList(); searched = false; return@LaunchedEffect }
+        delay(250)
+        suggestions = suggest(q)
+        searched = true
+    }
     val focus = LocalFocusManager.current
-    val go = { v: String -> if (v.isNotBlank()) { focus.clearFocus(); onRun(v) } }
+    val go = { v: String -> if (v.isNotBlank()) { typed = false; suggestions = emptyList(); focus.clearFocus(); onRun(v) } }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
-                text, { text = it.uppercase() },
-                placeholder = { Text("Stock, e.g. INFY or BSE:500209") },
+                text, { text = it.uppercase(); typed = true },
+                placeholder = { Text("Name or symbol, e.g. reli or INFY") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { go(text) }),
                 modifier = Modifier.weight(1f),
             )
             PrimaryButton(if (busy) "…" else action, busy = busy, enabled = text.isNotBlank()) { go(text) }
+        }
+        if (searched && suggestions.isEmpty()) {
+            Text("No stock matches that, or suggestions are unavailable. Type the full symbol instead.", style = Wv.small, color = Wv.c.text3)
+        }
+        if (suggestions.isNotEmpty()) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Wv.c.surface)) {
+                suggestions.forEach { s ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable { text = s.symbol.substringAfter(':'); go(s.symbol) }.padding(horizontal = 14.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(s.symbol, style = Wv.body.copy(fontWeight = FontWeight.SemiBold), color = Wv.c.text, maxLines = 1)
+                        Text(s.name, style = Wv.small, color = Wv.c.text3, maxLines = 1, modifier = Modifier.weight(1f))
+                    }
+                    HorizontalDivider(color = Wv.c.border)
+                }
+            }
         }
         if (picks.isNotEmpty()) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -158,7 +196,7 @@ fun MomentumScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisVi
                 "Trend verdict from moving averages (50/200-DMA, golden cross, 200-DMA slope, MACD), plus returns, RSI, 52-week range and strength vs the Nifty 50. One year of daily prices from Zerodha Kite.",
             )
         }
-        item { SymbolPicker(symbol ?: m?.instrument ?: "", picks, res.loading, "Analyse") { avm.analyse(it) } }
+        item { SymbolPicker(symbol ?: m?.instrument ?: "", picks, res.loading, "Analyse", avm::suggest) { avm.analyse(it) } }
         res.problem?.let { item { ProblemNote(it) } }
         if (res.loading) item { Loading("Fetching one year of daily prices…") }
         if (m != null && !res.loading) momentumBody(m, onStrategies)
@@ -435,7 +473,7 @@ fun StrategyScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisVi
                 style = Wv.small, color = Wv.c.text3,
             )
         }
-        item { SymbolPicker(current, picks, res.loading, "Run") { current = it; avm.runStrategy(tab, it) } }
+        item { SymbolPicker(current, picks, res.loading, "Run", avm::suggest) { current = it; avm.runStrategy(tab, it) } }
         item { StrategyInputs(avm, tab == "ath", res.loading, current.isNotBlank()) { avm.runStrategy(tab, current) } }
         res.problem?.let { item { ProblemNote(it) } }
         if (res.loading) item { Loading(if (tab == "ath") "Fetching the full daily price history and running the backtest…" else "Fetching daily prices and running the backtest…") }

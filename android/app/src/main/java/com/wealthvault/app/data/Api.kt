@@ -146,6 +146,8 @@ class Api(private val prefs: Prefs) {
 
     // --- one stock: momentum and strategy backtests (price history comes from Kite) ------------------------
 
+    suspend fun searchStocks(q: String): List<StockSuggestion> = json.decodeFromString(call("GET", "/analytics/search?q=${enc(q)}"))
+
     suspend fun momentum(symbol: String): MomentumAnalysis = json.decodeFromString(call("GET", "/analytics/momentum?symbol=${enc(symbol)}"))
 
     suspend fun swingStrategy(symbol: String, o: SwingOptions = SwingOptions()): StrategyResult = json.decodeFromString(

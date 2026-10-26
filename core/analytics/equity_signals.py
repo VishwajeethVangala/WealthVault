@@ -6,7 +6,9 @@ the 200-day rules) and reports why instead of failing the whole row.
 """
 
 import asyncio
+import json
 import logging
+import time
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -15,6 +17,8 @@ from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
 from core.analytics.strategy_calls import ath_buy_call, exit_calls, swing_buy_call, swing_pending_sell
 from core.analytics.swing_strategy import run_swing_strategy
 from core.market_data.candle_store import get_india_candles
+from core.market_data.indmoney_market import get_user_indmoney_client
+from core.market_data.kite_client import KiteAuthRequiredError
 from core.market_data.history import (
     MAX_LOOKBACK_DAYS,
     InstrumentNotFoundError,
@@ -22,8 +26,10 @@ from core.market_data.history import (
     NIFTY_50_TOKEN,
     drop_incomplete_today,
     get_history_service,
+    normalize_symbol,
 )
 from core.models import AthBreakoutParams, SwingStrategyParams
+from storage.tables.repositories import SignalCacheRepository
 
 logger = logging.getLogger("wealthvault.analytics.equity_signals")
 
@@ -168,8 +174,41 @@ def build_signal_row(
     return row
 
 
+_STORED_TTL_SECONDS = 300.0
+_stored: Dict[str, Dict[str, Any]] = {}
+_stored_at = -_STORED_TTL_SECONDS
+
+
+async def _stored_instrument(symbol: str) -> Optional[Dict[str, Any]]:
+    """The instrument of a stock whose signals were computed before (token and tick size are kept on its row).
+
+    Lets a refresh run without Kite's instrument search; the table is read once for all stocks, not per stock."""
+    global _stored_at
+    qualified = normalize_symbol(symbol)
+    if time.monotonic() - _stored_at >= _STORED_TTL_SECONDS:
+        repo = SignalCacheRepository()
+        found: Dict[str, Dict[str, Any]] = {}
+        for r in await repo.query_entities(user_id=repo.PARTITION):
+            try:
+                row = json.loads(r.get("payload") or "{}")
+            except ValueError:
+                continue
+            if row.get("token") and row.get("instrument"):
+                inst = {"id": row["instrument"], "instrument_token": row["token"], "tick_size": row.get("tick_size"), "name": row.get("name")}
+                found[str(row["instrument"]).upper()] = inst
+                found.setdefault(str(r.get("RowKey", "")).upper(), inst)
+        _stored.clear()
+        _stored.update(found)
+        _stored_at = time.monotonic()
+    return _stored.get(qualified.upper())
+
+
 async def compute_stock_signals(client: Any, symbol: str, benchmark: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
-    """Indian stocks: fetch history from Kite once and build the full signal row."""
+    """Indian stocks: fetch history from Kite once and build the full signal row.
+
+    With Kite's login lapsed and INDmoney connected, a stock already known (token stored) is topped up from INDmoney
+    instead. One never seen before needs Kite for its first full history, which is a per-stock failure, not an
+    expired login."""
     history = get_history_service()
     instrument: Dict[str, Any] = {}
     for attempt in range(3):
@@ -181,6 +220,13 @@ async def compute_stock_signals(client: Any, symbol: str, benchmark: Optional[Li
             if attempt == 2:
                 raise
             await asyncio.sleep(1.0 * (attempt + 1))
+        except KiteAuthRequiredError:
+            if await get_user_indmoney_client(getattr(client, "owner_id", None)) is None:
+                raise
+            instrument = await _stored_instrument(symbol) or {}
+            if not instrument:
+                raise ValueError("Needs a Kite login for its first price history")
+            break
     instrument_id = str(instrument.get("id") or f"{instrument.get('exchange')}:{instrument.get('tradingsymbol')}")
     # stored finished candles, topped up from Kite when behind; the live price is folded in at read time
     candles, _meta = await get_india_candles(client, instrument)
