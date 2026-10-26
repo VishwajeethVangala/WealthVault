@@ -77,7 +77,8 @@ class NormalizationService:
             ]
         elif broker == "groww":
             items = raw_data if isinstance(raw_data, list) else (raw_data.get("holdings", []) if isinstance(raw_data, dict) else [])
-            return [self._normalize_groww_holding(item, owner_id, connection_id) for item in items]
+            held = [self._normalize_groww_holding(item, owner_id, connection_id) for item in items if isinstance(item, dict)]
+            return [h for h in held if h.quantity > 0]  # a fully sold line is not a holding
         elif broker == "angelone":
             items = raw_data if isinstance(raw_data, list) else (raw_data.get("holdings", []) if isinstance(raw_data, dict) else [])
             return [self._normalize_angelone_holding(item, owner_id, connection_id) for item in items]
@@ -267,13 +268,21 @@ class NormalizationService:
         connection_id: str,
     ) -> Holding:
         """Groww holdings carry quantity and average price only; prices come from quote enrichment."""
-        symbol = str(item.get("trading_symbol") or item.get("isin") or "UNKNOWN").strip().upper()
-        quantity = _safe_float(item.get("quantity"), 0.0)
+        isin = str(item.get("symbol_isin") or item.get("isin") or "").strip().upper()
+        symbol = str(item.get("trading_symbol") or item.get("symbol") or isin or "UNKNOWN").strip().upper()
+        # `quantity` is Groww's net holding: it already includes shares settling (T1) and pledged shares, which
+        # Groww's own sample shows adding up (10 = 5 free + 3 T1 + 2 pledged). So they are never added on top; the parts are
+        # only a floor, in case a freshly bought line shows its parts before the net catches up.
+        parts = sum(
+            _safe_float(item.get(k), 0.0)
+            for k in ("demat_free_quantity", "t1_quantity", "pledge_quantity", "demat_locked_quantity", "groww_locked_quantity")
+        )
+        quantity = max(_safe_float(item.get("quantity"), 0.0), parts)
         average_price = _safe_float(item.get("average_price"), 0.0)
         asset_class = AssetClass.GOLD if "SGB" in symbol else AssetClass.EQUITY
 
         return Holding(
-            holding_id=self._generate_id("hld_grw", owner_id, connection_id, str(item.get("isin") or symbol)),
+            holding_id=self._generate_id("hld_grw", owner_id, connection_id, isin or symbol),
             owner_id=owner_id,
             connection_id=connection_id,
             instrument_symbol=symbol,

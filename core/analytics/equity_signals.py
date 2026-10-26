@@ -17,6 +17,7 @@ from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
 from core.analytics.strategy_calls import ath_buy_call, exit_calls, swing_buy_call, swing_pending_sell
 from core.analytics.swing_strategy import run_swing_strategy
 from core.market_data.candle_store import get_india_candles
+from core.market_data.groww_market import get_user_groww_client
 from core.market_data.indmoney_market import get_user_indmoney_client
 from core.market_data.kite_client import KiteAuthRequiredError
 from core.market_data.history import (
@@ -221,7 +222,8 @@ async def compute_stock_signals(client: Any, symbol: str, benchmark: Optional[Li
                 raise
             await asyncio.sleep(1.0 * (attempt + 1))
         except KiteAuthRequiredError:
-            if await get_user_indmoney_client(getattr(client, "owner_id", None)) is None:
+            owner = getattr(client, "owner_id", None)
+            if await get_user_indmoney_client(owner) is None and await get_user_groww_client(owner) is None:
                 raise
             instrument = await _stored_instrument(symbol) or {}
             if not instrument:

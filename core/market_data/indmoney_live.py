@@ -11,13 +11,15 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Tuple
 
+from core.market_data.indmoney_client import IndmoneyRateLimitError
 from core.models import Holding
 from core.portfolio.normalization import NormalizationService
 from providers.brokers.indmoney import IndmoneyProvider
 
 logger = logging.getLogger("wealthvault.market_data.indmoney_live")
 
-CACHE_SECONDS = 10.0
+# The holdings tool allows 250 cost units an hour at 3 per call. A read every 2 minutes uses 90, leaving room for syncs.
+CACHE_SECONDS = 120.0
 _cache: Dict[Tuple[str, str], Tuple[float, Dict[str, Holding]]] = {}
 
 
@@ -26,7 +28,8 @@ async def _fresh_for_connection(owner_id: str, connection_id: str) -> Dict[str, 
     cached = _cache.get(key)
     if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
         return cached[1]
-    raw = await IndmoneyProvider(connection_id=connection_id, owner_id=owner_id).get_holdings()
+    # prices only: the top holdings per member are enough, and the full lists are fetched by a sync, not on every read
+    raw = await IndmoneyProvider(connection_id=connection_id, owner_id=owner_id).get_holdings(complete=False)
     rows = NormalizationService().normalize_holdings(
         raw_data=raw, broker_name="indmoney", owner_id=owner_id, connection_id=connection_id
     )
@@ -42,6 +45,8 @@ async def overlay_indmoney_live(owner_id: str, holdings: List[Holding]) -> List[
     for conn_id in conn_ids:
         try:
             fresh.update(await _fresh_for_connection(owner_id, conn_id))
+        except IndmoneyRateLimitError as exc:  # over the hourly allowance: stored prices stay until it resets
+            logger.info("INDmoney live overlay paused for %s: %s", conn_id, exc)
         except Exception as exc:  # auth expired, network: keep stored prices
             logger.warning("INDmoney live overlay skipped for %s: %s", conn_id, exc)
 

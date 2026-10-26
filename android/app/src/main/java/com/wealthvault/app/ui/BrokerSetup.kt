@@ -55,7 +55,7 @@ sealed interface BrokerDialog {
 
 /**
  * The web app's broker set-up on a phone: pick a broker from the server's catalog, name the account, then either
- * enter its API keys (Groww, Angel One) or log in on the broker's own page (Zerodha, INDmoney).
+ * enter its API keys (Angel One) or log in on the broker's own page (Zerodha, INDmoney, Groww).
  */
 @Composable
 fun BrokerDialogs(dialog: BrokerDialog?, avm: AnalysisViewModel, existing: List<BrokerSession>, onDialog: (BrokerDialog?) -> Unit, onChanged: () -> Unit, onSync: (String) -> Unit = {}) {

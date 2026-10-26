@@ -107,11 +107,13 @@ async def lifespan(app: FastAPI):
     await stop_auto_refresh()
 
     logger.info("Shutting down %s...", settings.APP_NAME)
+    from core.market_data.groww_client import GrowwMCPClient
     from core.market_data.indmoney_client import IndmoneyMCPClient
     from core.market_data.kite_client import KiteMCPClient
 
     await KiteMCPClient.close_all()
     await IndmoneyMCPClient.close_all()
+    await GrowwMCPClient.close_all()
     from storage.tables.base import close_shared_table_clients
     await close_shared_table_clients()
 

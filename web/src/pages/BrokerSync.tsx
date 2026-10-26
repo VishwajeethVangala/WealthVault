@@ -85,7 +85,7 @@ export const BrokerSync: React.FC = () => {
     loadSessions()
     loadCatalog()
     const onMessage = (event: MessageEvent) => {
-      if (event.data === 'indmoney_authorized') loadSessions()
+      if (event.data === 'indmoney_authorized' || event.data === 'groww_authorized') loadSessions()
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)

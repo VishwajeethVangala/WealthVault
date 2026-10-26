@@ -8,6 +8,7 @@ Provides endpoints for:
 
 from datetime import datetime, timezone, timedelta
 import asyncio
+import html
 import logging
 from typing import Any, Dict, List, Optional
 import uuid
@@ -16,10 +17,10 @@ from fastapi.responses import HTMLResponse
 
 from apps.api.routers.accounts import get_current_user
 from core.market_data import get_market_data_service
-from core.market_data.indmoney_client import IndmoneyAuthRequiredError, IndmoneyMCPClient, get_indmoney_mcp_client
+from core.market_data.indmoney_client import IndmoneyAuthRequiredError, IndmoneyMCPClient, IndmoneyRateLimitError, get_indmoney_mcp_client
 from core.market_data.kite_client import get_kite_mcp_client
 from core.market_data.indmoney_live import overlay_indmoney_live
-from core.market_data.mf_nav import apply_mf_day_changes
+from core.market_data.mf_nav import apply_mf_values
 from core.market_data.user_client import get_user_kite_client
 from core.models import (
     BrokerCatalogItem,
@@ -79,24 +80,24 @@ BROKER_METADATA_CATALOG = {
     },
     "groww": {
         "display_name": "Groww",
-        "auth_type": "Trade API key + daily approval",
+        "auth_type": "Trade API TOTP token (signs in by itself each day)",
         "mcp_server_url": "https://api.groww.in",
         "mcp_protocol": "REST (Groww Trade API)",
         "default_account_id": "",
         "color": "#00d09c",
         "tag": "GRW",
         "supported": True,
-        "description": "Demat stock holdings via the Groww Trade API. Prices come from your Kite session.",
+        "description": "Demat stock, ETF and gold-bond holdings via the Groww Trade API. Prices come from your Kite session. Mutual funds held on Groww are not available through Groww's API, so they are not imported.",
         "setup_url": "https://groww.in/trade-api/api-keys",
         "setup_steps": [
-            "Subscribe to a Groww Trading API plan (the free plan is enough).",
-            "Generate an API key and secret at groww.in/trade-api/api-keys.",
-            "Approve the key there each day; Groww access tokens reset at 6 AM IST.",
+            "Open https://groww.in/trade-api/api-keys and subscribe to a Groww Trading API plan if you haven't (the free plan covers holdings).",
+            "Generate a TOTP token there. Groww shows the TOTP Access token (a long text) and the TOTP API Secret (a short text under the QR code) only once, so keep that page open.",
+            "Copy the TOTP Access token into the first box and the TOTP API Secret into the second, then save. WealthVault signs in to Groww by itself every morning, with nothing to approve each day.",
         ],
         "credential_fields": [
-            {"key": "api_key", "label": "API key", "secret": True, "required": True, "help": "From the Groww API keys page."},
-            {"key": "api_secret", "label": "API secret", "secret": True, "required": False, "help": "Needed unless you give a TOTP secret."},
-            {"key": "totp_secret", "label": "TOTP secret", "secret": True, "required": False, "help": "Alternative to the API secret (the base32 seed of your authenticator)."},
+            {"key": "api_key", "label": "TOTP Access token", "secret": True, "required": True, "help": "The long text (starts with eyJ) that Groww shows as the TOTP token."},
+            {"key": "totp_secret", "label": "TOTP API Secret", "secret": True, "required": False, "help": "The short text of letters and digits under the QR code. WealthVault uses it to sign in by itself every day."},
+            {"key": "api_secret", "label": "API secret (approval method only)", "secret": True, "required": False, "help": "Leave empty for the TOTP method. This one needs your approval on groww.in every day."},
         ],
     },
     "upstox": {
@@ -118,7 +119,8 @@ BROKER_METADATA_CATALOG = {
         "default_account_id": "",
         "color": "#ff5722",
         "tag": "ANG",
-        "supported": True,
+        "supported": False,
+        "coming_soon": True,
         "description": "Demat holdings with live prices via Angel One SmartAPI.",
         "setup_url": "https://smartapi.angelone.in/",
         "setup_steps": [
@@ -273,10 +275,10 @@ async def get_portfolio_holdings(
                 logger.warning("INDmoney live re-read timed out; showing stored INDmoney values")
             try:
                 enriched, _ = await market_service.enrich_holdings_with_live_quotes(filtered, client=await get_user_kite_client(current_user_id))
-                return await apply_mf_day_changes(enriched)
+                return await apply_mf_values(enriched)
             except Exception as quote_err:
                 logger.warning("Market quote enrichment note for persisted holdings: %s", quote_err)
-        return await apply_mf_day_changes(filtered)
+        return await apply_mf_values(filtered)
 
     normalizer = NormalizationService()
     unified_holdings: List[Holding] = []
@@ -315,7 +317,7 @@ async def get_portfolio_holdings(
     if refresh_live and unified_holdings:
         try:
             enriched, _ = await market_service.enrich_holdings_with_live_quotes(unified_holdings, client=await get_user_kite_client(current_user_id))
-            return enriched
+            return await apply_mf_values(enriched)
         except Exception as quote_err:
             logger.warning("Market quote enrichment note for live holdings: %s", quote_err)
 
@@ -468,6 +470,10 @@ async def sync_portfolio(
                     last_sync_time=sync_time.isoformat(),
                 )
                 all_holdings.extend(h for h in persisted_all if h.connection_id == conn_id)
+            except IndmoneyRateLimitError as limit_exc:
+                # over INDmoney's hourly allowance: the account is fine, so keep it connected and keep what is stored
+                logger.warning("INDmoney connection %s sync paused by rate limit: %s", conn_id, limit_exc)
+                all_holdings.extend(h for h in persisted_all if h.connection_id == conn_id)
             except Exception as exc:
                 logger.error("INDmoney connection %s sync failed during orchestration: %s", conn_id, exc)
                 await connections_repo.update_status(
@@ -504,6 +510,8 @@ async def sync_portfolio(
             all_holdings, _ = await market_service.enrich_holdings_with_live_quotes(all_holdings, client=await get_user_kite_client(current_user_id))
         except Exception as q_err:
             logger.warning("Quote enrichment during sync note: %s", q_err)
+        # mutual funds are valued at the latest published NAV, so the stored holdings and the snapshot are right too
+        all_holdings = await apply_mf_values(all_holdings)
 
     # --- 4. Idempotent Holdings Update: Purge Stale Records and Batch Upsert ---
     upserted_count = await holdings_repo.replace_holdings(owner_id=current_user_id, holdings=all_holdings)
@@ -602,6 +610,8 @@ async def get_broker_sessions(
     holdings = await holdings_repo.get_holdings(owner_id=current_user_id)
     if not holdings:
         holdings = await get_portfolio_holdings(broker="all", connection_id=None, current_user_id=current_user_id)
+    else:
+        holdings = await apply_mf_values(holdings)  # each broker's total on the Brokers page uses current fund values
 
     # Next daily Kite session expiry is 06:00 AM IST (00:30 UTC next day)
     from datetime import timedelta
@@ -879,6 +889,14 @@ async def sync_single_broker(
                 target.auth_url = auth_exc.auth_url
                 target.status = BrokerStatus.AUTH_REQUIRED
                 return target
+        except IndmoneyRateLimitError as limit_exc:
+            # over INDmoney's hourly allowance: nothing is wrong with the connection and nothing stored is touched
+            logger.warning("INDmoney connection %s sync paused by rate limit: %s", conn_id, limit_exc)
+            raise HTTPException(
+                status_code=429,
+                detail=f"INDmoney is limiting requests right now. Your stored holdings are unchanged; try again in about {int(limit_exc.retry_after) + 1} seconds.",
+                headers={"Retry-After": str(int(limit_exc.retry_after) + 1)},
+            )
         except Exception as exc:
             logger.error("INDmoney connection %s sync failed: %s", conn_id, exc)
             await connections_repo.update_status(
@@ -921,6 +939,7 @@ async def sync_single_broker(
             new_broker_holdings, _ = await market_service.enrich_holdings_with_live_quotes(new_broker_holdings, client=await get_user_kite_client(current_user_id))
         except Exception as q_err:
             logger.warning("Single broker quote enrichment note: %s", q_err)
+        new_broker_holdings = await apply_mf_values(new_broker_holdings)
 
     # 3. Combine with other connections' persisted holdings and batch persist
     existing_holdings = await holdings_repo.get_holdings(owner_id=current_user_id)
@@ -1078,7 +1097,7 @@ async def indmoney_oauth_callback(
             <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; background: #fef2f2;">
               <div style="background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; max-width: 480px;">
                 <h2 style="color: #b91c1c; margin-bottom: 8px;">✕ INDmoney Authorization Failed</h2>
-                <p style="color: #64748b; font-size: 14px;">{error}: {error_description or ''}</p>
+                <p style="color: #64748b; font-size: 14px;">{html.escape(error)}: {html.escape(error_description or '')}</p>
                 <p style="color: #94a3b8; font-size: 12px; margin-top: 16px;">You may close this tab and try again from WealthVault.</p>
               </div>
             </body>
@@ -1107,7 +1126,7 @@ async def indmoney_oauth_callback(
             <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; background: #fef2f2;">
               <div style="background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; max-width: 480px;">
                 <h2 style="color: #b91c1c; margin-bottom: 8px;">✕ Token Exchange Error</h2>
-                <p style="color: #64748b; font-size: 14px;">{exc}</p>
+                <p style="color: #64748b; font-size: 14px;">{html.escape(str(exc))}</p>
               </div>
             </body>
             </html>

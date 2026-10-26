@@ -26,6 +26,15 @@ logger = logging.getLogger("wealthvault.mcp.indmoney")
 
 
 
+class IndmoneyRateLimitError(RuntimeError):
+    """INDmoney limits each tool to a number of calls per hour (get_family_asset_holdings: 250 'cost units', 3 per
+    call). Past it the server answers with a notice, not an error status, which must never be read as data."""
+
+    def __init__(self, message: str, retry_after: float = 60.0) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 class IndmoneyAuthRequiredError(Exception):
     """Raised when INDmoney session requires interactive OAuth authorization."""
 
@@ -74,6 +83,7 @@ class IndmoneyMCPClient:
         self._lock = asyncio.Lock()
         self._http_session: Optional[aiohttp.ClientSession] = None
         self._request_counter: int = 0
+        self._blocked_until: Dict[str, float] = {}  # tool -> time.monotonic() until which INDmoney said to wait
 
         self.registration_endpoint = "https://mcp.indmoney.com/register"
         self._load_client_info()
@@ -367,6 +377,9 @@ class IndmoneyMCPClient:
 
     async def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> Any:
         """Invoke an INDmoney MCP tool via direct HTTP JSON-RPC 2.0 with Bearer auth."""
+        wait = self._blocked_until.get(name, 0.0) - time.monotonic()
+        if wait > 0:  # told to wait: asking again only spends the calls that the wait is for
+            raise IndmoneyRateLimitError(f"INDmoney rate limit on '{name}': try again in {int(wait) + 1}s", retry_after=wait)
         token = await self.ensure_valid_token()
 
         http = self._get_http_session()
@@ -435,24 +448,39 @@ class IndmoneyMCPClient:
                         raise RuntimeError(f"INDmoney tool '{name}' failed: {text}")
 
                     try:
-                        return json.loads(text)
+                        parsed = json.loads(text)
                     except Exception:
                         return text
+                    if isinstance(parsed, dict) and "rate_limit" in str(parsed.get("error", "")).lower():
+                        retry = min(3600.0, max(1.0, float(parsed.get("retry_after_seconds") or 60)))
+                        self._blocked_until[name] = time.monotonic() + retry
+                        logger.warning("INDmoney rate limit on %s: %s", name, parsed.get("message"))
+                        raise IndmoneyRateLimitError(str(parsed.get("message") or "INDmoney rate limit exceeded"), retry_after=retry)
+                    return parsed
                 elif "error" in data:
                     raise RuntimeError(f"INDmoney MCP error: {data['error']}")
                 return data
-        except (IndmoneyAuthRequiredError, RuntimeError):
+        except (IndmoneyAuthRequiredError, RuntimeError):  # (the rate limit error is a RuntimeError)
             raise
         except Exception as exc:
             logger.error("INDmoney call_tool error (%s): %s", name, exc)
             raise
 
-    async def get_family_asset_holdings(self, asset: str = "overall") -> Dict[str, Any]:
-        """Retrieve overall family asset holdings from INDmoney MCP."""
+    async def get_family_asset_holdings(self, asset: str = "overall", complete: bool = True) -> Dict[str, Any]:
+        """Retrieve overall family asset holdings from INDmoney MCP.
+
+        `complete` also asks for each capped member's full list (one more call each); price refreshes that only need
+        the top holdings pass False, because the calls are limited per hour."""
         data = await self.call_tool("get_family_asset_holdings", {"asset": asset})
-        if not isinstance(data, dict):
-            return {}
-        return await self._complete_capped_lists(data, asset)
+        # anything that is not a holdings reply is an error, never an empty portfolio: an empty one would wipe the
+        # stored holdings on the next sync
+        if not isinstance(data, dict) or not (
+            "family_asset_holdings" in data
+            or "family_asset_holdings" in (data.get("overall") if isinstance(data.get("overall"), dict) else {})
+            or "family_asset_holdings" in (data.get("data") if isinstance(data.get("data"), dict) else {})
+        ):
+            raise RuntimeError(f"INDmoney returned no holdings: {str(data)[:160]}")
+        return await self._complete_capped_lists(data, asset) if complete else data
 
     async def _complete_capped_lists(self, data: Dict[str, Any], asset: str) -> Dict[str, Any]:
         """INDmoney's whole-family view lists only each member's top 25 holdings by value and says how many it left

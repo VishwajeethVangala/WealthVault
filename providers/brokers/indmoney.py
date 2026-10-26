@@ -11,7 +11,7 @@ from pathlib import Path
 import shutil
 from typing import Any, Dict, List, Optional
 
-from core.market_data.indmoney_client import IndmoneyAuthRequiredError, get_indmoney_mcp_client
+from core.market_data.indmoney_client import IndmoneyAuthRequiredError, IndmoneyRateLimitError, get_indmoney_mcp_client
 from providers.brokers.base import BrokerProvider
 
 logger = logging.getLogger("wealthvault.providers.indmoney")
@@ -79,17 +79,18 @@ class IndmoneyProvider(BrokerProvider):
             "auth_url": auth_url,
         }
 
-    async def get_holdings(self) -> Any:
-        """Retrieve live family asset holdings directly from INDmoney MCP."""
+    async def get_holdings(self, complete: bool = True) -> Any:
+        """Retrieve live family asset holdings directly from INDmoney MCP. `complete=False` skips the extra calls
+        that fetch each member's full list (see IndmoneyMCPClient.get_family_asset_holdings)."""
         client = self.client
         try:
-            raw_overall = await client.get_family_asset_holdings("overall")
+            raw_overall = await client.get_family_asset_holdings("overall", complete=complete)
             if not raw_overall:
                 return {}
             transformed = self._transform_live_payload(raw_overall)
             self.live_fetched = True
             return transformed
-        except IndmoneyAuthRequiredError:
+        except (IndmoneyAuthRequiredError, IndmoneyRateLimitError):
             raise
         except Exception as exc:
             logger.error("INDmoney live holdings retrieval failed: %s", exc)

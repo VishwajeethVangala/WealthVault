@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
+from core.market_data.groww_market import fetch_groww_daily_candles, get_user_groww_client
 from core.market_data.history import IST, drop_incomplete_today, get_history_service
 from core.market_data.indmoney_market import fetch_daily_candles, get_user_indmoney_client
 from core.market_data.kite_client import KiteAuthRequiredError
@@ -71,18 +72,22 @@ async def _save(token: str, candles: List[Dict[str, Any]], years: List[str], met
 
 
 async def _recent(client: Any, history: Any, token: int, instrument: Dict[str, Any], lookback: int) -> Tuple[List[Dict[str, Any]], bool]:
-    """The latest finished candles: from Kite, or from INDmoney when Kite's login has lapsed (second item True)."""
+    """The latest finished candles: from Kite, or from INDmoney/Groww when Kite's login has lapsed (second item True)."""
     try:
         return _clean(await history.get_daily_candles(client, token, lookback)), False
     except KiteAuthRequiredError:
         owner_id = getattr(client, "owner_id", None)
         ind_client = await get_user_indmoney_client(owner_id)
-        if ind_client is None:
-            raise
-        fresh = _clean(await fetch_daily_candles(ind_client, str(instrument.get("id") or ""), lookback))
-        if not fresh:
-            raise
-        return fresh, True
+        if ind_client is not None:
+            fresh = _clean(await fetch_daily_candles(ind_client, str(instrument.get("id") or ""), lookback))
+            if fresh:
+                return fresh, True
+        grw_client = await get_user_groww_client(owner_id)
+        if grw_client is not None:
+            fresh = _clean(await fetch_groww_daily_candles(grw_client, str(instrument.get("id") or ""), lookback))
+            if fresh:
+                return fresh, True
+        raise
 
 
 async def get_india_candles(
@@ -111,11 +116,14 @@ async def get_india_candles(
     rebuilt = False
     if candles:
         lookback = (datetime.now(IST).date() - datetime.fromisoformat(candles[-1]["date"]).date()).days + 10
-        fresh, from_indmoney = await _recent(client, history, int(token), instrument, lookback)
+        fresh, from_fallback = await _recent(client, history, int(token), instrument, lookback)
+        if fresh and from_fallback and not ({c["date"] for c in fresh} & {c["date"] for c in candles}):
+            # nothing in common with what is stored, so there is no way to tell it is the same stock: not trusted
+            logger.warning("Fallback candles for %s share no day with the stored history; ignoring them", instrument.get("id"))
+            return candles, {**meta, "checked_at": time.time()}
         if fresh and restated(candles, fresh):
-            if from_indmoney:
-                # INDmoney can only supply a year, so it cannot rebuild a history; a refresh with Kite logged in will
-                logger.info("INDmoney candles for %s disagree with the stored ones; keeping the stored history", instrument.get("id"))
+            if from_fallback:
+                logger.info("Fallback candles for %s disagree with the stored ones; keeping stored history", instrument.get("id"))
                 return candles, {**meta, "checked_at": time.time()}
             logger.info("Stored candles for %s were restated; rebuilding", instrument.get("id"))
             rebuilt = True

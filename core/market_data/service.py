@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from zoneinfo import ZoneInfo
 
 from mcp import ClientSession
+from core.market_data.groww_market import fetch_groww_quotes, get_user_groww_client
 from core.market_data.indmoney_market import fetch_quotes as fetch_indmoney_quotes, get_user_indmoney_client
 from core.market_data.kite_client import KiteAuthRequiredError, get_kite_mcp_client
 from core.market_data.symbol_resolver import resolve_indmoney_symbols, split_indmoney_symbol
@@ -26,6 +27,7 @@ from core.models import AssetClass, Holding, QuoteItem
 logger = logging.getLogger("wealthvault.market_data.service")
 
 INDMONEY_FALLBACK_SECONDS = 8.0
+MIN_FALLBACK_SECONDS = 0.05
 
 NPX_BIN = shutil.which("npx") or shutil.which("npx.cmd") or "npx"
 
@@ -223,21 +225,31 @@ class MCPMarketDataService:
                 kite_login_lapsed = isinstance(exc, KiteAuthRequiredError)
                 break
 
-        # Only when Kite's login has lapsed (it does daily): INDmoney, when connected, prices what is missing. A live
-        # Kite session is never second-guessed, and a slow INDmoney must not hold up the page.
+        # Only when Kite's login has lapsed (it does daily): the user's other brokers price what is missing, INDmoney
+        # first, then Groww, inside one shared time budget. A live Kite session is never second-guessed, and slow
+        # brokers must not hold up the page.
         owner_id = getattr(client, "owner_id", None)
-        left = [i for i in missing if i not in combined]
-        if kite_login_lapsed and left and owner_id:
-            try:
-                ind_client = await get_user_indmoney_client(owner_id)
-                if ind_client is not None:
-                    found = await asyncio.wait_for(fetch_indmoney_quotes(ind_client, left), timeout=INDMONEY_FALLBACK_SECONDS)
+        if kite_login_lapsed and owner_id:
+            deadline = time.monotonic() + INDMONEY_FALLBACK_SECONDS
+            for name, get_client, fetch in (
+                ("INDmoney", get_user_indmoney_client, fetch_indmoney_quotes),
+                ("Groww", get_user_groww_client, fetch_groww_quotes),
+            ):
+                left = [i for i in missing if i not in combined]
+                remaining = deadline - time.monotonic()
+                if not left or remaining < MIN_FALLBACK_SECONDS:  # a sliver of budget cannot finish a broker call
+                    break
+                try:
+                    other = await get_client(owner_id)
+                    if other is None:
+                        continue
+                    found = await asyncio.wait_for(fetch(other, left), timeout=max(0.1, deadline - time.monotonic()))
                     for inst_key, item in found.items():
                         self.cache.set(inst_key, item)
                         combined[inst_key] = item
                         live_fetched = True
-            except Exception as exc:
-                logger.warning("INDmoney quote fallback unavailable: %s", exc)
+                except Exception as exc:
+                    logger.warning("%s quote fallback unavailable: %s", name, exc)
 
         return combined, live_fetched
 

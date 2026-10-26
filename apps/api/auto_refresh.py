@@ -2,7 +2,7 @@
 
 Every AUTO_REFRESH_MINUTES (15) from 09:15 to 15:30 IST, Monday to Friday, the server does what the "Refresh
 Momentum Stocks" button does: re-read the Chartink Stage 2 list, then compute signals for it and for the holdings
-of every user whose Kite login is active, or failing that whose INDmoney login is (INDmoney can top up the price
+of every user whose Kite login is active, or failing that whose INDmoney/Groww login is (INDmoney/Groww can top up the price
 history of stocks already stored; a stock never seen before still needs a Kite login for its first history). The
 list is read once per run and a stock already computed in this run for one user is not computed again for the next.
 
@@ -25,6 +25,7 @@ from apps.api.routers.stage2 import _jobs, _run_job, read_screener
 from core.config import data_dir, get_settings
 from core.market_data.candle_store import get_india_candles
 from core.market_data.history import NIFTY_50_SYMBOL, NIFTY_50_TOKEN
+from core.market_data.groww_market import get_user_groww_client
 from core.market_data.indmoney_market import get_user_indmoney_client
 from core.market_data.live_bar import apply_live_quote
 from core.market_data.service import get_market_data_service
@@ -120,16 +121,26 @@ def indmoney_owners() -> List[str]:
     return sorted(owners)
 
 
+def groww_owners() -> List[str]:
+    """Users with a saved Groww login (one token file per user connection: groww_tokens_<owner>__<connection>.json)."""
+    owners = set()
+    for f in data_dir().glob("groww_tokens_*__*.json"):
+        owners.add(f.stem[len("groww_tokens_"):].split("__", 1)[0])
+    return sorted(owners)
+
+
 async def _live_clients() -> List[Tuple[str, Any]]:
-    """(owner, Kite client) for each user the run can serve: Kite logged in, or else an INDmoney login to stand in."""
+    """(owner, Kite client) for each user the run can serve: Kite logged in, or else an INDmoney/Groww login to stand in."""
     out = []
     kite = set(kite_owners())
-    for owner in sorted(kite | set(indmoney_owners())):
+    for owner in sorted(kite | set(indmoney_owners()) | set(groww_owners())):
         try:
             client = await get_user_kite_client(owner)
             if owner in kite and not await session_really_expired(client):
                 out.append((owner, client))
             elif await get_user_indmoney_client(owner) is not None:
+                out.append((owner, client))
+            elif await get_user_groww_client(owner) is not None:
                 out.append((owner, client))
         except Exception as exc:
             logger.warning("Auto refresh could not check the logins of %s: %s", owner, exc)
@@ -141,7 +152,7 @@ async def run_tick(slot: datetime) -> None:
     today = slot.astimezone(IST).date().isoformat()
     live = await _live_clients()
     if not live:
-        _record(slot, "skipped", "Nobody is logged in to Kite or INDmoney today, so price history cannot be read.")
+        _record(slot, "skipped", "Nobody is logged in to Kite, INDmoney, or Groww today, so price history cannot be read.")
         return
     if await traded_today(live[0][1], today) is False:
         _record(slot, "skipped", "The exchange is not trading today.")

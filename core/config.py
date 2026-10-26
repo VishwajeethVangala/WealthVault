@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     INDMONEY_CLIENT_ID: str = Field(default="", description="INDmoney MCP OAuth client id")
     INDMONEY_CLIENT_SECRET: str = Field(default="", description="INDmoney MCP OAuth client secret")
+    GROWW_CLIENT_ID: str = Field(default="", description="Groww MCP OAuth client id")
+    GROWW_CLIENT_SECRET: str = Field(default="", description="Groww MCP OAuth client secret")
     CREDENTIAL_ENCRYPTION_KEY: str = Field(
         default="",
         description="Fernet key used to encrypt per-user broker credentials at rest",
