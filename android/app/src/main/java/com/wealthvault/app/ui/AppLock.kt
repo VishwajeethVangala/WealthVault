@@ -23,6 +23,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.TextButton
+import android.content.Intent
+import android.provider.Settings
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -103,3 +109,52 @@ fun LockScreen(onUnlocked: () -> Unit) {
 }
 
 
+
+/**
+ * First thing a signed-in person sees until app lock is on. It is required, with no skip. The one exception is a phone
+ * with no screen lock at all: the app cannot check anything there, so it points to the phone's settings and lets the
+ * person in meanwhile rather than shutting them out of their own data.
+ */
+@Composable
+fun LockSetupScreen(vm: AppViewModel) {
+    val context = LocalContext.current
+    val activity = context.findFragmentActivity()
+    var note by remember { mutableStateOf<String?>(null) }
+    // the person may set a screen lock in the phone's settings and come back: look again then
+    val state by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val available = remember(state) { AppLock.available(context) }
+    Column(
+        Modifier.fillMaxSize().background(Wv.c.bg).padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.Start,
+    ) {
+        Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Wv.c.text), contentAlignment = Alignment.Center) {
+            Text("W", color = Wv.c.bg, style = Wv.title)
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("Protect your portfolio", style = Wv.h1, color = Wv.c.text)
+        Text(
+            "WealthVault shows your holdings and net worth, so the app now opens only after your fingerprint, face or screen lock. It takes a few seconds, and WealthVault never sees any of it.",
+            style = Wv.sub, color = Wv.c.text3,
+        )
+        Spacer(Modifier.height(24.dp))
+        if (available) {
+            PrimaryButton("Turn on app lock", modifier = Modifier.fillMaxWidth()) {
+                note = null
+                activity?.let { a -> AppLock.prompt(a, "Turn on app lock", "Confirm it is you", onSuccess = { vm.setLock(true) }, onFailure = { note = it }) }
+            }
+        } else {
+            Note("This phone has no screen lock yet. Set a fingerprint, face, PIN or pattern in the phone's settings, then come back.")
+            Spacer(Modifier.height(12.dp))
+            PrimaryButton("Open phone security settings", modifier = Modifier.fillMaxWidth()) {
+                context.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            TextButton(onClick = { vm.lockSetupSkipped.value = true }, modifier = Modifier.fillMaxWidth()) { Text("Continue without it for now", color = Wv.c.text2) }
+        }
+        note?.let {
+            Spacer(Modifier.height(12.dp))
+            Note(it)
+        }
+        TextButton(onClick = { vm.signOut() }, modifier = Modifier.fillMaxWidth()) { Text("Sign out", color = Wv.c.text3) }
+    }
+}

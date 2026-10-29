@@ -76,7 +76,7 @@ async def live_india_rows(client: Any, cached: Dict[str, Dict[str, Any]]) -> Dic
     today = india_today()
     unique: Dict[str, Dict[str, Any]] = {}
     for row in cached.values():
-        if row.get("instrument") and row.get("token") and (row.get("momentum") or row.get("swing") or row.get("ath")):
+        if row.get("instrument") and row.get("token") and (row.get("momentum") or row.get("ath")):
             unique.setdefault(row["instrument"], row)
     if not today or not unique:
         return {}
@@ -142,7 +142,7 @@ def _build_us(items: List[Tuple[str, Dict[str, Any], List[Dict[str, Any]], Optio
     for instrument_id, instrument, candles, bench, extra, complete in items:
         row = build_signal_row(instrument_id, instrument, candles, bench, benchmark_name="S&P 500 (SPY)", drop_partial=_no_partial, extra=extra)
         if not complete:
-            for section in ("swing", "ath"):
+            for section in ("ath",):
                 row[section] = None
                 row["errors"][section] = "History incomplete; not shown rather than guessed"
         out[instrument_id] = row
@@ -152,7 +152,7 @@ def _build_us(items: List[Tuple[str, Dict[str, Any], List[Dict[str, Any]], Optio
 async def live_us_rows(cached: Dict[str, Dict[str, Any]], quotes: Dict[str, Dict[str, Any]], names: Dict[str, str], tick_size: float) -> Dict[str, Dict[str, Any]]:
     """Live rows for the cached US rows. `quotes` is {ticker: {price, ...}} from INDmoney."""
     today = us_today()
-    unique = {r["instrument"]: r for r in cached.values() if r.get("instrument", "").startswith("US:") and (r.get("momentum") or r.get("swing") or r.get("ath"))}
+    unique = {r["instrument"]: r for r in cached.values() if r.get("instrument", "").startswith("US:") and (r.get("momentum") or r.get("ath"))}
     if not today or not unique or not quotes:
         return {}
 

@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { AlertTriangle, MessageSquare, ShieldCheck } from 'lucide-react'
 import { clearToken, deleteAccount, getStoredUser, sendFeedback } from '../utils/api'
 import { DISCLAIMER } from './Legal'
+import { AnalyticsSwitch } from '../components/AnalyticsConsent'
+import { ShareCard } from '../components/ShareCard'
 
 type Category = 'idea' | 'problem' | 'praise' | 'other'
 const MAX_FEEDBACK = 2000
@@ -127,7 +129,10 @@ export const Account: React.FC = () => {
           </a>
           <Link to="/brokers">Manage brokers</Link>
         </p>
+        <AnalyticsSwitch />
       </section>
+
+      <ShareCard />
 
       <FeedbackCard />
 

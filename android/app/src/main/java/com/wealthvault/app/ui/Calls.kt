@@ -57,7 +57,6 @@ data class CallSource(
 )
 
 enum class Kind(val title: String, val sub: String) {
-    Swing("Swing V2.1", "UT Bot buy inside a 200-SMA uptrend; fills at the next open."),
     Ath("200-DMA ATH breakout", "Close above the all-time high shortly after a 200-DMA reclaim; bought at that close."),
 }
 
@@ -101,31 +100,6 @@ fun buildBuys(sources: List<CallSource>, sessions: List<String>, window: BuyWind
     val inWindow = { d: String? -> d != null && (window == OPEN_WINDOW || d in sessions) }
     sources.forEach { src ->
         val sig = src.sig
-        val s = sig?.swing
-        val sc = s?.call
-        if (s != null && sc != null) {
-            val waiting = sc.queued && s.pending_order == "BUY"
-            val open = !sc.queued && sc.entry_date != null && s.state == "IN_POSITION" && s.entry_date == sc.entry_date
-            if (waiting || (open && inWindow(sc.entry_date))) {
-                val entry = if (waiting) sc.signal_close else sc.entry_price
-                out += CallRow(
-                    key = "${src.code}-swing", src = src, kind = Kind.Swing,
-                    date = if (waiting) sc.signal_date else sc.entry_date!!,
-                    waiting = waiting,
-                    live = sessionOpen && waiting && sc.signal_date == sig.live_date,
-                    price = entry,
-                    priceNote = if (waiting) "indicative" else "signal ${shortDate(sc.signal_date)}",
-                    why = "UT Bot buy at the ${shortDate(sc.signal_date)} close, ${fmt.price(sc.signal_close)}",
-                    detail = "Close ${signed1(sc.above_slow_pct)} over the 200-SMA; 50-SMA ${signed1(sc.fast_over_slow_pct)} over it; 200-SMA ${signed1(sc.slow_slope_pct)} in ${sc.slope_lookback ?: "—"} bars",
-                    tail = when {
-                        waiting -> "Stop is set when it fills"
-                        sc.stop != null -> "Stop ${fmt.price(sc.stop)}" + (sc.stop_pct?.let { ", ${weight1(it)} below entry" } ?: "")
-                        else -> "No protective stop"
-                    },
-                    sinceRef = since(entry, src.ltp),
-                )
-            }
-        }
         val a = sig?.ath
         val ac = a?.call
         if (a != null && ac != null && a.state == "IN_POSITION" && a.entry_date == ac.entry_date && inWindow(ac.entry_date)) {
@@ -153,29 +127,6 @@ fun buildSells(sources: List<CallSource>, sessions: List<String>, fmt: PriceFmt,
     }
     sources.forEach { src ->
         val sig = src.sig
-        sig?.swing?.exits?.forEachIndexed { i, e ->
-            if (!inWindow(e.exit_date)) return@forEachIndexed
-            val stop = e.reason == "ATR STOP"
-            out += CallRow(
-                key = "${src.code}-swing-exit-$i", src = src, kind = Kind.Swing, date = e.exit_date, waiting = false, live = false,
-                price = e.exit_price, priceNote = if (stop) "stop hit" else "at the open",
-                why = if (stop) "Protective ATR stop hit on ${shortDate(e.exit_date)}" else "UT Bot sell and a close under the 20-EMA on ${shortDate(e.signal_date)}",
-                detail = if (stop) "The stop sits 2 ATR below the entry and trails up with the position" else "Sold at the ${shortDate(e.exit_date)} open",
-                tail = ended(e.entry_date, e.entry_price, e.exit_price, e.pnl_pct), tailTone = e.pnl_pct,
-                sinceRef = since(e.exit_price, src.ltp),
-            )
-        }
-        sig?.swing?.pending_sell?.let { ps ->
-            out += CallRow(
-                key = "${src.code}-swing-pending", src = src, kind = Kind.Swing, date = ps.signal_date, waiting = true,
-                live = sessionOpen && ps.signal_date == sig.live_date,
-                price = ps.signal_close, priceNote = "indicative",
-                why = "UT Bot sell and a close under the 20-EMA on the ${shortDate(ps.signal_date)} close",
-                detail = "Sells at the next open",
-                tail = if (ps.entry_date != null) "Bought ${shortDate(ps.entry_date)} at ${fmt.price(ps.entry_price)}" else "",
-                sinceRef = since(ps.signal_close, src.ltp),
-            )
-        }
         sig?.ath?.exits?.forEachIndexed { i, e ->
             if (!inWindow(e.exit_date)) return@forEachIndexed
             out += CallRow(
@@ -281,20 +232,12 @@ fun LazyListScope.callsView(
             )
         }
     }
-    listOf(Kind.Swing, Kind.Ath).forEach { kind ->
+    listOf(Kind.Ath).forEach { kind ->
         val list = filled.filter { it.kind == kind }
         callSection(
-            key = "${state.side}-$kind-${state.window}", title = kind.title, sub = kind.sub, accent = { if (kind == Kind.Swing) Wv.c.accent else Wv.c.gain },
+            key = "${state.side}-$kind-${state.window}", title = kind.title, sub = kind.sub, accent = { Wv.c.gain },
             rows = list, side = state.side, fmt = fmt, state = state, onStock = onStock,
             empty = if (state.side == "buy") (if (state.window == OPEN_WINDOW) "No open positions." else "No buys filled in this period.") else if (state.window == OPEN_WINDOW) "No closed trades on record." else "No sells in this period.",
-        )
-    }
-    if (waiting.isNotEmpty()) {
-        callSection(
-            key = "${state.side}-waiting",
-            title = if (state.side == "buy") "Swing buys waiting to fill" else "Swing sells waiting to fill",
-            sub = "The latest session's Swing ${state.side} signals. The strategy trades at the next open, so none has filled yet; the price shown is the signal close and the real fill can differ.",
-            accent = { Wv.c.warn }, rows = waiting, side = state.side, fmt = fmt, state = state, onStock = onStock, empty = "Nothing is waiting to fill.",
         )
     }
 }

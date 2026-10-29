@@ -3,8 +3,6 @@
 Provides endpoints for:
 - GET /api/v1/analytics/momentum: Momentum report (trend, returns, RSI, 52W range,
   relative strength) for a single stock computed from Kite daily candles.
-- GET /api/v1/analytics/strategy/swing-v21: NSE Swing Momentum V2.1 strategy status,
-  signals, and backtest for a single stock.
 - GET /api/v1/analytics/strategy/ath-breakout: "Below 200DMA -> ATH Break -> Hold till
   200DMA Break" strategy status, signals, and backtest over the full price history.
 """
@@ -17,7 +15,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from apps.api.routers.accounts import get_current_user
 from core.analytics import analyze_momentum
 from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
-from core.analytics.swing_strategy import run_swing_strategy
 from core.market_data.history import (
     MAX_LOOKBACK_DAYS,
     NIFTY_50_SYMBOL,
@@ -35,8 +32,6 @@ from core.models import (
     AthBreakoutResult,
     BrokerStatus,
     MomentumAnalysis,
-    SwingStrategyParams,
-    SwingStrategyResult,
 )
 from core.market_data.stock_search import MIN_CHARS as MIN_SEARCH_CHARS, search_stocks
 from storage.tables.repositories import BrokerConnectionRepository
@@ -195,57 +190,6 @@ async def get_momentum(
     )
     report.live_bar = live_price is not None
     return report
-
-
-@router.get(
-    "/strategy/swing-v21",
-    response_model=SwingStrategyResult,
-    status_code=status.HTTP_200_OK,
-    summary="NSE Swing Momentum V2.1 Strategy",
-    description=(
-        "Runs the NSE Swing Momentum V2.1 strategy (50/200-SMA trend filter, UT Bot entry, "
-        "UT + 20-EMA exit, ATR protective stop) on Kite daily candles and returns the current "
-        "status, per-bar signals, trade list, and backtest statistics. Today's unfinished candle "
-        "is excluded during market hours so signals do not change intraday."
-    ),
-)
-async def get_swing_strategy(
-    symbol: str = Query(..., min_length=1, max_length=40, description="Symbol, e.g. 'INFY' or 'NSE:INFY'"),
-    years: int = Query(default=5, ge=1, le=5, description="Backtest length in years (Kite allows ~4.5Y after warm-up)"),
-    ut_key: float = Query(default=1.0, gt=0, le=10, description="UT Bot key value"),
-    ut_atr_period: int = Query(default=10, ge=1, le=100, description="UT Bot ATR period"),
-    use_stop: bool = Query(default=True, description="Use the ATR protective stop"),
-    stop_atr_mult: float = Query(default=2.0, gt=0, le=10, description="Protective stop ATR multiplier"),
-    current_user_id: str = Depends(get_current_user),
-) -> SwingStrategyResult:
-    """Compute status, signals, and backtest for the V2.1 swing strategy."""
-    params = SwingStrategyParams(
-        ut_key=ut_key,
-        ut_atr_period=ut_atr_period,
-        use_stop=use_stop,
-        stop_atr_mult=stop_atr_mult,
-    )
-    lookback = min(MAX_LOOKBACK_DAYS, years * 365 + STRATEGY_WARMUP_DAYS)
-    instrument, candles, _ = await _load_candles(current_user_id, symbol, lookback_days=lookback)
-    candles, _bench, live_price = await _apply_live(current_user_id, instrument, candles)
-    partial_dropped = False
-    if live_price is None:  # no live quote: fall back to completed candles only
-        candles, partial_dropped = drop_incomplete_today(candles)
-
-    tick = float(instrument.get("tick_size") or 0.05)
-    try:
-        result = run_swing_strategy(
-            instrument=_qualified_symbol(instrument),
-            candles=candles,
-            params=params,
-            tick_size=tick,
-            name=instrument.get("name"),
-            partial_bar_excluded=partial_dropped,
-        )
-        result.live_bar, result.live_price = live_price is not None, live_price
-        return result
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
 
 @router.get(

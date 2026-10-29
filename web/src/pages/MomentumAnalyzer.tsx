@@ -210,7 +210,7 @@ export const MomentumAnalyzer: React.FC = () => {
                 to={`/strategy?symbol=${encodeURIComponent(report.instrument)}`}
                 className="inline-flex items-center gap-1 text-[11px] font-semibold text-wv-text-2 hover:text-wv-text mt-1"
               >
-                Run Swing V2.1 strategy <ArrowUpRight className="w-3.5 h-3.5" />
+                Run ATH strategy <ArrowUpRight className="w-3.5 h-3.5" />
               </Link>
             </div>
           </div>

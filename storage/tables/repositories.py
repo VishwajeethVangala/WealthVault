@@ -7,7 +7,8 @@ multi-tenant partitioning:
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 import logging
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -896,3 +897,116 @@ class FeedbackRepository(BaseTableStorage):
         keys = ("id", "category", "message", "platform", "app_version", "created_at", "status")
         return [{k: r.get(k) for k in keys} for r in sorted(rows, key=lambda r: r.get("RowKey", ""), reverse=True)]
 
+
+# --- push notifications --------------------------------------------------------------------------------------
+
+
+class DeviceTokenRepository(BaseTableStorage):
+    """The phones signed in as a user, so a push goes to that user's phones only.
+
+    PartitionKey = owner_id
+    RowKey = first 40 hex characters of SHA-256 of the FCM token (tokens are long and may hold odd characters)
+    """
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="devicetokens", connection_string=connection_string)
+
+    @staticmethod
+    def _row(token: str) -> str:
+        return hashlib.sha256(token.encode("utf-8")).hexdigest()[:40]
+
+    async def add(self, owner_id: str, token: str, platform: str = "android") -> None:
+        await self.upsert_entity(
+            user_id=owner_id,
+            entity_id=self._row(token),
+            data={"token": token, "platform": platform, "updated_at": datetime.now(timezone.utc).isoformat()},
+            mode="replace",
+        )
+
+    async def remove(self, owner_id: str, token: str) -> bool:
+        return await self.delete_entity(user_id=owner_id, entity_id=self._row(token))
+
+    async def tokens(self, owner_id: str) -> List[str]:
+        return [r["token"] for r in await self.query_entities(user_id=owner_id) if r.get("token")]
+
+    async def owners(self) -> List[str]:
+        """Every user with at least one registered phone (the table is small: one row per phone)."""
+        client = await self.get_table_client()
+        seen: set = set()
+        async for e in client.list_entities(select=["PartitionKey"]):
+            seen.add(e["PartitionKey"])
+        return sorted(seen)
+
+
+class NotificationPrefsRepository(BaseTableStorage):
+    """Which kinds of notification a person wants. PartitionKey = owner_id, RowKey = 'prefs'."""
+
+    KINDS = ("holdings_ath", "stage2_ath", "networth_daily", "networth_weekly", "kite_login")
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="notifprefs", connection_string=connection_string)
+
+    async def get(self, owner_id: str) -> Dict[str, bool]:
+        row = await self.get_entity(user_id=owner_id, entity_id="prefs") or {}
+        return {k: bool(row.get(k, True)) for k in self.KINDS}  # everything is on until switched off
+
+    async def save(self, owner_id: str, prefs: Dict[str, bool]) -> Dict[str, bool]:
+        clean = {k: bool(prefs.get(k, True)) for k in self.KINDS}
+        await self.upsert_entity(user_id=owner_id, entity_id="prefs", data=clean, mode="replace")
+        return clean
+
+
+class NotificationRepository(BaseTableStorage):
+    """What each notification says. The push itself carries only an id; the phone asks for the text, so names and
+    amounts never pass through Google's push service.
+
+    PartitionKey = owner_id (so an account deletion removes them)
+    RowKey = '<UTC time>_<random>'
+    """
+
+    KEEP_DAYS = 14
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="notifications", connection_string=connection_string)
+
+    async def create(self, owner_id: str, kind: str, title: str, body: str, body_masked: str, public_title: str, route: str) -> str:
+        now = datetime.now(timezone.utc)
+        nid = f"{now.strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        await self.upsert_entity(
+            user_id=owner_id,
+            entity_id=nid,
+            data={
+                "kind": kind, "title": title, "body": body, "body_masked": body_masked,
+                "public_title": public_title, "route": route, "created_at": now.isoformat(),
+            },
+            mode="replace",
+        )
+        cutoff = (now - timedelta(days=self.KEEP_DAYS)).strftime("%Y%m%dT%H%M%S")
+        for r in await self.query_entities(user_id=owner_id, filter_query=f"RowKey lt '{cutoff}'", select=["RowKey"]):
+            await self.delete_entity(user_id=owner_id, entity_id=r["RowKey"])
+        return nid
+
+    async def get(self, owner_id: str, nid: str) -> Optional[Dict[str, Any]]:
+        return await self.get_entity(user_id=owner_id, entity_id=nid)
+
+
+class PushSentRepository(BaseTableStorage):
+    """What has already been sent to a person, so a call or a summary is never repeated.
+
+    PartitionKey = owner_id
+    RowKey = a key such as 'h|2026-10-29|buy|NSE:RELIANCE' (see core/push/service.py)
+    """
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="pushsent", connection_string=connection_string)
+
+    async def has(self, owner_id: str, key: str) -> bool:
+        return await self.get_entity(user_id=owner_id, entity_id=key, select=["RowKey"]) is not None
+
+    async def mark(self, owner_id: str, key: str, **fields: Any) -> None:
+        data = {"sent_at": datetime.now(timezone.utc).isoformat(), "status": "sent"}
+        data.update(fields)
+        await self.upsert_entity(user_id=owner_id, entity_id=key, data=data, mode="replace")
+
+    async def with_prefix(self, owner_id: str, prefix: str) -> List[Dict[str, Any]]:
+        return await self.query_entities(user_id=owner_id, filter_query=f"RowKey ge '{prefix}' and RowKey lt '{prefix}~'")

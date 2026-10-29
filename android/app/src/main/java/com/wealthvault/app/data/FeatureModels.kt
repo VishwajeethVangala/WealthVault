@@ -22,19 +22,15 @@ data class MomentumSignal(
     val range_pos: Double? = null,
 )
 
+/** The text of one notification, fetched from the server by the id the push carried. */
 @Serializable
-data class SwingCall(
-    val signal_date: String = "",
-    val signal_close: Double? = null,
-    val above_slow_pct: Double? = null,
-    val fast_over_slow_pct: Double? = null,
-    val slow_slope_pct: Double? = null,
-    val slope_lookback: Int? = null,
-    val queued: Boolean = false,
-    val entry_date: String? = null,
-    val entry_price: Double? = null,
-    val stop: Double? = null,
-    val stop_pct: Double? = null,
+data class PushNote(
+    val kind: String = "",
+    val title: String = "",
+    val body: String = "",
+    val body_masked: String = "",
+    val public_title: String = "",
+    val route: String = "",
 )
 
 @Serializable
@@ -72,22 +68,6 @@ data class PendingSell(
 )
 
 @Serializable
-data class SwingSignal(
-    val state: String = "",
-    val headline: String = "",
-    val detail: String = "",
-    val pending_order: String? = null,
-    val entry_date: String? = null,
-    val entry_price: Double? = null,
-    val stop_price: Double? = null,
-    val bars_held: Int? = null,
-    val regime_bullish: Boolean = false,
-    val call: SwingCall? = null,
-    val exits: List<ExitCall>? = null,
-    val pending_sell: PendingSell? = null,
-)
-
-@Serializable
 data class AthSignal(
     val state: String = "",
     val headline: String = "",
@@ -112,7 +92,6 @@ data class StockSignals(
     val live_date: String? = null,
     val last_sessions: List<String>? = null,
     val momentum: MomentumSignal? = null,
-    val swing: SwingSignal? = null,
     val ath: AthSignal? = null,
     val errors: Map<String, String> = emptyMap(),
     val computed_at: String? = null,
@@ -251,7 +230,7 @@ data class MomentumAnalysis(
     val series: List<MomentumPoint> = emptyList(),
 )
 
-// --- strategy backtests (Swing V2.1 and 200-DMA ATH breakout share one shape here) -------------------------
+// --- strategy backtests (the 200-DMA ATH breakout) -------------------------
 
 @Serializable
 data class StrategyStatus(
@@ -313,7 +292,7 @@ data class StrategyTrade(
     val is_open: Boolean = false,
 )
 
-/** One day of a backtest: the price, the strategy's lines and signals, and both equity curves. Swing and ATH fill different fields. */
+/** One day of a backtest: the price, the strategy's lines and signals, and both equity curves.  */
 @Serializable
 data class StrategyBar(
     val date: String = "",
@@ -336,7 +315,7 @@ data class StrategyBar(
     val in_window: Boolean = false,
 )
 
-/** The settings a backtest ran with (Swing and ATH use different ones). */
+/** The settings a backtest ran with (the ATH breakout run). */
 @Serializable
 data class StrategyParams(
     val use_stop: Boolean? = null,
@@ -430,9 +409,6 @@ data class PortfolioRisk(
 
 @Serializable
 data class RiskResponse(val risk: PortfolioRisk? = null, val equity_value: Double = 0.0, val measured_stocks: Int = 0, val total_stocks: Int = 0)
-
-/** Inputs for a Swing V2.1 run (the web's defaults); the rest of the script is fixed. */
-data class SwingOptions(val years: Int = 5, val utKey: Double = 1.0, val utAtrPeriod: Int = 10, val useStop: Boolean = true, val stopMult: Double = 2.0)
 
 /** Inputs for a 200-DMA ATH breakout run (the web's defaults). */
 data class AthOptions(val startDate: String = "2015-01-01", val dmaLength: Int = 200, val windowBars: Int = 200, val capital: Double = 50000.0)

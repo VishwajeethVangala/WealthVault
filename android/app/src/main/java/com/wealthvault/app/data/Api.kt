@@ -106,6 +106,29 @@ class Api(private val prefs: Prefs) {
     private fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
 
     /** Sends a message from the feedback form; it is kept on the server with the sender's account. */
+    // --- push notifications ---------------------------------------------------------------------------------
+
+    suspend fun registerDevice(token: String) {
+        call("POST", "/notifications/devices", buildJsonObject { put("token", token) }.toString())
+    }
+
+    suspend fun removeDevice(token: String) {
+        call("POST", "/notifications/devices/remove", buildJsonObject { put("token", token) }.toString())
+    }
+
+    suspend fun notificationPrefs(): Map<String, Boolean> = json.decodeFromString(call("GET", "/notifications/prefs"))
+
+    suspend fun saveNotificationPrefs(prefs: Map<String, Boolean>): Map<String, Boolean> {
+        val body = buildJsonObject { prefs.forEach { (k, v) -> put(k, v) } }.toString()
+        return json.decodeFromString(call("PUT", "/notifications/prefs", body))
+    }
+
+    suspend fun notification(id: String): PushNote = json.decodeFromString(call("GET", "/notifications/$id"))
+
+    suspend fun testNotification() {
+        call("POST", "/notifications/test")
+    }
+
     suspend fun sendFeedback(category: String, message: String, appVersion: String) {
         val body = buildJsonObject {
             put("category", category)
@@ -149,10 +172,6 @@ class Api(private val prefs: Prefs) {
     suspend fun searchStocks(q: String): List<StockSuggestion> = json.decodeFromString(call("GET", "/analytics/search?q=${enc(q)}"))
 
     suspend fun momentum(symbol: String): MomentumAnalysis = json.decodeFromString(call("GET", "/analytics/momentum?symbol=${enc(symbol)}"))
-
-    suspend fun swingStrategy(symbol: String, o: SwingOptions = SwingOptions()): StrategyResult = json.decodeFromString(
-        call("GET", "/analytics/strategy/swing-v21?symbol=${enc(symbol)}&years=${o.years}&ut_key=${o.utKey}&ut_atr_period=${o.utAtrPeriod}&use_stop=${o.useStop}&stop_atr_mult=${o.stopMult}"),
-    )
 
     suspend fun athStrategy(symbol: String, o: AthOptions = AthOptions()): StrategyResult = json.decodeFromString(
         call("GET", "/analytics/strategy/ath-breakout?symbol=${enc(symbol)}&start_date=${o.startDate}&dma_length=${o.dmaLength}&window_bars=${o.windowBars}&capital_per_trade=${o.capital.toLong()}"),

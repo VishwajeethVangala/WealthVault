@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from apps.api.routers import accounts_router, analytics_router, auth_router, feedback_router, health_router, history_router, portfolio_router, signals_router, stage2_router, targets_router
+from apps.api.routers import accounts_router, analytics_router, auth_router, feedback_router, health_router, history_router, notifications_router, portfolio_router, signals_router, stage2_router, targets_router
 from core.config import get_settings, production_problems
 
 # Configure logging
@@ -101,9 +101,12 @@ async def lifespan(app: FastAPI):
             raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
 
     from apps.api.auto_refresh import start_auto_refresh, stop_auto_refresh
+    from apps.api.push_jobs import start_push_jobs, stop_push_jobs
 
     start_auto_refresh()
+    start_push_jobs()
     yield
+    await stop_push_jobs()
     await stop_auto_refresh()
 
     logger.info("Shutting down %s...", settings.APP_NAME)
@@ -157,6 +160,7 @@ def create_application() -> FastAPI:
     app.include_router(signals_router, prefix=settings.API_V1_PREFIX)
     app.include_router(stage2_router, prefix=settings.API_V1_PREFIX)
     app.include_router(feedback_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
 
     # Native frontend serving attached after all API routers to prevent route swallowing
     app.frontend("/", directory="dist", fallback="index.html")

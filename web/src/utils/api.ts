@@ -1,5 +1,6 @@
+import { cleanSearchTerm, track } from './analytics'
 import type { LiveSignalsResponse } from '../components/signals/useLiveSignals'
-import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, SwingStrategyOptions, SwingStrategyResult, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
+import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -105,6 +106,7 @@ export async function authenticateWithGoogle(credential: string): Promise<AuthRe
 
   setToken(data.access_token)
   setStoredUser(data.user)
+  track('login', { method: 'google' })
   return data
 }
 
@@ -149,9 +151,16 @@ export async function fetchBrokerSessions(): Promise<BrokerSessionInfo[]> {
 }
 
 export async function syncBroker(connectionIdOrBroker: string): Promise<BrokerSessionInfo> {
-  return fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(connectionIdOrBroker)}/sync`, {
-    method: 'POST',
-  })
+  try {
+    const res = await fetchApi<BrokerSessionInfo>(`/api/v1/portfolio/sessions/${encodeURIComponent(connectionIdOrBroker)}/sync`, {
+      method: 'POST',
+    })
+    track('sync', { broker: res.broker_name, outcome: res.status === 'CONNECTED' ? 'ok' : 'needs_attention' })
+    return res
+  } catch (err) {
+    track('sync', { outcome: 'failed' })
+    throw err
+  }
 }
 
 export async function reauthBroker(connectionIdOrBroker: string, data?: ReauthRequest): Promise<BrokerSessionInfo> {
@@ -178,10 +187,12 @@ export async function fetchBrokerCatalog(): Promise<BrokerCatalogItem[]> {
 }
 
 export async function addBrokerConnection(data: CreateBrokerConnectionRequest): Promise<BrokerSessionInfo> {
-  return fetchApi<BrokerSessionInfo>('/api/v1/portfolio/connections', {
+  const res = await fetchApi<BrokerSessionInfo>('/api/v1/portfolio/connections', {
     method: 'POST',
     body: JSON.stringify(data),
   })
+  track('broker_connected', { broker: res.broker_name })
+  return res
 }
 
 export async function deleteBrokerConnection(connectionIdOrBroker: string, wipeBlobs = true): Promise<BrokerDeleteResponse> {
@@ -197,20 +208,14 @@ export async function fetchMomentum(symbol: string): Promise<MomentumAnalysis> {
   return fetchApi<MomentumAnalysis>(`/api/v1/analytics/momentum?symbol=${encodeURIComponent(symbol)}`)
 }
 
-export async function fetchSwingStrategy(symbol: string, options: SwingStrategyOptions = {}): Promise<SwingStrategyResult> {
-  const params = new URLSearchParams({ symbol })
-  Object.entries(options).forEach(([key, value]) => {
-    if (value !== undefined) params.set(key, String(value))
-  })
-  return fetchApi<SwingStrategyResult>(`/api/v1/analytics/strategy/swing-v21?${params.toString()}`)
-}
-
 export async function fetchAthBreakoutStrategy(symbol: string, options: AthBreakoutOptions = {}): Promise<AthBreakoutResult> {
   const params = new URLSearchParams({ symbol })
   Object.entries(options).forEach(([key, value]) => {
     if (value !== undefined) params.set(key, String(value))
   })
-  return fetchApi<AthBreakoutResult>(`/api/v1/analytics/strategy/ath-breakout?${params.toString()}`)
+  const res = await fetchApi<AthBreakoutResult>(`/api/v1/analytics/strategy/ath-breakout?${params.toString()}`)
+  track('strategy_run', { strategy: 'ath', symbol: cleanSearchTerm(symbol) })
+  return res
 }
 
 // Target allocation (stored per user in Azure Table Storage)
@@ -286,7 +291,9 @@ export async function fetchUsLive(): Promise<UsLiveResponse> {
 }
 
 export async function refreshSignals(market: 'in' | 'us' = 'in'): Promise<SignalsJob> {
-  return fetchApi<SignalsJob>(`/api/v1/analytics/signals/refresh?market=${market}`, { method: 'POST' })
+  const res = await fetchApi<SignalsJob>(`/api/v1/analytics/signals/refresh?market=${market}`, { method: 'POST' })
+  track('signals_refresh', { market })
+  return res
 }
 
 // Stage 2 screener
@@ -295,7 +302,9 @@ export async function fetchStage2(): Promise<Stage2Response> {
 }
 
 export async function refreshStage2(): Promise<SignalsJob> {
-  return fetchApi<SignalsJob>('/api/v1/analytics/stage2/refresh', { method: 'POST' })
+  const res = await fetchApi<SignalsJob>('/api/v1/analytics/stage2/refresh', { method: 'POST' })
+  track('signals_refresh', { market: 'in' })
+  return res
 }
 
 export async function fetchStage2Live(): Promise<Stage2LiveResponse> {

@@ -128,3 +128,53 @@ a.avatar {
   border-top: 1px solid var(--border, #e5e7eb);
   padding-top: 14px;
 }
+
+/* one-time analytics choice */
+.consent {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 28px));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(15, 23, 32, 0.18);
+}
+.consent svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.consent-tx {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--text-2);
+  min-width: 0;
+}
+.consent-tx b {
+  color: var(--text);
+}
+.consent-btns {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+@media (max-width: 720px) {
+  .consent {
+    bottom: 84px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .consent svg {
+    display: none;
+  }
+  .consent-btns .btn {
+    flex: 1;
+  }
+}

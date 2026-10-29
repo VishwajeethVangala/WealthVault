@@ -391,3 +391,144 @@
     min-width: 640px;
   }
 }
+
+/* =========================================================================
+   Pinned summary: a slim bar replaces the cards once they scroll away; search stays under it
+   ========================================================================= */
+.pin-mini {
+  position: sticky;
+  top: 0;
+  height: 0;
+  margin-top: -20px; /* cancels the page's flex gap so the zero-height anchor adds no space */
+  z-index: 30;
+}
+.mini {
+  all: unset;
+  box-sizing: border-box;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 6px 16px rgba(15, 23, 32, 0.1);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-100%);
+  transition: transform 0.18s ease, opacity 0.18s ease, visibility 0s linear 0.18s;
+}
+.mini.on {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+.mini:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.mini span {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+}
+.mini i {
+  grid-column: 1 / -1;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.mini b {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini em {
+  font-style: normal;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.pin-search {
+  position: sticky;
+  top: 52px;
+  z-index: 20;
+  background: var(--bg);
+  padding: 6px 0;
+  margin: -6px 0;
+}
+@media (min-width: 1500px) {
+  /* The table fits without sideways scrolling here, so its header can pin too */
+  .tcard {
+    overflow: hidden;
+    overflow: clip;
+  }
+  .tscroll {
+    overflow: visible;
+  }
+  .tr.th {
+    position: sticky;
+    top: 100px;
+    z-index: 10;
+  }
+}
+@media (max-width: 720px) {
+  .pin-mini {
+    margin-top: -14px;
+  }
+  .page-in > .pin-mini {
+    margin-top: -20px;
+  }
+  .mini {
+    height: 52px;
+    gap: 6px;
+    padding: 0 10px;
+    border-radius: 0 0 10px 10px;
+  }
+  .mini span {
+    display: block;
+  }
+  .mini b {
+    display: block;
+    font-size: 12px;
+  }
+  .mini em {
+    display: block;
+    font-size: 10px;
+  }
+  .mini i {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 0.03em;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mini,
+  .mini.on {
+    transition: none;
+  }
+}
+
+/* momentum verdict next to the asset class on each holding */
+.badge.trend {
+  height: 18px;
+  padding: 0 7px;
+  font-size: 10.5px;
+  margin-left: 8px;
+  vertical-align: middle;
+}

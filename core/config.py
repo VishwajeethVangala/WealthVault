@@ -83,6 +83,7 @@ class Settings(BaseSettings):
     # Unset = on in production, off elsewhere (a local server shares the same Azure tables).
     AUTO_REFRESH_ENABLED: Optional[bool] = Field(default=None, description="Run the market-hours auto refresh")
     AUTO_REFRESH_MINUTES: int = Field(default=15, ge=5, le=120, description="Minutes between auto refreshes")
+    FCM_SERVICE_ACCOUNT_JSON: str = Field(default="", description="Firebase service account key (JSON) used to send Android push notifications")
 
     model_config = SettingsConfigDict(
         env_file=".env",

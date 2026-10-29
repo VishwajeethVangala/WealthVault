@@ -270,8 +270,6 @@ export const EquityCurveCard: React.FC<{ series: EquityPoint[]; initialCapital: 
 }
 
 const EXIT_STYLES: Record<StrategyTrade['exit_reason'], { label: string; cls: string }> = {
-  'UT + EMA20 SELL': { label: 'UT + EMA20', cls: 'bg-wv-surface-2 text-wv-text-2' },
-  'ATR STOP': { label: 'ATR stop', cls: 'bg-wv-loss-weak text-wv-loss' },
   '200DMA BREAK': { label: 'Below 200-DMA', cls: 'bg-wv-surface-2 text-wv-text-2' },
   OPEN: { label: 'Open', cls: 'bg-wv-accent-weak text-wv-accent' },
 }

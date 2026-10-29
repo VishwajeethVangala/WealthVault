@@ -1,9 +1,13 @@
 /* Refinements loaded last: consistent controls, no overflow, and a layout that holds from phone to wide desktop. */
 
 /* ---- never scroll the page sideways ---- */
-html,
+html {
+  overflow-x: hidden;
+}
+/* clip, not hidden: hidden would make body a scroll container and break every position: sticky inside it */
 body {
   overflow-x: hidden;
+  overflow-x: clip;
 }
 .main,
 .page {

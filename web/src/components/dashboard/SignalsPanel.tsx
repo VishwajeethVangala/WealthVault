@@ -90,7 +90,7 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
     const waitingBuys = [...a.buys, ...b.buys].filter((r) => r.waiting)
     // the same "all bearish" reading the Signals page filters on, so the count matches what the link opens
     const review = all.filter((s) => readSignals(s.sig, s.ltp).alignment === 'all-bear')
-    const covered = all.filter((s) => s.sig && (s.sig.momentum || s.sig.swing || s.sig.ath)).length
+    const covered = all.filter((s) => s.sig && (s.sig.momentum || s.sig.ath)).length
     const market = (rows: { src: CallSource }[]) => (rows.length > 0 && rows.every((r) => inSrc.includes(r.src) === false) ? 'us' : 'in')
     const links = {
       // source=held: these counts are your holdings only, so the page opens on them
@@ -98,7 +98,7 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
       buys: `/signals?view=calls&side=buy&window=2&source=held${market(buys) === 'us' ? '&market=us' : ''}`,
       review: `/signals?filter=all-bear&source=held${review.length > 0 && review.every((r) => usSrc.includes(r)) ? '&market=us' : ''}`,
     }
-    return { links, sells, buys, waitingBuys, review, covered, total: all.length, hasExit: all.some((s) => s.sig?.swing?.exits || s.sig?.ath?.exits), s7 }
+    return { links, sells, buys, waitingBuys, review, covered, total: all.length, hasExit: all.some((s) => s.sig?.ath?.exits), s7 }
   }, [base, liveIn.signals, liveUs.signals, instruments, stockHref])
 
   useEffect(() => {
@@ -116,7 +116,7 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
       <header className="bx-ph">
         <div>
           <h2 className="card-t">Signals on your holdings</h2>
-          <p className="card-s">Swing V2.1 and ATH breakout calls, on live prices</p>
+          <p className="card-s">ATH breakout calls, on live prices</p>
         </div>
         <div className="bx-ph-r">
           {hasIn && <FreshnessChip status={liveIn.status} broker="Kite" sessionOpen={indiaSessionActive()} />}
@@ -153,7 +153,7 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
           {!model.hasExit && <p className="empty-s">Sell history is added after the next signals refresh.</p>}
           {model.review.length > 0 && (
             <p className="bx-fine">
-              <b>To review</b> (all three signals bearish): {model.review.slice(0, 6).map((r) => r.name).join(', ')}
+              <b>To review</b> (both signals bearish): {model.review.slice(0, 6).map((r) => r.name).join(', ')}
               {model.review.length > 6 ? ` and ${model.review.length - 6} more` : ''}
             </p>
           )}
@@ -167,7 +167,7 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
               <div className="bx-sig-r" key={r.key}>
                 <div>
                   <StockLink href={r.src.href ?? null}>{r.src.name.length > 26 ? `${r.src.name.slice(0, 25)}…` : r.src.name}</StockLink>
-                  <span className={`badge ${r.kind === 'swing' ? 'info' : 'ok'}`}>{r.kind === 'swing' ? 'Swing' : 'ATH'}</span>
+                  <span className="badge ok">ATH</span>
                   {r.waiting && <span className="badge warn">Waiting</span>}
                 </div>
                 <div className={`sub num ${r.tailTone ?? ''}`}>
@@ -183,7 +183,7 @@ export const SignalsPanel: React.FC<{ instruments: Instrument[]; onDigest?: (d: 
               <div className="bx-sig-r" key={r.key}>
                 <div>
                   <StockLink href={r.src.href ?? null}>{r.src.name.length > 26 ? `${r.src.name.slice(0, 25)}…` : r.src.name}</StockLink>
-                  <span className={`badge ${r.kind === 'swing' ? 'info' : 'ok'}`}>{r.kind === 'swing' ? 'Swing' : 'ATH'}</span>
+                  <span className="badge ok">ATH</span>
                 </div>
                 <div className={`sub num ${tone(r.sinceRef?.abs)}`}>
                   {longDate(r.date)} · {r.why}

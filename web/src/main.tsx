@@ -10,6 +10,9 @@ import './styles/executive.css'
 import './styles/account.css'
 import './styles/polish.css'
 import App from './App.tsx'
+import { initAnalytics } from './utils/analytics'
+
+initAnalytics()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, Check, Info } from 'lucide-react'
 import { StockLink } from '../components/StockLink'
@@ -11,6 +11,7 @@ import { useMoney } from '../utils/useMoney'
 import { CLASS_COLOR, CLASS_LABEL, brokerCode, brokerColor, buildInstruments } from '../components/holdings/holdingsModel'
 import { TargetAllocationEditor } from '../components/dashboard/TargetAllocationEditor'
 import { HeroBand } from '../components/dashboard/HeroBand'
+import { SummaryPin } from '../components/SummaryPin'
 import { CategoryGrid } from '../components/dashboard/CategoryGrid'
 import { DayMove } from '../components/dashboard/DayMove'
 import { SignalsPanel, type SignalDigest } from '../components/dashboard/SignalsPanel'
@@ -30,6 +31,7 @@ export const ExecutiveOverview: React.FC = () => {
   const { holdings, loading, error, refresh, stockHref } = usePortfolio()
   const { compact, signedCompact } = useMoney()
 
+  const heroRef = useRef<HTMLDivElement>(null)
   const [sessions, setSessions] = useState<BrokerSessionInfo[]>([])
   const [targets, setTargets] = useState<Record<string, number>>({})
   const [editingTargets, setEditingTargets] = useState(false)
@@ -247,15 +249,19 @@ export const ExecutiveOverview: React.FC = () => {
         </div>
       )}
 
-      <HeroBand
-        instruments={instruments}
-        totals={totals}
-        history={history}
-        period={period}
-        onPeriod={setPeriod}
-        nifty={nifty}
-        filterActive={filterActive}
-      />
+      <SummaryPin totals={totals} watch={heroRef} />
+
+      <div ref={heroRef}>
+        <HeroBand
+          instruments={instruments}
+          totals={totals}
+          history={history}
+          period={period}
+          onPeriod={setPeriod}
+          nifty={nifty}
+          filterActive={filterActive}
+        />
+      </div>
 
       <Brief lines={brief} />
 

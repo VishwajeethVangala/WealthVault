@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.foundation.layout.Box
@@ -83,6 +84,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.wealthvault.app.ui.AppViewModel
 import com.wealthvault.app.ui.LockScreen
+import com.wealthvault.app.ui.LockSetupScreen
+import com.wealthvault.app.ui.NotificationsPromptScreen
+import com.wealthvault.app.push.Notifier
+import com.wealthvault.app.push.PushRegistration
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.wealthvault.app.ui.BrokersScreen
 import com.wealthvault.app.ui.HoldingsScreen
 import com.wealthvault.app.ui.OverviewScreen
@@ -112,6 +120,9 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        com.wealthvault.app.ui.Analytics.attach(applicationContext)
+        Notifier.ensureChannels(applicationContext)
+        rememberTappedNotification(intent)
         // count the opening (not a screen rotation), for the review prompt
         if (savedInstanceState == null) lifecycleScope.launch { vm.prefs.countOpen() }
         // Debug builds only: tests start the app signed in with
@@ -119,7 +130,19 @@ class MainActivity : FragmentActivity() {
         if (BuildConfig.DEBUG) {
             val base = intent.getStringExtra("wv_base")
             val token = intent.getStringExtra("wv_token")
-            if (base != null && token != null) vm.debugSignIn(base, token)
+            // `--ez wv_ask true` also shows the analytics consent screen
+            // `--ez wv_real true` signs in as an ordinary (non-demo) account, so the required app lock setup shows
+            // `--es wv_fake_push ath_h` shows a sample notification of that kind, with no push and no server
+            intent.getStringExtra("wv_fake_push")?.let { kind ->
+                val note = com.wealthvault.app.data.PushNote(
+                    kind = kind, title = "ATH strategy · your holdings",
+                    body = "RELIANCE: entry signal on today's live price. A strategy signal, not advice.",
+                    body_masked = "RELIANCE: entry signal on today's live price. A strategy signal, not advice.",
+                    public_title = "ATH strategy update", route = "holdings",
+                )
+                Notifier.show(applicationContext, kind, "debug-$kind", note, hideAmounts = false)
+            }
+            if (base != null && token != null) vm.debugSignIn(base, token, demoAccount = !intent.getBooleanExtra("wv_real", false), askAnalytics = intent.getBooleanExtra("wv_ask", false))
         }
         setContent {
             val session by vm.session.collectAsState()
@@ -132,7 +155,16 @@ class MainActivity : FragmentActivity() {
             }
             // the eye switch: hide every rupee amount, as the phone remembers it
             LaunchedEffect(session?.hideAmounts) { com.wealthvault.app.ui.Privacy.hidden = session?.hideAmounts != false }
+            // usage analytics and crash reports follow the person's choice (off until they allow it)
+            LaunchedEffect(session?.analytics) { if (session != null) com.wealthvault.app.ui.Analytics.apply(session?.analytics == "granted") }
+            LaunchedEffect(session?.token, session?.userId) { com.wealthvault.app.ui.Analytics.identify(if (session?.token != null) session?.userId else null) }
+            // whether the phone lets us show notifications; looked at again each time the app comes back to the front
+            var notificationsOn by remember { mutableStateOf(NotificationManagerCompat.from(this@MainActivity).areNotificationsEnabled()) }
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { notificationsOn = NotificationManagerCompat.from(this@MainActivity).areNotificationsEnabled() }
+            // a phone that allows notifications tells the server it belongs to this person (and stops when signed out)
+            LaunchedEffect(session?.token, notificationsOn) { if (session?.token != null && notificationsOn) PushRegistration.registerCurrent(applicationContext) }
             val unlocked by vm.unlocked.collectAsState()
+            val lockSetupSkipped by vm.lockSetupSkipped.collectAsState()
             val lockOn = session?.lock == true && session?.token != null
             // with the lock on, hide the screen from screenshots and the recent-apps thumbnail
             LaunchedEffect(lockOn) {
@@ -144,10 +176,28 @@ class MainActivity : FragmentActivity() {
                     session == null -> Unit // reading the saved session
                     session?.token == null -> SignInScreen(vm)
                     lockOn && !unlocked -> LockScreen { vm.unlocked.value = true }
+                    // app lock is required: a signed-in person who has not turned it on is asked to, before anything else
+                    session?.lock != true && session?.demo != true && !lockSetupSkipped -> LockSetupScreen(vm)
+                    session?.analytics == null -> com.wealthvault.app.ui.AnalyticsConsentScreen(vm)
+                    // Android 13+ asks permission to show notifications; asked once, never nagged
+                    android.os.Build.VERSION.SDK_INT >= 33 && !notificationsOn && session?.notifAsked != true -> NotificationsPromptScreen(vm)
                     else -> SignedIn(vm, avm)
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        rememberTappedNotification(intent)
+    }
+
+    /** A tapped notification says which page to open; the signed-in screen picks it up once it is showing. */
+    private fun rememberTappedNotification(intent: android.content.Intent?) {
+        val page = intent?.getStringExtra(Notifier.EXTRA_OPEN) ?: return
+        vm.pendingOpen.value = page to (intent.getStringExtra(Notifier.EXTRA_KIND) ?: "")
+        intent.removeExtra(Notifier.EXTRA_OPEN)
     }
 
     // Leaving the app (home, another app, screen off) locks it again; turning the phone over does not.
@@ -163,6 +213,8 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route?.substringBefore('?')
     val onSubPage = route in SUB_PAGES
+    val analyticsChoice = vm.session.collectAsState().value?.analytics
+    LaunchedEffect(route, analyticsChoice) { com.wealthvault.app.ui.Analytics.screen(route) }
     // the pages inside the navigation graph are built once, so they must read the current page when a tap happens,
     // not the page that was showing when they were built
     val liveRoute = rememberUpdatedState(route)
@@ -176,6 +228,15 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
+        }
+    }
+    // a tapped notification opens the page it is about
+    val tapped by vm.pendingOpen.collectAsState()
+    LaunchedEffect(tapped) {
+        tapped?.let { (page, kind) ->
+            if (page in SUB_PAGES) nav.navigate(page) else if (TABS.any { it.route == page }) goTab(page)
+            com.wealthvault.app.ui.Analytics.log("notification_opened", "kind" to kind)
+            vm.pendingOpen.value = null
         }
     }
     // the tabs you came from, so Back from a stock returns to the page it was opened from
@@ -302,6 +363,8 @@ private fun TopBar(vm: AppViewModel, attention: Boolean, onBrokers: () -> Unit, 
                 MenuRow("Settings", Icons.Outlined.Settings) { pick(onSettings) }
                 MenuRow("Send feedback", Icons.Outlined.ChatBubbleOutline) { pick(onFeedback) }
                 MenuRow("Rate WealthVault", Icons.Outlined.StarOutline) { pick(onRate) }
+                val shareContext = androidx.compose.ui.platform.LocalContext.current
+                MenuRow("Share WealthVault", Icons.Outlined.Share) { pick { com.wealthvault.app.ui.ShareApp.open(shareContext, "menu") } }
             }
         }
     }

@@ -124,6 +124,7 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshSignals() = viewModelScope.launch {
         try {
             api.refreshSignals(market.value)
+            Analytics.log("signals_refresh", "market" to market.value)
         } catch (e: Exception) {
             signals.value = signals.value.copy(problem = e.problem())
             return@launch
@@ -166,6 +167,7 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshStage2() = viewModelScope.launch {
         try {
             api.refreshStage2()
+            Analytics.log("signals_refresh", "market" to "in")
         } catch (e: Exception) {
             stage2.value = stage2.value.copy(problem = e.problem())
             return@launch
@@ -176,7 +178,6 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
     // --- one stock: momentum and strategies ------------------------------------------------------------------
 
     val momentum = MutableStateFlow(Res<MomentumAnalysis>())
-    val swing = MutableStateFlow(Res<StrategyResult>())
     val ath = MutableStateFlow(Res<StrategyResult>())
 
     /** Stocks matching what has been typed (3+ characters); empty when the search is unavailable. */
@@ -184,13 +185,12 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
 
     fun analyse(symbol: String) = run(momentum, keep = false) { api.momentum(symbol.trim().uppercase()) }
 
-    /** The inputs each strategy runs with; the Strategies page edits them. */
-    val swingOpts = MutableStateFlow(com.wealthvault.app.data.SwingOptions())
+    /** The inputs the strategy runs with; the ATH Strategy page edits them. */
     val athOpts = MutableStateFlow(com.wealthvault.app.data.AthOptions())
 
-    fun runStrategy(kind: String, symbol: String) =
-        if (kind == "ath") run(ath, keep = false) { api.athStrategy(symbol.trim().uppercase(), athOpts.value) }
-        else run(swing, keep = false) { api.swingStrategy(symbol.trim().uppercase(), swingOpts.value) }
+    fun runStrategy(symbol: String) = run(ath, keep = false) {
+        api.athStrategy(symbol.trim().uppercase(), athOpts.value).also { Analytics.log("strategy_run", "strategy" to "ath", "symbol" to Analytics.cleanSearchTerm(symbol)) }
+    }
 
     // --- brokers ---------------------------------------------------------------------------------------------
 
@@ -205,6 +205,7 @@ class AnalysisViewModel(app: Application) : AndroidViewModel(app) {
         brokerBusy.value = true
         try {
             val created = api.addConnection(item.broker_name, label, accountId)
+            Analytics.log("broker_connected", "broker" to item.broker_name)
             loadCatalog()
             then(created)
         } catch (e: Exception) {

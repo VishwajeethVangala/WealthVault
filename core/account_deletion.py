@@ -15,7 +15,11 @@ from storage.blobs.archive import purge_owner_blobs
 from storage.tables.repositories import (
     BrokerConnectionRepository,
     BrokerCredentialRepository,
+    DeviceTokenRepository,
     FeedbackRepository,
+    NotificationPrefsRepository,
+    NotificationRepository,
+    PushSentRepository,
     HoldingsRepository,
     SnapshotsRepository,
     TargetAllocationRepository,
@@ -65,6 +69,10 @@ async def delete_user_data(owner_id: str) -> Dict[str, Any]:
         ("credentials", BrokerCredentialRepository()),
         ("connections", BrokerConnectionRepository()),
         ("feedback", FeedbackRepository()),
+        ("devices", DeviceTokenRepository()),
+        ("notification_prefs", NotificationPrefsRepository()),
+        ("notifications", NotificationRepository()),
+        ("push_sent", PushSentRepository()),
     ):
         try:
             removed[label] = await repo.delete_partition(owner_id)

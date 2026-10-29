@@ -186,7 +186,7 @@ private fun titleCase(v: String) = v.split(' ').joinToString(" ") { w -> w.repla
 private fun codeOf(id: String) = id.substringAfter(':').uppercase().replace(Regex("-(BE|BZ|BL|IL)$"), "")
 
 private fun isFresh(sig: StockSignals?) =
-    (sig?.swing?.state == "IN_POSITION" && (sig.swing.bars_held ?: 999) <= FRESH_DAYS) || (sig?.ath?.state == "IN_POSITION" && (sig.ath.bars_held ?: 999) <= FRESH_DAYS)
+    (sig?.ath?.state == "IN_POSITION" && (sig.ath.bars_held ?: 999) <= FRESH_DAYS)
 
 /** Chartink + holdings - on both = total, counted once. */
 private data class Breakdown(val chartink: Int, val held: Int, val both: Int) {
@@ -303,7 +303,7 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
             calls.side = side
             calls.window = p.window ?: OPEN_WINDOW
             // a link to calls opens their sections, as the web does
-            listOf("$side-${Kind.Swing}-${calls.window}", "$side-${Kind.Ath}-${calls.window}", "$side-waiting").forEach { calls.open[it] = true }
+            listOf("$side-${Kind.Ath}-${calls.window}").forEach { calls.open[it] = true }
         }
         shown = PAGE
         avm.signalsPreset.value = null
@@ -346,7 +346,7 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
                 SigFilter.Bull -> r.reading.alignment == Agreement.AllBull
                 SigFilter.Mixed -> r.reading.alignment == Agreement.Mixed
                 SigFilter.Bear -> r.reading.alignment == Agreement.AllBear
-                SigFilter.Trade -> r.sig?.swing?.state == "IN_POSITION" || r.sig?.ath?.state == "IN_POSITION"
+                SigFilter.Trade -> r.sig?.ath?.state == "IN_POSITION"
                 SigFilter.Fresh -> r.fresh
             }
     }.let { l ->
@@ -366,7 +366,7 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
 
     PullToRefreshBox(isRefreshing = (res.loading || s2Res.loading) && !running, onRefresh = { avm.loadAll() }) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { PageTitle("Signals", "Momentum, Swing V2.1 and the ATH breakout on the stocks you hold and your Chartink Stage 2 list") }
+            item { PageTitle("Signals", "Momentum and the ATH breakout on the stocks you hold and your Chartink Stage 2 list") }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     // one control bar: which stocks, then the refresh; a quiet status line under it
@@ -425,9 +425,8 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
                                 if (us) (if (scoped.size - covered > 0) "${scoped.size - covered} without signals" else "All analysed")
                                 else "${scoped.count { it.inst != null }} held · ${scoped.count { it.s2 != null }} on Stage 2 · ${scoped.count { it.inst != null && it.s2 != null }} both"),
                             Triple("Momentum", "$up / ${withM.size - up - down} / $down", "Uptrend / neutral / downtrend"),
-                            Triple("In a Swing trade", "${scoped.count { it.sig?.swing?.state == "IN_POSITION" }}", "${scoped.count { it.fresh }} opened in the last $FRESH_DAYS days (either strategy)"),
-                            Triple("In an ATH trade", "${scoped.count { it.sig?.ath?.state == "IN_POSITION" }}", "Near or at highs after a 200-DMA reclaim"),
-                            Triple("All three bullish", "${bull.size}", "${bull.count { it.inst != null }} held" + if (reviewHeld > 0) " · $reviewHeld held all bearish" else ""),
+                            Triple("In an ATH trade", "${scoped.count { it.sig?.ath?.state == "IN_POSITION" }}", "${scoped.count { it.fresh }} opened in the last $FRESH_DAYS days"),
+                            Triple("Both bullish", "${bull.size}", "${bull.count { it.inst != null }} held" + if (reviewHeld > 0) " · $reviewHeld held all bearish" else ""),
                         ),
                         listOf(null, null, null, null, if (bull.isNotEmpty()) Wv.c.gain else null),
                     )
@@ -505,10 +504,10 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
             }
             item {
                 Text(
-                    "Swing V2.1 and ATH entries are the strategies' own signals on daily candles, not your actual buys. \"Since entry\" compares the live price with the strategy entry price, per share" +
+                    "ATH entries are the strategy's own signals on daily candles, not your actual buys. \"Since entry\" compares the live price with the strategy entry price, per share" +
                         (if (us) ", in US dollars; position values stay in rupees" else "") +
                         ". Signals use today's live price as the latest bar, so they can change until the close; the \"last sessions\" windows are the finished sessions plus today. " +
-                        "Bullish: uptrend, a strategy in position, or a buy signal. Bearish: downtrend, a failing Swing trend filter, a sell signal or an exit. This is a rules-based reading of past prices, not advice.",
+                        "Bullish: uptrend, a strategy in position, or a buy signal. Bearish: downtrend, a sell signal or an exit. This is a rules-based reading of past prices, not advice.",
                     style = Wv.small, color = Wv.c.text3,
                 )
             }

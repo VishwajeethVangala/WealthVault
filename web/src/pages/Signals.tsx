@@ -19,7 +19,6 @@ import {
   AthCell,
   DASH,
   MomentumCell,
-  SwingCell,
   momentumLean,
   readSignals,
   type Alignment,
@@ -35,7 +34,7 @@ import {
 type Market = 'in' | 'us'
 type Source = 'all' | 'held' | 'stage2' | 'new'
 type AlignFilter = 'all' | Alignment | 'trade' | 'fresh'
-type SortKey = 'sym' | 'price' | 'day' | 'pos' | 'pnlPct' | 'vol' | 'momentum' | 'swing' | 'ath' | 'align' | `x:${string}`
+type SortKey = 'sym' | 'price' | 'day' | 'pos' | 'pnlPct' | 'vol' | 'momentum' | 'ath' | 'align' | `x:${string}`
 
 interface Row extends Reading {
   key: string
@@ -49,7 +48,7 @@ interface Row extends Reading {
   ltp: number
   dayPct: number | null
   live?: UsLiveQuote
-  /** a Swing or ATH trade that opened within the last FRESH_DAYS trading days */
+  /** an ATH trade that opened within the last FRESH_DAYS trading days */
   fresh: boolean
 }
 
@@ -102,8 +101,6 @@ const sortValue = (r: Row, key: SortKey): string | number | null => {
       return r.s2 ? r.s2.volume : null
     case 'momentum':
       return r.sig?.momentum ? r.sig.momentum.score / (r.sig.momentum.max || 1) : null
-    case 'swing':
-      return r.swingSince ? r.swingSince.pct : null
     case 'ath':
       return r.athSince ? r.athSince.pct : null
     case 'align':
@@ -303,8 +300,7 @@ export const Signals: React.FC = () => {
     const add = (row: Omit<Row, keyof Reading | 'fresh'> & { fresh?: boolean }) => {
       const reading = readSignals(row.sig, row.ltp)
       const fresh =
-        (row.sig?.swing?.state === 'IN_POSITION' && (row.sig.swing.bars_held ?? 999) <= FRESH_DAYS) ||
-        (row.sig?.ath?.state === 'IN_POSITION' && (row.sig.ath.bars_held ?? 999) <= FRESH_DAYS)
+        row.sig?.ath?.state === 'IN_POSITION' && (row.sig.ath.bars_held ?? 999) <= FRESH_DAYS
       const full: Row = { ...row, fresh, ...reading }
       out.push(full)
       return full
@@ -329,8 +325,7 @@ export const Signals: React.FC = () => {
         const ltp = liveQuotes[match.code]?.price ?? inst.ltp ?? match.ltp
         const merged: Row = { ...match, inst, sig, ltp, href: stockHref(inst) ?? match.href, fresh: false, ...readSignals(sig, ltp) }
         merged.fresh =
-          (sig?.swing?.state === 'IN_POSITION' && (sig.swing.bars_held ?? 999) <= FRESH_DAYS) ||
-          (sig?.ath?.state === 'IN_POSITION' && (sig.ath.bars_held ?? 999) <= FRESH_DAYS)
+          sig?.ath?.state === 'IN_POSITION' && (sig.ath.bars_held ?? 999) <= FRESH_DAYS
         out[idx] = merged
         return
       }
@@ -385,7 +380,7 @@ export const Signals: React.FC = () => {
     const out = scoped.filter((r) => {
       if (needle && !`${r.name} ${r.code}`.toLowerCase().includes(needle)) return false
       if (sector !== 'all' && String(r.s2?.sector ?? '') !== sector) return false
-      if (align === 'trade') return r.sig?.swing?.state === 'IN_POSITION' || r.sig?.ath?.state === 'IN_POSITION'
+      if (align === 'trade') return r.sig?.ath?.state === 'IN_POSITION'
       if (align === 'fresh') return r.fresh
       if (align !== 'all') return r.alignment === align
       return true
@@ -406,11 +401,10 @@ export const Signals: React.FC = () => {
     const down = withM.filter((r) => momentumLean(r.sig!.momentum!) === 'bear').length
     const bull = scoped.filter((r) => r.alignment === 'all-bull')
     return {
-      covered: scoped.filter((r) => r.sig && (r.sig.momentum || r.sig.swing || r.sig.ath)).length,
+      covered: scoped.filter((r) => r.sig && (r.sig.momentum || r.sig.ath)).length,
       up,
       down,
       neutral: withM.length - up - down,
-      swing: scoped.filter((r) => r.sig?.swing?.state === 'IN_POSITION').length,
       ath: scoped.filter((r) => r.sig?.ath?.state === 'IN_POSITION').length,
       fresh: scoped.filter((r) => r.fresh).length,
       bull: bull.length,
@@ -477,7 +471,7 @@ export const Signals: React.FC = () => {
   const pctDone = job && job.total > 0 ? Math.round((job.done / job.total) * 100) : 0
   const extras = !isUs && source !== 'held' ? list?.extra_columns ?? [] : []
   const showVolume = !isUs && source !== 'held' && hasList
-  const colCount = 8 + (showVolume ? 1 : 0) + extras.length
+  const colCount = 7 + (showVolume ? 1 : 0) + extras.length
 
   if (portfolioLoading && holdings.length === 0) {
     return (
@@ -589,17 +583,12 @@ export const Signals: React.FC = () => {
           <div className="foot">Uptrend / neutral / downtrend</div>
         </div>
         <div className="card">
-          <div className="lbl">In a Swing trade</div>
-          <div className="val num">{summary.swing}</div>
-          <div className="foot">{summary.fresh} opened in the last {FRESH_DAYS} days (either strategy)</div>
-        </div>
-        <div className="card">
           <div className="lbl">In an ATH trade</div>
           <div className="val num">{summary.ath}</div>
-          <div className="foot">Near or at highs after a 200-DMA reclaim</div>
+          <div className="foot">{summary.fresh} opened in the last {FRESH_DAYS} days</div>
         </div>
         <div className="card">
-          <div className="lbl">All three bullish</div>
+          <div className="lbl">Both bullish</div>
           <div className="val num pos">{summary.bull}</div>
           <div className="foot">
             {summary.bullHeld} held{summary.reviewHeld > 0 ? ` · ${summary.reviewHeld} held stock${summary.reviewHeld === 1 ? '' : 's'} all bearish` : ''}
@@ -623,7 +612,7 @@ export const Signals: React.FC = () => {
           <p className="card-s">
             {isUs
               ? 'No US stocks or ETFs in your portfolio.'
-              : 'Press Refresh Momentum Stocks. It reads your saved Chartink Stage 2 screener, then runs it and every Indian stock you hold through momentum, Swing V2.1 and ATH breakout. The first run takes a few minutes; results are saved, so the page opens instantly after that.'}
+              : 'Press Refresh Momentum Stocks. It reads your saved Chartink Stage 2 screener, then runs it and every Indian stock you hold through momentum and ATH breakout. The first run takes a few minutes; results are saved, so the page opens instantly after that.'}
           </p>
         </div>
       ) : notComputed ? (
@@ -695,7 +684,6 @@ export const Signals: React.FC = () => {
                   {head('day', 'Day', true)}
                   {head('pos', 'Your position', true)}
                   {head('momentum', 'Momentum')}
-                  {head('swing', 'Swing V2.1')}
                   {head('ath', '200-DMA ATH breakout')}
                   {head('align', 'Signal alignment')}
                   {showVolume && head('vol', 'Volume', true)}
@@ -743,9 +731,6 @@ export const Signals: React.FC = () => {
                       </td>
                       <td>
                         <MomentumCell sig={sig} fmt={fmt} />
-                      </td>
-                      <td>
-                        <SwingCell sig={sig} ltp={r.ltp} reading={r} fmt={fmt} />
                       </td>
                       <td>
                         <AthCell sig={sig} reading={r} fmt={fmt} />
@@ -809,9 +794,9 @@ export const Signals: React.FC = () => {
 
       <p className="sg-legend">
         {isUs ? 'Your US stocks and ETFs. ' : 'Everything you hold in Indian stocks and ETFs, plus the stocks on your Chartink Stage 2 screener, on one list; a stock that is both is shown once. '}
-        Swing V2.1 and ATH entries are the strategies&apos; own signals on daily candles, not your actual buys; &quot;since entry&quot; compares the live price with the strategy entry price, per share
+        ATH entries are the strategy&apos;s own signals on daily candles, not your actual buys; &quot;since entry&quot; compares the live price with the strategy entry price, per share
         {isUs ? ', in US dollars; position values stay in rupees' : ''}. Signals are built from daily candles with today&apos;s bar made from the live price, so they can change until the close; the
-        &quot;last sessions&quot; windows are the finished sessions plus today. Bullish: uptrend, a strategy in position, or a buy signal. Bearish: downtrend, a failing Swing trend filter, a sell signal or an exit.
+        &quot;last sessions&quot; windows are the finished sessions plus today. Bullish: uptrend, a strategy in position, or a buy signal. Bearish: downtrend, a sell signal or an exit.
         {isUs
           ? ' US history is stored in Azure: INDmoney for the latest year and daily updates, with a validated backfill for earlier years. Momentum is measured against the S&P 500 (SPY). Prices update while the US session is open (about 19:00 to 01:30 IST).'
           : ' The Chartink list is as at its last end-of-day data; prices and day change are live from Kite while the NSE session is open. Mutual funds, US stocks, NPS and gold are not covered here.'}{' '}

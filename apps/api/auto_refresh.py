@@ -169,6 +169,12 @@ async def run_tick(slot: datetime) -> None:
         _jobs[owner] = job
         await _run_job(owner, job, fresh_since=started, screener=screener)
         ran += 1
+    try:
+        from apps.api.push_jobs import after_tick
+
+        await after_tick(slot, live, screener)
+    except Exception as exc:  # a failed notification must never fail the refresh
+        logger.warning("Push notifications after the refresh failed: %s", exc)
     note = f" Chartink: {screener[1]}" if screener[1] else ""
     _record(slot, "ran", f"Refreshed for {ran} user{'s' if ran != 1 else ''}.{note}", ran)
 

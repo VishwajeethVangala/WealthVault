@@ -133,8 +133,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     try {
                         val updated = api.syncOne(b.connection_id)
                         val p = problemOf(updated)
+                        Analytics.log("sync", "broker" to updated.broker_name, "outcome" to if (p == null) "ok" else "needs_attention")
                         if (p == null) ok++ else problems += p
                     } catch (e: Exception) {
+                        Analytics.log("sync", "outcome" to "failed")
                         problems += "${shortName(b)} failed"
                     }
                 }
@@ -159,6 +161,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 val updated = api.syncOne(connectionId)
+                Analytics.log("sync", "broker" to updated.broker_name, "outcome" to if (problemOf(updated) == null) "ok" else "needs_attention")
                 message.value = problemOf(updated)?.let { p -> updated.error_message?.takeIf { it.isNotBlank() } ?: p }
             } catch (e: Exception) {
                 message.value = e.message
@@ -174,8 +177,58 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Whether the app lock has been passed since the app was opened or came back to the front. */
     val unlocked = MutableStateFlow(false)
 
+    /** A phone with no screen lock cannot be asked to set one up; set when the person goes on without it, until the app is closed. */
+    val lockSetupSkipped = MutableStateFlow(false)
+
+    fun setAnalytics(on: Boolean) = viewModelScope.launch { prefs.saveAnalytics(on) }
+
+    /**
+     * The momentum verdict of each holding, keyed by the broker's holding symbol, from the signals the scheduled refresh
+     * saves (the Signals tab reads the same). Mutual funds, NPS, gold and cash have none.
+     */
+    val holdingTrends = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    fun loadHoldingTrends() = viewModelScope.launch {
+        val out = mutableMapOf<String, String>()
+        listOf("in", "us").forEach { market ->
+            runCatching { api.signals(market) }.getOrNull()?.let { r ->
+                r.symbol_map.forEach { (sym, id) ->
+                    r.signals[id]?.momentum?.verdict?.takeIf { it.isNotBlank() && !it.contains("insufficient", ignoreCase = true) }?.let { out[sym] = it }
+                }
+            }
+        }
+        holdingTrends.value = out
+    }
+
+    // --- notifications ---------------------------------------------------------------------------------------
+
+    /** Where a tapped notification should land: (page, kind of notification), consumed once the app is showing. */
+    val pendingOpen = MutableStateFlow<Pair<String, String>?>(null)
+    val notifPrefs = MutableStateFlow<Map<String, Boolean>?>(null)
+    val notifMessage = MutableStateFlow<String?>(null)
+
+    fun setNotifAsked() = viewModelScope.launch { prefs.saveNotifAsked() }
+
+    fun loadNotifPrefs() = viewModelScope.launch { runCatching { api.notificationPrefs() }.onSuccess { notifPrefs.value = it } }
+
+    fun setNotifPref(key: String, on: Boolean) = viewModelScope.launch {
+        val next = (notifPrefs.value ?: emptyMap()) + (key to on)
+        notifPrefs.value = next
+        runCatching { api.saveNotificationPrefs(next) }.onFailure {
+            notifMessage.value = "Could not save that. Check the connection and try again."
+            loadNotifPrefs()
+        }
+    }
+
+    fun testNotification() = viewModelScope.launch {
+        notifMessage.value = "Sending…"
+        notifMessage.value = runCatching { api.testNotification(); "Sent. It should arrive in a few seconds." }
+            .getOrElse { it.message ?: "Could not send the test." }
+    }
+
     fun setLock(on: Boolean) = viewModelScope.launch {
         prefs.saveLock(on)
+        if (on) Analytics.log("app_lock_enabled")
         unlocked.value = true // the person has just proved who they are
     }
 
@@ -204,9 +257,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun setTheme(value: String) = viewModelScope.launch { prefs.saveTheme(value) }
 
     /** Debug builds only (see MainActivity): sign in with a token issued by a test server. */
-    fun debugSignIn(baseUrl: String, token: String) = viewModelScope.launch {
+    fun debugSignIn(baseUrl: String, token: String, demoAccount: Boolean = true, askAnalytics: Boolean = false) = viewModelScope.launch {
         prefs.saveDebugBaseUrl(baseUrl)
-        prefs.signIn(com.wealthvault.app.data.TokenResponse(token, com.wealthvault.app.data.User("test", "test@local", "Test")))
+        prefs.signIn(com.wealthvault.app.data.TokenResponse(token, com.wealthvault.app.data.User("test", "test@local", "Test")), demoAccount = demoAccount)
+        if (!askAnalytics) { prefs.saveAnalytics(false); prefs.saveNotifAsked() } // tests skip these screens unless asked to show them
     }
 
     /** Username-and-password sign-in for the sample account (store reviewers cannot use Google sign-in). */
@@ -216,7 +270,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         message.value = null
         viewModelScope.launch {
             try {
-                prefs.signIn(api.signInDemo(username, password))
+                prefs.signIn(api.signInDemo(username, password), demoAccount = true)
+                Analytics.log("login", "method" to "demo")
             } catch (e: Exception) {
                 message.value = if (e.message?.contains("401") == true) "Wrong username or password." else (e.message ?: "Sign-in failed.")
             } finally {
@@ -226,6 +281,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun signOut() = viewModelScope.launch {
+        com.wealthvault.app.push.PushRegistration.unregister(getApplication()) // this phone stops getting their alerts
         prefs.signOut()
         summary.value = Load()
         holdings.value = Load()
@@ -250,6 +306,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 if (cred is CustomCredential && cred.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
                     val idToken = GoogleIdTokenCredential.createFrom(cred.data).idToken
                     prefs.signIn(api.signInWithGoogle(idToken)) // the signed-in screen loads everything
+                    Analytics.log("login", "method" to "google")
                 } else {
                     message.value = "That sign-in type is not supported. Use a Google account."
                 }

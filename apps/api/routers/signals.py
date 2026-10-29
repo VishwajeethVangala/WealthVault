@@ -1,6 +1,6 @@
 """Equity Signals Router.
 
-- GET  /api/v1/analytics/signals?market=in|us          cached momentum / Swing V2.1 / ATH-breakout signals
+- GET  /api/v1/analytics/signals?market=in|us          cached momentum / ATH-breakout signals
 - POST /api/v1/analytics/signals/refresh?market=in|us  recompute them in the background (progress comes from the GET)
 - GET  /api/v1/analytics/signals/us-live               live USD prices for the caller's US stocks (INDmoney)
 - POST /api/v1/analytics/signals/us-history/{ticker}   build or top up the stored history for any US ticker
@@ -200,7 +200,7 @@ async def _run_job_in(owner_id: str, job: Job) -> None:
                 job.failed += 1
                 await cache.save(
                     symbol,
-                    {"instrument": symbol, "momentum": None, "swing": None, "ath": None, "errors": {"all": "Price history unavailable"}},
+                    {"instrument": symbol, "momentum": None, "ath": None, "errors": {"all": "Price history unavailable"}},
                 )
             job.done += 1
         if auth_error:
@@ -255,7 +255,7 @@ async def _run_job_us(owner_id: str, job: Job) -> None:
                 )
                 if info.status != "complete":
                     # Without the full history the all-time high and the strategies' state are not trustworthy
-                    for section in ("swing", "ath"):
+                    for section in ("ath",):
                         row[section] = None
                         row["errors"][section] = f"History incomplete ({info.count} days); not shown rather than guessed"
                 await cache.save(f"US:{ticker}", row)
@@ -288,7 +288,7 @@ async def _run_job_us(owner_id: str, job: Job) -> None:
                 job.failed += 1
                 await cache.save(
                     f"US:{ticker}",
-                    {"instrument": f"US:{ticker}", "momentum": None, "swing": None, "ath": None, "errors": {"all": "Price history unavailable"}},
+                    {"instrument": f"US:{ticker}", "momentum": None, "ath": None, "errors": {"all": "Price history unavailable"}},
                 )
             job.done += 1
         if auth_error:

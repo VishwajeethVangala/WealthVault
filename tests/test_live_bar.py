@@ -218,5 +218,5 @@ def test_us_rows_are_rebuilt_on_the_live_price_and_incomplete_history_stays_supp
     live_signals._row_cache.clear()
     partial = {**cached, "history_status": "partial"}
     rows = asyncio.run(live_signals.live_us_rows({"US:NVDA": partial}, quotes, {"NVDA": "NVIDIA"}, 0.01))
-    assert rows["US:NVDA"]["swing"] is None and rows["US:NVDA"]["ath"] is None
+    assert rows["US:NVDA"]["ath"] is None
     live_signals._row_cache.clear()

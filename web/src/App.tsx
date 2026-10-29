@@ -9,11 +9,12 @@ import { Signals } from './pages/Signals'
 import { HoldingsTable } from './pages/HoldingsTable'
 import { BrokerSync } from './pages/BrokerSync'
 import { MomentumAnalyzer } from './pages/MomentumAnalyzer'
-import { SwingStrategy } from './pages/SwingStrategy'
+import { AthStrategy } from './pages/AthStrategy'
 import { Login } from './pages/Login'
 import { Account } from './pages/Account'
 import { DeleteAccountInfo, PrivacyPolicy } from './pages/Legal'
 import { getToken, getStoredUser, verifySession } from './utils/api'
+import { identify } from './utils/analytics'
 import type { User } from './types'
 
 const SignedInApp: React.FC = () => {
@@ -40,6 +41,10 @@ const SignedInApp: React.FC = () => {
         setIsVerifying(false)
       })
   }, [])
+
+  useEffect(() => {
+    void identify(currentUser?.user_id)
+  }, [currentUser?.user_id])
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user)
@@ -79,7 +84,7 @@ const SignedInApp: React.FC = () => {
             <Route path="/stage2" element={<Navigate to="/signals?source=stage2" replace />} />
             <Route path="/signals" element={<Signals />} />
             <Route path="/momentum" element={<MomentumAnalyzer />} />
-            <Route path="/strategy" element={<SwingStrategy />} />
+            <Route path="/strategy" element={<AthStrategy />} />
             <Route path="/brokers" element={<BrokerSync />} />
             <Route path="/account" element={<Account />} />
             <Route path="/sync" element={<Navigate to="/brokers" replace />} />

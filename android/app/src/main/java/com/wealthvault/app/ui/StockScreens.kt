@@ -78,9 +78,11 @@ private fun SymbolPicker(
     busy: Boolean,
     action: String,
     suggest: suspend (String) -> List<StockSuggestion>,
+    page: String,
     onRun: (String) -> Unit,
 ) {
     var text by rememberSaveable(initial) { mutableStateOf(initial.substringAfter(':')) }
+    var lastTyped by remember { mutableStateOf("") }
     // suggestions come from the third typed character; a value filled in by a pick or a link asks for none
     var typed by remember { mutableStateOf(false) }
     var suggestions by remember { mutableStateOf<List<StockSuggestion>>(emptyList()) }
@@ -92,12 +94,19 @@ private fun SymbolPicker(
         suggestions = suggest(q)
         searched = true
     }
+    // what people look for, once they pause typing (not every keystroke): the text and how many stocks matched
+    LaunchedEffect(text, typed, suggestions) {
+        val term = Analytics.cleanSearchTerm(text)
+        if (!typed || term == null || term.length < 3) return@LaunchedEffect
+        delay(1000)
+        Analytics.log("search", "page" to page, "term" to term, "results" to suggestions.size)
+    }
     val focus = LocalFocusManager.current
-    val go = { v: String -> if (v.isNotBlank()) { typed = false; suggestions = emptyList(); focus.clearFocus(); onRun(v) } }
+    val go = { v: String -> if (v.isNotBlank()) { Analytics.log("search_select", "page" to page, "term" to Analytics.cleanSearchTerm(lastTyped.ifBlank { v }), "symbol" to Analytics.cleanSearchTerm(v)); typed = false; suggestions = emptyList(); focus.clearFocus(); onRun(v) } }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(
-                text, { text = it.uppercase(); typed = true },
+                text, { text = it.uppercase(); lastTyped = text; typed = true },
                 placeholder = { Text("Name or symbol, e.g. reli or INFY") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Go),
@@ -196,7 +205,7 @@ fun MomentumScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisVi
                 "Trend verdict from moving averages (50/200-DMA, golden cross, 200-DMA slope, MACD), plus returns, RSI, 52-week range and strength vs the Nifty 50. One year of daily prices from Zerodha Kite.",
             )
         }
-        item { SymbolPicker(symbol ?: m?.instrument ?: "", picks, res.loading, "Analyse", avm::suggest) { avm.analyse(it) } }
+        item { SymbolPicker(symbol ?: m?.instrument ?: "", picks, res.loading, "Analyse", avm::suggest, "momentum") { avm.analyse(it) } }
         res.problem?.let { item { ProblemNote(it) } }
         if (res.loading) item { Loading("Fetching one year of daily prices…") }
         if (m != null && !res.loading) momentumBody(m, onStrategies)
@@ -244,7 +253,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.momentumBody(m: Momen
                 }
                 Text("${m.trend_score}/${m.trend_max_score}", style = Wv.small.copy(fontFeatureSettings = "tnum", fontWeight = FontWeight.SemiBold), color = Wv.c.text2)
             }
-            OutlinedButton(onClick = { onStrategies(m.instrument) }, shape = RoundedCornerShape(10.dp)) { Text("Run Swing V2.1 strategy", color = Wv.c.accent) }
+            OutlinedButton(onClick = { onStrategies(m.instrument) }, shape = RoundedCornerShape(10.dp)) { Text("Run ATH strategy", color = Wv.c.accent) }
         }
     }
     item {
@@ -386,122 +395,85 @@ private fun NumberField(label: String, value: String, modifier: Modifier = Modif
     )
 }
 
-/** The inputs a strategy run takes, as on the web; the rest of each script's settings are fixed. */
+/** The inputs an ATH breakout run takes, as on the web; the rest of the script's settings are fixed. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun StrategyInputs(avm: AnalysisViewModel, ath: Boolean, busy: Boolean, canRun: Boolean, onApply: () -> Unit) {
+private fun StrategyInputs(avm: AnalysisViewModel, busy: Boolean, canRun: Boolean, onApply: () -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
-    val swing by avm.swingOpts.collectAsState()
     val athO by avm.athOpts.collectAsState()
     WvCard {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { open = !open }) {
             Text("INPUTS", style = Wv.over, color = Wv.c.text3, modifier = Modifier.weight(1f))
             Text(
-                if (ath) "From ${athO.startDate} · ${athO.dmaLength}-DMA · ${athO.windowBars}-day window · ${compact(athO.capital)} a trade"
-                else "${swing.years}Y · UT key ${swing.utKey} · ATR ${swing.utAtrPeriod} · stop ${if (swing.useStop) "${swing.stopMult}×ATR" else "off"}",
+                "From ${athO.startDate} · ${athO.dmaLength}-DMA · ${athO.windowBars}-day window · ${compact(athO.capital)} a trade",
                 style = Wv.small, color = Wv.c.text2, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(2f),
             )
             Icon(if (open) androidx.compose.material.icons.Icons.Outlined.ExpandLess else androidx.compose.material.icons.Icons.Outlined.ExpandMore, contentDescription = if (open) "Hide inputs" else "Show inputs", tint = Wv.c.text3)
         }
         if (!open) return@WvCard
-        if (!ath) {
-            Text("Backtest", style = Wv.small, color = Wv.c.text3)
-            Seg(listOf(1, 2, 3, 5).map { it to "${it}Y" }, swing.years) { avm.swingOpts.value = swing.copy(years = it) }
-            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                var utKey by remember { mutableStateOf(swing.utKey.toString()) }
-                var atr by remember { mutableStateOf(swing.utAtrPeriod.toString()) }
-                var mult by remember { mutableStateOf(swing.stopMult.toString()) }
-                NumberField("UT key", utKey, Modifier.width(110.dp)) { utKey = it; it.toDoubleOrNull()?.let { v -> avm.swingOpts.value = avm.swingOpts.value.copy(utKey = v) } }
-                NumberField("UT ATR period", atr, Modifier.width(130.dp)) { atr = it; it.toDoubleOrNull()?.let { v -> avm.swingOpts.value = avm.swingOpts.value.copy(utAtrPeriod = v.toInt().coerceAtLeast(1)) } }
-                NumberField("Stop ATR ×", mult, Modifier.width(110.dp)) { mult = it; it.toDoubleOrNull()?.let { v -> avm.swingOpts.value = avm.swingOpts.value.copy(stopMult = v) } }
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.Switch(
-                    swing.useStop, { avm.swingOpts.value = swing.copy(useStop = it) },
-                    colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = Wv.c.accent, checkedThumbColor = Wv.c.onAccent, uncheckedTrackColor = Wv.c.surface2, uncheckedThumbColor = Wv.c.text3, uncheckedBorderColor = Wv.c.borderStrong),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("ATR protective stop", style = Wv.sub, color = Wv.c.text2)
-            }
-            Text("Fixed: 50/200-SMA · 20-bar slope · 20-EMA exit · ATR(14) stop · ₹1,00,000 · 0.10% commission · 1 tick slippage", style = Wv.small, color = Wv.c.text3)
-        } else {
-            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                var start by remember { mutableStateOf(athO.startDate) }
-                var dma by remember { mutableStateOf(athO.dmaLength.toString()) }
-                var window by remember { mutableStateOf(athO.windowBars.toString()) }
-                var capital by remember { mutableStateOf(athO.capital.toLong().toString()) }
-                OutlinedTextField(
-                    start, { v -> start = v.filter { it.isDigit() || it == '-' }.take(10); if (Regex("""\d{4}-\d{2}-\d{2}""").matches(start)) avm.athOpts.value = avm.athOpts.value.copy(startDate = start) },
-                    label = { Text("Backtest start") }, placeholder = { Text("2015-01-01") }, singleLine = true, modifier = Modifier.width(150.dp),
-                )
-                NumberField("DMA length", dma, Modifier.width(120.dp)) { dma = it; it.toDoubleOrNull()?.let { v -> avm.athOpts.value = avm.athOpts.value.copy(dmaLength = v.toInt().coerceIn(50, 400)) } }
-                NumberField("Window (days)", window, Modifier.width(130.dp)) { window = it; it.toDoubleOrNull()?.let { v -> avm.athOpts.value = avm.athOpts.value.copy(windowBars = v.toInt().coerceAtLeast(1)) } }
-                NumberField("Capital / trade ₹", capital, Modifier.width(150.dp)) { capital = it; it.toDoubleOrNull()?.let { v -> avm.athOpts.value = avm.athOpts.value.copy(capital = v.coerceAtLeast(1000.0)) } }
-            }
-            Text("Fixed: fills at the signal close · no commission (as in the script) · capital per trade does not compound", style = Wv.small, color = Wv.c.text3)
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            var start by remember { mutableStateOf(athO.startDate) }
+            var dma by remember { mutableStateOf(athO.dmaLength.toString()) }
+            var window by remember { mutableStateOf(athO.windowBars.toString()) }
+            var capital by remember { mutableStateOf(athO.capital.toLong().toString()) }
+            OutlinedTextField(
+                start, { v -> start = v.filter { it.isDigit() || it == '-' }.take(10); if (Regex("""\d{4}-\d{2}-\d{2}""").matches(start)) avm.athOpts.value = avm.athOpts.value.copy(startDate = start) },
+                label = { Text("Backtest start") }, placeholder = { Text("2015-01-01") }, singleLine = true, modifier = Modifier.width(150.dp),
+            )
+            NumberField("DMA length", dma, Modifier.width(120.dp)) { dma = it; it.toDoubleOrNull()?.let { v -> avm.athOpts.value = avm.athOpts.value.copy(dmaLength = v.toInt().coerceIn(50, 400)) } }
+            NumberField("Window (days)", window, Modifier.width(130.dp)) { window = it; it.toDoubleOrNull()?.let { v -> avm.athOpts.value = avm.athOpts.value.copy(windowBars = v.toInt().coerceAtLeast(1)) } }
+            NumberField("Capital / trade ₹", capital, Modifier.width(150.dp)) { capital = it; it.toDoubleOrNull()?.let { v -> avm.athOpts.value = avm.athOpts.value.copy(capital = v.coerceAtLeast(1000.0)) } }
         }
+        Text("Fixed: fills at the signal close · no commission (as in the script) · capital per trade does not compound", style = Wv.small, color = Wv.c.text3)
         PrimaryButton(if (busy) "Running…" else "Apply", busy = busy, enabled = canRun) { onApply() }
     }
 }
 
 @Composable
 fun StrategyScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisViewModel.StockRequest?) {
-    var tab by rememberSaveable { mutableStateOf("swing") }
     var current by rememberSaveable { mutableStateOf(request?.takeIf { it.kind == "strategy" }?.symbol.orEmpty()) }
-    val swing by avm.swing.collectAsState()
-    val ath by avm.ath.collectAsState()
-    val res = if (tab == "ath") ath else swing
+    val res by avm.ath.collectAsState()
     val picks = quickPicks(vm, avm)
     LaunchedEffect(request?.id) {
-        avm.takeStockRequest("strategy")?.let { r -> current = r.symbol; avm.runStrategy("swing", r.symbol); avm.runStrategy("ath", r.symbol) }
+        avm.takeStockRequest("strategy")?.let { r -> current = r.symbol; avm.runStrategy(r.symbol) }
     }
     LaunchedEffect(Unit) { if (avm.signals.value.data == null) avm.loadSignals() }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { PageTitle("Strategies", "Run a strategy on any NSE/BSE stock: today's signal, the chart with entries and exits, and a backtest of every past trade. Prices from Zerodha Kite.") }
-        item {
-            Seg(listOf("swing" to "Swing V2.1", "ath" to "200-DMA ATH breakout"), tab) { t ->
-                tab = t
-                val r = if (t == "ath") avm.ath.value else avm.swing.value
-                if (current.isNotBlank() && r.data == null && !r.loading) avm.runStrategy(t, current)
-            }
-        }
+        item { PageTitle("ATH Strategy", "The 200-DMA to all-time-high breakout on any NSE/BSE stock: today's signal, the chart with entries and exits, and a backtest of every past trade. Prices from Zerodha Kite.") }
         item {
             Text(
-                if (tab == "ath") "Buys when the close breaks above the prior all-time high within the window after a close below the DMA, and holds until a close below the DMA. Orders fill at the signal day's close, with a fixed amount per trade."
-                else "Long-only daily swing strategy. Buys a UT Bot cross-up while the 50/200-SMA trend filter is bullish; exits on a UT Bot flip with a close under the 20-EMA, or at the ATR protective stop. Orders fill at the next open.",
+                "Buys when the close breaks above the prior all-time high within the window after a close below the DMA, and holds until a close below the DMA. Orders fill at the signal day's close, with a fixed amount per trade.",
                 style = Wv.small, color = Wv.c.text3,
             )
         }
-        item { SymbolPicker(current, picks, res.loading, "Run", avm::suggest) { current = it; avm.runStrategy(tab, it) } }
-        item { StrategyInputs(avm, tab == "ath", res.loading, current.isNotBlank()) { avm.runStrategy(tab, current) } }
+        item { SymbolPicker(current, picks, res.loading, "Run", avm::suggest, "ath_strategy") { current = it; avm.runStrategy(it) } }
+        item { StrategyInputs(avm, res.loading, current.isNotBlank()) { avm.runStrategy(current) } }
         res.problem?.let { item { ProblemNote(it) } }
-        if (res.loading) item { Loading(if (tab == "ath") "Fetching the full daily price history and running the backtest…" else "Fetching daily prices and running the backtest…") }
-        if (!res.loading) res.data?.let { strategyBody(it, tab == "ath") }
+        if (res.loading) item { Loading("Fetching the full daily price history and running the backtest…") }
+        if (!res.loading) res.data?.let { strategyBody(it) }
         if (res.data == null && !res.loading && res.problem == null) item { Note("Pick one of your holdings or type a symbol.") }
     }
 }
 
-/** A price chart with the strategy's lines, its buys, sells and stop exits, and the days its setup was on. */
+/** A price chart with the strategy's lines, its buys and sells, and the days its setup was on. */
 @Composable
-private fun StrategyPriceChart(r: StrategyResult, ath: Boolean) {
-    val ranges = if (ath) listOf(252 to "1Y", 756 to "3Y", 1260 to "5Y", 0 to "All") else listOf(126 to "6M", 252 to "1Y", 504 to "2Y", 0 to "All")
-    var range by rememberSaveable(ath) { mutableStateOf(if (ath) 0 else 252) }
+private fun StrategyPriceChart(r: StrategyResult) {
+    val ranges = listOf(252 to "1Y", 756 to "3Y", 1260 to "5Y", 0 to "All")
+    var range by rememberSaveable { mutableStateOf(0) }
     val bars = if (range > 0) r.series.takeLast(range) else r.series
     if (bars.size < 2) return
     val dmaLabel = "${r.params.dma_length ?: 200}-DMA"
-    val stopFills = r.trades.filter { it.exit_reason == "ATR STOP" && it.exit_date != null }.associate { it.exit_date!! to it.exit_price }
     val buy = Wv.c.gain
     val sell = Wv.c.loss
     val markers = bars.flatMapIndexed { i, b ->
         listOfNotNull(
-            if (b.buy) ChartMarker(i, if (ath) b.close * 0.96 else b.low * 0.975, ChartMarker.Kind.Up, buy) else null,
-            if (b.sell) ChartMarker(i, b.high * if (ath) 1.04 else 1.025, ChartMarker.Kind.Down, sell) else null,
-            if (b.stop_exit) ChartMarker(i, stopFills[b.date] ?: b.low, ChartMarker.Kind.Cross, sell) else null,
+            if (b.buy) ChartMarker(i, b.close * 0.96, ChartMarker.Kind.Up, buy) else null,
+            if (b.sell) ChartMarker(i, b.high * 1.04, ChartMarker.Kind.Down, sell) else null,
         )
     }
-    // runs of days with the setup on (a bullish regime for Swing, the window after a DMA break for ATH)
-    val on = bars.map { if (ath) it.in_window else it.regime }
+    // runs of days with the setup on: the window after a DMA break
+    val on = bars.map { it.in_window }
     val bands = mutableListOf<IntRange>()
     var start = -1
     on.forEachIndexed { i, v ->
@@ -510,34 +482,28 @@ private fun StrategyPriceChart(r: StrategyResult, ath: Boolean) {
     }
     WvCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (ath) "PRICE, DMA, ALL-TIME HIGH AND SIGNALS" else "PRICE, INDICATORS AND SIGNALS", style = Wv.over, color = Wv.c.text3, modifier = Modifier.weight(1f))
+            Text("PRICE, DMA, ALL-TIME HIGH AND SIGNALS", style = Wv.over, color = Wv.c.text3, modifier = Modifier.weight(1f))
         }
         Seg(ranges, range) { range = it }
         LineChart(
             bars.map { it.date },
-            if (ath) listOf(
+            listOf(
                 Series("Close", Wv.c.text, bars.map { it.close }, thin = true),
                 Series(dmaLabel, Wv.c.warn, bars.map { it.dma }),
                 Series("All-time high", Wv.c.text3, bars.map { it.ath }, dashed = true, step = true, thin = true),
-            ) else listOf(
-                Series("Close", Wv.c.text, bars.map { it.close }, thin = true),
-                Series("50-SMA", Wv.c.accent, bars.map { it.sma_fast }),
-                Series("200-SMA", Wv.c.warn, bars.map { it.sma_slow }),
-                Series("20-EMA", Wv.c.gain, bars.map { it.exit_ema }, dashed = true, thin = true),
-                Series("UT stop", Wv.c.text3, bars.map { it.ut_stop }, dashed = true, step = true, thin = true),
             ),
             format = { price(it) },
             height = 240.dp,
             markers = markers,
             bands = bands,
             bandColor = Wv.c.gain,
-            bandLabel = if (ath) "Setup window" else "Bullish regime",
+            bandLabel = "Setup window",
         )
-        Text("▲ buy   ▼ sell" + if (!ath) "   ✕ stop exit" else "", style = Wv.small, color = Wv.c.text3)
+        Text("▲ buy   ▼ sell", style = Wv.small, color = Wv.c.text3)
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.strategyBody(r: StrategyResult, ath: Boolean) {
+private fun androidx.compose.foundation.lazy.LazyListScope.strategyBody(r: StrategyResult) {
     val st = r.status
     val s = r.stats
     val dmaLabel = "${r.params.dma_length ?: 200}-DMA"
@@ -545,18 +511,12 @@ private fun androidx.compose.foundation.lazy.LazyListScope.strategyBody(r: Strat
         WvCard {
             Text("${r.instrument} · signals as of ${longDate(r.as_of)} close", style = Wv.small, color = Wv.c.text3)
             Text(r.name ?: r.instrument, style = Wv.title, color = Wv.c.text)
-            val badge = if (ath) when {
+            val badge = when {
                 st.last_signal == "BUY" -> "Bought today" to Tone.Ok
                 st.last_signal == "SELL" -> "Sold today" to Tone.Bad
                 st.state == "IN_POSITION" -> "In position" to Tone.Info
                 st.in_window == true -> "Setup active" to Tone.Warn
                 else -> "No setup" to Tone.Off
-            } else when {
-                st.pending_order == "BUY" -> "BUY signal" to Tone.Ok
-                st.pending_order == "SELL" -> "SELL signal" to Tone.Bad
-                st.state == "IN_POSITION" -> "In position" to Tone.Info
-                st.regime_bullish == true -> "Waiting for entry" to Tone.Warn
-                else -> "No trade" to Tone.Off
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Badge(badge.first, badge.second)
@@ -568,23 +528,16 @@ private fun androidx.compose.foundation.lazy.LazyListScope.strategyBody(r: Strat
             if (st.state == "IN_POSITION") {
                 StatLine("Entry", price(st.entry_price), note = st.entry_date?.let { longDate(it) })
                 StatLine("Unrealized", pct(st.unrealized_pct), toneOf(st.unrealized_pct))
-                if (!ath) StatLine("Protective stop", if (r.params.use_stop != false) price(st.stop_price) else "Off")
                 StatLine("Days held", st.bars_held?.toString() ?: "—")
             }
-            if (ath) {
-                StatLine("Last close", price(st.close))
-                StatLine(dmaLabel, price(st.dma), note = st.pct_above_dma?.let { pct(it) })
-                StatLine("Prior ATH", price(st.prior_ath))
-                StatLine("To ATH", pct(st.pct_to_ath))
-                r.history_start?.let { Text("All-time high measured from ${longDate(it)}, the earliest daily data Kite returned.", style = Wv.small, color = Wv.c.text3) }
-            } else {
-                StatLine("Last close", price(r.series.lastOrNull()?.close))
-                StatLine("UT stop", price(st.ut_stop))
-                StatLine("20-EMA", price(st.exit_ema))
-            }
+            StatLine("Last close", price(st.close))
+            StatLine(dmaLabel, price(st.dma), note = st.pct_above_dma?.let { pct(it) })
+            StatLine("Prior ATH", price(st.prior_ath))
+            StatLine("To ATH", pct(st.pct_to_ath))
+            r.history_start?.let { Text("All-time high measured from ${longDate(it)}, the earliest daily data Kite returned.", style = Wv.small, color = Wv.c.text3) }
         }
     }
-    if (ath) {
+    run {
         item {
             WvCard {
                 if (st.state == "IN_POSITION") {
@@ -605,27 +558,19 @@ private fun androidx.compose.foundation.lazy.LazyListScope.strategyBody(r: Strat
                 }
             }
         }
-    } else if (st.regime_checks.isNotEmpty()) {
-        item {
-            WvCard {
-                Label("Trend filter")
-                Checks(st.regime_checks)
-                Text(if (st.regime_bullish == true) "Bullish regime: entries allowed" else "Not bullish: no new entries", style = Wv.small.copy(fontWeight = FontWeight.SemiBold), color = if (st.regime_bullish == true) Wv.c.gain else Wv.c.text3)
-            }
-        }
     }
-    item { StrategyPriceChart(r, ath) }
+    item { StrategyPriceChart(r) }
     item {
         WvCard {
             Label("Backtest")
-            Text("${longDate(r.test_start)} to ${longDate(r.test_end)} · ${r.bars_tested} days · " + if (ath) "${compact(r.params.capital_per_trade)} per trade · no commission" else "${compact(r.params.initial_capital)} start · ${r.params.commission_pct ?: 0.1}% commission", style = Wv.small, color = Wv.c.text3)
+            Text("${longDate(r.test_start)} to ${longDate(r.test_end)} · ${r.bars_tested} days · ${compact(r.params.capital_per_trade)} per trade · no commission", style = Wv.small, color = Wv.c.text3)
             StatLine("Net return", pct(s.net_profit_pct, 1), toneOf(s.net_profit_pct), signedMoney(s.net_profit) + " on " + compact(s.initial_capital))
             StatLine("Buy and hold", pct(s.buy_hold_return_pct, 1), toneOf(s.buy_hold_return_pct))
             StatLine("CAGR", pct(s.cagr_pct, 1), toneOf(s.cagr_pct), compact(s.final_equity))
             StatLine("Max drawdown", String.format("%.1f%%", -kotlin.math.abs(s.max_drawdown_pct)).replace("-", "−"), Wv.c.loss, "Peak-to-trough equity")
             StatLine("Win rate", s.win_rate_pct?.let { String.format("%.0f%%", it) } ?: "—", note = "${pct(s.avg_win_pct, 1)} avg win · ${pct(s.avg_loss_pct, 1)} avg loss")
             StatLine("Profit factor", s.profit_factor?.let { String.format("%.2f", it) } ?: "—", note = "Gross profit ÷ gross loss")
-            StatLine("Closed trades", "${s.total_trades}", note = (if (ath) "${s.signal_exits} on DMA break" else "${s.signal_exits} signal · ${s.stop_exits} stop") + if (s.open_trade) " · 1 open" else "")
+            StatLine("Closed trades", "${s.total_trades}", note = "${s.signal_exits} on DMA break" + if (s.open_trade) " · 1 open" else "")
             StatLine("Avg hold", s.avg_bars_held?.let { String.format("%.0f days", it) } ?: "—")
             StatLine("Time in market", String.format("%.0f%%", s.exposure_pct), note = "Share of days holding")
         }
@@ -644,12 +589,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.strategyBody(r: Strat
         }
     }
     if (r.trades.isNotEmpty()) {
-        item { TradesList(r.trades, if (ath) "Newest first. Entries and exits fill at the signal day's close; no commission." else "Newest first. Entry and exit prices include 1 tick of slippage; P&L is after commission.") }
+        item { TradesList(r.trades, "Newest first. Entries and exits fill at the signal day's close; no commission.") }
     }
     item {
         Text(
-            if (ath) "A backtest replays past prices; it is not a forecast or investment advice. The all-time high depends on how far back Kite's data goes and how it adjusts for splits and bonuses, so it can differ from TradingView."
-            else "A backtest replays past prices; it is not a forecast or investment advice. Results can differ from TradingView because of price-adjustment differences in the data, and because positions are sized in whole shares bought at the fill price.",
+            "A backtest replays past prices; it is not a forecast or investment advice. The all-time high depends on how far back Kite's data goes and how it adjusts for splits and bonuses, so it can differ from TradingView.",
             style = Wv.small, color = Wv.c.text3,
         )
     }

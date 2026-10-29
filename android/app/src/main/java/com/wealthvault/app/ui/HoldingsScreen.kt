@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -46,6 +48,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,6 +66,7 @@ import com.wealthvault.app.data.ASSET_CLASS_LABEL
 import com.wealthvault.app.data.Holding
 import java.io.File
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 /**
  * Holdings, as on the web (web/src/pages/HoldingsTable.tsx): every instrument merged across brokers with its
@@ -99,6 +103,23 @@ private fun sortPositions(list: List<Position>, key: HSort, asc: Boolean): List<
 
 private fun classLabel(cls: String) = ASSET_CLASS_LABEL[cls] ?: cls
 
+/** Momentum trend groups for the filter, as on the web (web/src/components/holdings/useTrend.ts). */
+private val TREND_LABEL = linkedMapOf("up" to "Uptrend", "neutral" to "Neutral", "down" to "Downtrend", "none" to "Not rated")
+
+private fun trendBucket(verdict: String?): String = when {
+    verdict == null -> "none"
+    verdict.contains("uptrend", ignoreCase = true) -> "up"
+    verdict.contains("downtrend", ignoreCase = true) -> "down"
+    verdict.contains("neutral", ignoreCase = true) -> "neutral"
+    else -> "none"
+}
+
+private fun trendTone(verdict: String) = when (trendBucket(verdict)) {
+    "up" -> Tone.Ok
+    "down" -> Tone.Bad
+    else -> Tone.Off
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
@@ -110,10 +131,18 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
     var asc by rememberSaveable { mutableStateOf(false) }
     var grouped by rememberSaveable { mutableStateOf(true) }
     var pnl by rememberSaveable { mutableStateOf("all") }
+    var trend by rememberSaveable { mutableStateOf("all") }
+    val trends by vm.holdingTrends.collectAsState()
     val expanded = rememberSaveable(saver = listSaver<SnapshotStateList<String>, String>(save = { it.toList() }, restore = { it.toMutableStateList() })) { mutableStateListOf<String>() }
     val context = LocalContext.current
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val pinSummary by pastItem(listState, "kpi")
+    val pinSearch by pastItem(listState, "search")
 
     val all = holdingsRes.data.orEmpty()
+    LaunchedEffect(all.size) { if (all.isNotEmpty()) vm.loadHoldingTrends() }
+    val trendOf = { p: Position -> p.lots.firstNotNullOfOrNull { trends[it.holding.instrument_symbol] } }
     val totalValue = all.sumOf { it.current_value }
     // 1. broker -> merge across brokers -> search; class counts come from here so they reflect the other filters
     val searched = remember(all, brokerFilter, q) {
@@ -124,10 +153,17 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
         }
     }
     val classCounts = CLASS_ORDER.mapNotNull { c -> searched.count { it.cls == c }.takeIf { it > 0 || c in classFilter }?.let { c to it } }
-    val rows = remember(searched, classFilter, pnl, sortKey, asc) {
+    // trend counts follow the other filters, as the class counts do
+    val trendCounts = remember(searched, classFilter, trends) {
+        val scoped = if (classFilter.isEmpty()) searched else searched.filter { it.cls in classFilter }
+        TREND_LABEL.keys.associateWith { b -> scoped.count { trendBucket(trendOf(it)) == b } }
+    }
+    val anyRated = (trendCounts["up"] ?: 0) + (trendCounts["neutral"] ?: 0) + (trendCounts["down"] ?: 0) > 0
+    val rows = remember(searched, classFilter, pnl, trend, trends, sortKey, asc) {
         var list = if (classFilter.isEmpty()) searched else searched.filter { it.cls in classFilter }
         if (pnl == "gainers") list = list.filter { it.pnl >= 0 }
         if (pnl == "losers") list = list.filter { it.pnl < 0 }
+        if (trend != "all") list = list.filter { trendBucket(trendOf(it)) == trend }
         sortPositions(list, sortKey, asc)
     }
     val totals = totalsOf(rows)
@@ -135,7 +171,7 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
     val maxCur = rows.maxOfOrNull { it.cur }?.coerceAtLeast(1.0) ?: 1.0
 
     PullToRefreshBox(isRefreshing = holdingsRes.loading && all.isNotEmpty(), onRefresh = { vm.refreshAll() }) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { PageTitle("Holdings", all.map { brokerKeyOf(it.connection_id) }.distinct().size.let { n -> "Merged across $n broker${if (n == 1) "" else "s"} · ${compact(totalValue)}" }) }
@@ -151,7 +187,7 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
                 }
             }
             if (all.isNotEmpty()) {
-                item {
+                item(key = "kpi") {
                     KpiGrid(
                         listOf(
                             Triple("Current value", compact(totals.cur), "${rows.size} holdings shown"),
@@ -164,7 +200,7 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
                     )
                 }
                 if (totals.day != null) item { CoverageNote(coverage) }
-                item { OutlinedTextField(q, { q = it }, placeholder = { Text("Search symbol, class or broker") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                item(key = "search") { HoldingsSearch(q) { q = it } }
                 // class, broker/gainers and sort chips as one group with room between the rows
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -172,6 +208,13 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
                             Chip("All ${searched.size}", classFilter.isEmpty()) { vm.classFilter.value = emptySet() }
                             if (classFilter.size > 1) Chip("${classFilter.size} classes", true) {}
                             classCounts.forEach { (c, n) -> Chip("${classLabel(c)} $n", classFilter.size == 1 && c in classFilter) { vm.classFilter.value = setOf(c) } }
+                        }
+                        if (anyRated) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("Trend", style = Wv.small, color = Wv.c.text3)
+                                Chip("Any", trend == "all") { trend = "all" }
+                                TREND_LABEL.forEach { (b, label) -> Chip("$label ${trendCounts[b] ?: 0}", trend == b) { trend = b } }
+                            }
                         }
                         FilterBar(vm, all, showClasses = false) {
                             Box(Modifier.width(1.dp).height(20.dp).background(Wv.c.border))
@@ -196,7 +239,7 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
                         )
                         Spacer(Modifier.width(8.dp))
                         Text("Group by asset class", style = Wv.sub, color = Wv.c.text2, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { exportCsv(context, rows) }, enabled = rows.isNotEmpty()) {
+                        TextButton(onClick = { exportCsv(context, rows, trendOf) }, enabled = rows.isNotEmpty()) {
                             Icon(Icons.Outlined.FileDownload, contentDescription = null, tint = Wv.c.accent, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Export CSV", color = Wv.c.accent)
@@ -210,10 +253,10 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
                         val items = rows.filter { it.cls == c }
                         if (items.isEmpty()) return@forEach
                         item(key = "g-$c") { GroupHeader(c, items, totalValue) }
-                        items(items, key = { it.key }) { p -> PositionCard(p, totalValue, maxCur, p.key in expanded, { toggle(p.key) }, onStock) }
+                        items(items, key = { it.key }) { p -> PositionCard(p, trendOf(p), totalValue, maxCur, p.key in expanded, { toggle(p.key) }, onStock) }
                     }
                 } else {
-                    items(rows, key = { it.key }) { p -> PositionCard(p, totalValue, maxCur, p.key in expanded, { toggle(p.key) }, onStock) }
+                    items(rows, key = { it.key }) { p -> PositionCard(p, trendOf(p), totalValue, maxCur, p.key in expanded, { toggle(p.key) }, onStock) }
                 }
                 if (rows.isNotEmpty()) {
                     item {
@@ -235,7 +278,16 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
                 }
             }
         }
+        // The full cards scroll away; this slim bar and the search box stay on top while the holdings keep scrolling
+        SummaryPinBar(pinSummary && all.isNotEmpty(), totals, onClick = { scope.launch { listState.animateScrollToItem(0) } }) {
+            if (pinSearch) HoldingsSearch(q, Modifier.padding(top = 6.dp)) { q = it }
+        }
     }
+}
+
+@Composable
+private fun HoldingsSearch(q: String, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+    OutlinedTextField(q, onChange, placeholder = { Text("Search symbol, class or broker") }, singleLine = true, modifier = modifier.fillMaxWidth())
 }
 
 @Composable
@@ -264,13 +316,14 @@ fun BrokerTiles(keys: List<String>) {
 }
 
 @Composable
-private fun PositionCard(p: Position, totalValue: Double, maxCur: Double, open: Boolean, onToggle: () -> Unit, onStock: (String) -> Unit) {
+private fun PositionCard(p: Position, trend: String?, totalValue: Double, maxCur: Double, open: Boolean, onToggle: () -> Unit, onStock: (String) -> Unit) {
     val w = if (totalValue > 0) p.cur / totalValue * 100 else null
     WvCard(Modifier.animateContentSize().clickable(onClick = onToggle), padding = 14) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Text(p.sym, style = Wv.title, color = Wv.c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    trend?.let { Badge(it, trendTone(it)) }
                     BrokerTiles(p.brokers)
                     Text("${classLabel(p.cls)} · ${trimQty(p.qty)} @ ${ownPrice(p.avg)}", style = Wv.small, color = Wv.c.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -315,13 +368,13 @@ private fun PositionCard(p: Position, totalValue: Double, maxCur: Double, open: 
 }
 
 /** The rows shown, one line per broker lot, as a CSV file handed to the share sheet (the web downloads the same file). */
-private fun exportCsv(context: Context, rows: List<Position>) {
+private fun exportCsv(context: Context, rows: List<Position>, trendOf: (Position) -> String?) {
     val esc = { v: Any -> "\"" + v.toString().replace("\"", "\"\"") + "\"" }
-    val header = listOf("Symbol", "Asset class", "Broker", "Quantity", "Avg cost", "LTP", "Invested", "Current value", "P&L", "P&L %", "1D P&L")
+    val header = listOf("Symbol", "Asset class", "Trend", "Broker", "Quantity", "Avg cost", "LTP", "Invested", "Current value", "P&L", "P&L %", "1D P&L")
     val lines = rows.flatMap { p ->
         p.lots.map { l ->
             listOf(
-                p.sym, classLabel(p.cls), brokerKeyLabel(l.brokerKey), l.qty, String.format("%.2f", l.holding.average_price), String.format("%.2f", p.ltp),
+                p.sym, classLabel(p.cls), trendOf(p) ?: "", brokerKeyLabel(l.brokerKey), l.qty, String.format("%.2f", l.holding.average_price), String.format("%.2f", p.ltp),
                 String.format("%.2f", l.inv), String.format("%.2f", l.cur), String.format("%.2f", l.pnl),
                 if (l.inv > 0) String.format("%.2f", l.pnl / l.inv * 100) else "", l.day?.let { String.format("%.2f", it) } ?: "",
             ).joinToString(",") { esc(it) }

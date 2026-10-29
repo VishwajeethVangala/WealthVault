@@ -1,7 +1,8 @@
 import { StockLink } from '../components/StockLink'
 import { DayCoverageNote } from '../components/DayCoverageNote'
+import { SummaryPin } from '../components/SummaryPin'
 import { dayCoverage } from '../utils/dayCoverage'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronRight, Download, Search, X } from 'lucide-react'
 import { usePortfolio } from '../context/PortfolioContext'
@@ -21,6 +22,7 @@ import {
   type Instrument,
   type SortKey,
 } from '../components/holdings/holdingsModel'
+import { TREND_LABEL, TREND_ORDER, trendBadge, useTrend, type TrendBucket } from '../components/holdings/useTrend'
 
 const EM_DASH = '—'
 
@@ -51,6 +53,7 @@ export const HoldingsTable: React.FC = () => {
   const { holdings, loading, error, refresh, stockHref } = usePortfolio()
   const fmt = useMoney()
 
+  const sumRef = useRef<HTMLElement>(null)
   const [q, setQ] = useState('')
   const [sort, setSort] = useState(() => sortKeyFromParam(params.get('sort')))
   const [grouped, setGrouped] = useState(true)
@@ -60,6 +63,7 @@ export const HoldingsTable: React.FC = () => {
   const brokers = useMemo(() => (params.get('broker') || '').split(',').filter(Boolean), [params])
   const classes = useMemo(() => (params.get('assetClass') || '').split(',').filter(Boolean) as CanonicalAssetClass[], [params])
   const pnlFilter = params.get('pnl') || 'all'
+  const trendFilter = (params.get('trend') || 'all') as TrendBucket | 'all'
   const highlight = (params.get('highlight') || '').toLowerCase()
 
   const setParam = (name: string, value: string | null) => {
@@ -71,6 +75,7 @@ export const HoldingsTable: React.FC = () => {
   }
 
   const totalValue = useMemo(() => holdings.reduce((s, h) => s + (h.current_value || 0), 0), [holdings])
+  const trendOf = useTrend(holdings.length)
   const brokerOptions = useMemo(
     () => [...new Set(holdings.map((h) => brokerKeyOf(h.connection_id)).filter(Boolean))].sort(),
     [holdings],
@@ -95,12 +100,22 @@ export const HoldingsTable: React.FC = () => {
     return counts
   }, [searched])
 
+  // trend counts follow the other filters, as the class counts do
+  const trendCounts = useMemo(() => {
+    const scoped = classes.length > 0 ? searched.filter((i) => classes.includes(i.cls)) : searched
+    const counts: Record<TrendBucket, number> = { up: 0, neutral: 0, down: 0, none: 0 }
+    scoped.forEach((i) => counts[trendOf(i)?.bucket ?? 'none']++)
+    return counts
+  }, [searched, classes, trendOf])
+  const anyRated = trendCounts.up + trendCounts.neutral + trendCounts.down > 0
+
   const rows = useMemo(() => {
     let list = classes.length > 0 ? searched.filter((i) => classes.includes(i.cls)) : searched
     if (pnlFilter === 'gainers') list = list.filter((i) => i.pnl >= 0)
     if (pnlFilter === 'losers') list = list.filter((i) => i.pnl < 0)
+    if (trendFilter !== 'all') list = list.filter((i) => (trendOf(i)?.bucket ?? 'none') === trendFilter)
     return sortInstruments(list, sort.key, sort.dir)
-  }, [searched, classes, pnlFilter, sort])
+  }, [searched, classes, pnlFilter, trendFilter, trendOf, sort])
 
   // Totals for the summary tiles and footer
   const totals = useMemo(() => {
@@ -148,13 +163,14 @@ export const HoldingsTable: React.FC = () => {
 
   const exportCsv = () => {
     const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
-    const header = ['Symbol', 'Asset class', 'Broker', 'Quantity', 'Avg cost', 'LTP', 'Invested', 'Current value', 'P&L', 'P&L %', '1D P&L']
+    const header = ['Symbol', 'Asset class', 'Trend', 'Broker', 'Quantity', 'Avg cost', 'LTP', 'Invested', 'Current value', 'P&L', 'P&L %', '1D P&L']
     const lines = rows.flatMap((i) =>
       i.lots.map((l) => {
         const inv = l.inv
         return [
           i.sym,
           CLASS_LABEL[i.cls],
+          trendOf(i)?.verdict ?? '',
           brokerLabel(l.brokerKey),
           l.qty,
           (l.holding.average_price || 0).toFixed(2),
@@ -239,6 +255,14 @@ export const HoldingsTable: React.FC = () => {
                   <span className="dot" style={{ background: CLASS_COLOR[i.cls], width: 6, height: 6 }} />
                   {CLASS_LABEL[i.cls]}
                 </span>
+                {(() => {
+                  const t = trendOf(i)
+                  return t ? (
+                    <span className={`badge trend ${trendBadge(t.bucket)}`} title={`Momentum verdict${t.asOf ? ` as of ${new Date(t.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`}>
+                      {t.verdict}
+                    </span>
+                  ) : null
+                })()}
               </div>
             </div>
           </div>
@@ -354,7 +378,7 @@ export const HoldingsTable: React.FC = () => {
 
   return (
     <>
-      <section className="sum" aria-label="Summary of filtered holdings">
+      <section className="sum" ref={sumRef} aria-label="Summary of filtered holdings">
         <div className="card">
           <div className="lbl">Current value</div>
           <div className="val num">{fmt.compact(totals.cur)}</div>
@@ -394,7 +418,9 @@ export const HoldingsTable: React.FC = () => {
         </div>
       </section>
 
-      <section className="toolbar" aria-label="Filters">
+      <SummaryPin totals={totals} watch={sumRef} />
+
+      <div className="pin-search">
         <div className="search">
           <label className="sr" htmlFor="holdings-q">
             Search holdings
@@ -409,7 +435,9 @@ export const HoldingsTable: React.FC = () => {
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+      </div>
 
+      <section className="toolbar" aria-label="Filters">
         <div className="seg" role="group" aria-label="Asset class">
           <button type="button" className={classes.length === 0 ? 'on' : ''} aria-pressed={classes.length === 0} onClick={() => setParam('assetClass', null)}>
             All<span className="cnt num">{searched.length}</span>
@@ -425,6 +453,20 @@ export const HoldingsTable: React.FC = () => {
             )
           })}
         </div>
+
+        {anyRated && (
+          <div className="seg" role="group" aria-label="Momentum trend">
+            <button type="button" className={trendFilter === 'all' ? 'on' : ''} aria-pressed={trendFilter === 'all'} onClick={() => setParam('trend', null)}>
+              Any trend
+            </button>
+            {TREND_ORDER.map((b) => (
+              <button key={b} type="button" className={trendFilter === b ? 'on' : ''} aria-pressed={trendFilter === b} onClick={() => setParam('trend', b)}>
+                {TREND_LABEL[b]}
+                <span className="cnt num">{trendCounts[b]}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         <label className="sr" htmlFor="holdings-broker">
           Broker

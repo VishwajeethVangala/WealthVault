@@ -65,15 +65,49 @@ export const PrivacyPolicy: React.FC = () => (
         <b>Your settings</b>, such as target allocation.
       </li>
       <li>
+        <b>Your phone&apos;s notification address</b> (a code Google&apos;s push service gives the Android app), only if you allow notifications,
+        together with your notification choices. It is used to send you the alerts you picked and is removed when you sign out or delete your
+        account. The alerts themselves are fetched from WealthVault when they arrive, so stock names and amounts do not pass through Google&apos;s
+        push service, and the lock screen shows only a plain line.
+      </li>
+      <li>
         <b>Raw broker responses</b>, kept so figures can be checked and rebuilt if a broker changes its format.
       </li>
     </ul>
 
     <h2>What we do not do</h2>
     <ul>
-      <li>We do not sell or share your data, and there is no advertising or tracking.</li>
+      <li>We do not sell your data, and there is no advertising. The only data that leaves our storage is the optional usage data and crash reports described below, and only if you allow it.</li>
       <li>We cannot place trades or move money. The app only reads your holdings.</li>
       <li>The app does not read your contacts, location, photos or messages.</li>
+    </ul>
+
+    <h2>Usage data and crash reports (optional)</h2>
+    <p>
+      The first time you open the app, and again in <b>Account</b> (web) or <b>Settings</b> (Android), you are asked whether to share usage data.
+      Nothing is sent unless you choose <b>Allow</b>, and you can switch it off at any time. If you allow it, we use Google Analytics and
+      Firebase (Google) to learn which screens are used and what people search for, and to receive crash reports, so we can fix what is slow
+      or missing.
+    </p>
+    <ul>
+      <li>
+        <b>What is sent:</b> which screen you opened, when you sign in, connect a broker, sync, refresh signals or run the strategy; the text you
+        type into the stock search boxes on the Momentum and ATH Strategy pages (and the stock you pick); whether you turned on app lock; and
+        technical details such as app version, device model and country. Crash reports include the error and the state of the app when it
+        happened.
+      </li>
+      <li>
+        <b>What is never sent:</b> your amounts, holdings, quantities, broker details, email address or name. Searches on the Holdings page are
+        not recorded. Search text that looks like an email address or a long number is dropped.
+      </li>
+      <li>
+        <b>Who you are:</b> events are tied to a random code made from your account id, not to your name or email. We do not use advertising
+        features, Google signals or the Android advertising ID.
+      </li>
+      <li>
+        <b>How long:</b> usage data is kept for 14 months and then removed automatically. To have your usage data removed sooner, email{' '}
+        <Contact />.
+      </li>
     </ul>
 
     <h2>Where it is stored and who else sees it</h2>
@@ -86,7 +120,7 @@ export const PrivacyPolicy: React.FC = () => (
     <h2>On your device</h2>
     <p>
       The apps keep a sign-in token on your device so you stay signed in. The Android app does not save your portfolio data for offline
-      use. If you turn on the optional <b>app lock</b>, the app asks for your phone&apos;s own fingerprint, face or screen lock each time you
+      use. The Android app requires the <b>app lock</b>: it asks for your phone&apos;s own fingerprint, face or screen lock each time you
       open it. That check is done by Android; WealthVault never receives or stores your fingerprint, face or PIN.
     </p>
 

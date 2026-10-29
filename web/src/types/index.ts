@@ -236,35 +236,6 @@ export interface MomentumAnalysis {
 
 
 
-// NSE Swing Momentum V2.1 strategy (see core/analytics/swing_strategy.py)
-export interface SwingStrategyParams {
-  fast_sma: number
-  slow_sma: number
-  slope_lookback: number
-  ut_key: number
-  ut_atr_period: number
-  exit_ema: number
-  use_stop: boolean
-  stop_atr_period: number
-  stop_atr_mult: number
-  initial_capital: number
-  commission_pct: number
-  slippage_ticks: number
-}
-
-export interface StrategyTrade {
-  entry_date: string
-  entry_price: number
-  exit_date: string | null
-  exit_price: number | null
-  exit_reason: 'UT + EMA20 SELL' | 'ATR STOP' | '200DMA BREAK' | 'OPEN'
-  quantity: number
-  pnl: number
-  pnl_pct: number
-  bars_held: number
-  is_open: boolean
-}
-
 export interface StrategyStats {
   initial_capital: number
   final_equity: number
@@ -285,64 +256,17 @@ export interface StrategyStats {
   stop_exits: number
 }
 
-export interface StrategyStatus {
-  state: 'IN_POSITION' | 'FLAT'
-  headline: string
-  detail: string
-  regime_bullish: boolean
-  regime_checks: TrendCheck[]
-  pending_order: 'BUY' | 'SELL' | null
-  entry_date: string | null
-  entry_price: number | null
-  stop_price: number | null
-  ut_stop: number | null
-  exit_ema: number | null
-  unrealized_pct: number | null
-  bars_held: number | null
-}
-
-export interface StrategyBar {
-  date: string
-  open: number
-  high: number
-  low: number
-  close: number
-  sma_fast: number | null
-  sma_slow: number | null
-  exit_ema: number | null
-  ut_stop: number | null
-  regime: boolean
-  buy: boolean
-  sell: boolean
-  stop_exit: boolean
-  stop_level: number | null
-  equity: number
-  buy_hold: number
-}
-
-export interface SwingStrategyResult {
-  instrument: string
-  name: string | null
-  as_of: string
-  params: SwingStrategyParams
-  test_start: string
-  test_end: string
-  bars_tested: number
-  partial_bar_excluded: boolean
-  live_bar?: boolean
-  live_price?: number | null
-  status: StrategyStatus
-  stats: StrategyStats
-  trades: StrategyTrade[]
-  series: StrategyBar[]
-}
-
-export interface SwingStrategyOptions {
-  years?: number
-  ut_key?: number
-  ut_atr_period?: number
-  use_stop?: boolean
-  stop_atr_mult?: number
+export interface StrategyTrade {
+  entry_date: string
+  entry_price: number
+  exit_date: string | null
+  exit_price: number | null
+  exit_reason: '200DMA BREAK' | 'OPEN'
+  quantity: number
+  pnl: number
+  pnl_pct: number
+  bars_held: number
+  is_open: boolean
 }
 
 // "Below 200DMA -> ATH Break -> Hold till 200DMA Break" (see core/analytics/ath_breakout_strategy.py)
@@ -418,7 +342,7 @@ export interface TargetAllocation {
   updated_at?: string
 }
 
-// Equity signals (momentum, Swing V2.1, 200-DMA ATH breakout), computed per stock by the backend
+// Equity signals (momentum, 200-DMA ATH breakout), computed per stock by the backend
 export interface MomentumSignal {
   verdict: string
   score: number
@@ -450,22 +374,6 @@ export interface PendingSell {
   entry_price: number | null
 }
 
-export interface SwingSignal {
-  state: 'IN_POSITION' | 'FLAT'
-  headline: string
-  detail: string
-  pending_order: 'BUY' | 'SELL' | null
-  entry_date: string | null
-  entry_price: number | null
-  stop_price: number | null
-  bars_held: number | null
-  regime_bullish: boolean
-  as_of: string
-  call?: SwingCall | null
-  exits?: ExitCall[]
-  pending_sell?: PendingSell | null
-}
-
 export interface AthSignal {
   state: 'IN_POSITION' | 'FLAT'
   headline: string
@@ -494,7 +402,6 @@ export interface StockSignals {
   live?: { price: number; date: string; at: string }
   live_date?: string
   momentum: MomentumSignal | null
-  swing: SwingSignal | null
   ath: AthSignal | null
   errors: Record<string, string>
   computed_at?: string
@@ -583,25 +490,6 @@ export interface AutoRefresh {
 
 export interface Stage2LiveResponse {
   quotes: Record<string, { price: number; day_change_pct: number | null }>
-}
-
-// The BUY call behind a strategy position, with the facts that justify it
-export interface SwingCall {
-  signal_date: string
-  signal_close: number
-  ut_stop: number | null
-  sma_fast: number | null
-  sma_slow: number | null
-  above_slow_pct: number | null
-  fast_over_slow_pct: number | null
-  slow_slope_pct: number | null
-  slope_lookback: number
-  /** signalled on the latest close, fills at the next open */
-  queued: boolean
-  entry_date: string | null
-  entry_price: number | null
-  stop: number | null
-  stop_pct?: number | null
 }
 
 export interface AthCall {

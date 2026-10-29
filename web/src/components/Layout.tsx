@@ -3,6 +3,8 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Eye, EyeOff, LogOut, Moon, RefreshCw, Sun } from 'lucide-react'
 import { clearToken, fetchBrokerSessions, getStoredUser, syncBroker } from '../utils/api'
 import { PRIVACY_READY_PATHS, SHOW_THEME_TOGGLE } from '../utils/features'
+import { trackScreen } from '../utils/analytics'
+import { AnalyticsBanner } from './AnalyticsConsent'
 import { Sidebar } from './Sidebar'
 import { NAV_ITEMS, isNavActive } from './navItems'
 import { GlobalFilters } from './GlobalFilters'
@@ -45,6 +47,10 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   }, [loadSessions])
 
   const path = location.pathname
+
+  useEffect(() => {
+    trackScreen(path)
+  }, [path])
   // Portfolio filters do not apply to single-stock or broker pages
   // (Holdings has its own toolbar, built on the same URL filters)
   const hideGlobalFilters = path === '/brokers' || path === '/signals' || path === '/momentum' || path === '/strategy' || path === '/holdings' || path === '/account'
@@ -66,9 +72,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
       : ''
     if (path === '/holdings') return { title: 'Holdings', sub: `Merged across ${sessions.length} ${sessions.length === 1 ? 'broker' : 'brokers'} · ${syncLine}${priceLine}` }
     if (path === '/brokers') return { title: 'Brokers', sub: 'Connect, sync and manage your broker accounts' }
-    if (path === '/signals') return { title: 'Signals', sub: 'Momentum, Swing V2.1 and 200-DMA ATH breakout for the stocks you hold and your Chartink Stage 2 list' }
+    if (path === '/signals') return { title: 'Signals', sub: 'Momentum and 200-DMA ATH breakout for the stocks you hold and your Chartink Stage 2 list' }
     if (path === '/momentum') return { title: 'Momentum', sub: 'Trend, returns and relative strength for one stock' }
-    if (path === '/strategy') return { title: 'Strategies', sub: 'Rule-based backtests on daily candles' }
+    if (path === '/strategy') return { title: 'ATH Strategy', sub: 'The 200-DMA to all-time-high breakout: signal and backtest on daily candles' }
     if (path === '/account') return { title: 'Account', sub: 'Your sign-in, privacy and data' }
     return { title: 'Overview', sub: syncLine }
   }, [path, lastSync, connected, sessions.length, lastRefreshedAt, dataFreshness])
@@ -184,6 +190,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
         )}
 
         <main className="page">{children}</main>
+        <AnalyticsBanner />
       </div>
 
       <nav className="tabbar" aria-label="Mobile">

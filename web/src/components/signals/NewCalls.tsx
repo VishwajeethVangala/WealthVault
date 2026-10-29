@@ -18,11 +18,10 @@ export interface CallSource {
   href?: string | null
 }
 
-type Kind = 'swing' | 'ath'
+type Kind = 'ath'
 export type BuyWindow = 2 | 7 | 'open'
 
 const STRATEGY: Record<Kind, { title: string; sub: string; accent: string }> = {
-  swing: { title: 'Swing V2.1', sub: 'UT Bot buy inside a 200-SMA uptrend; fills at the next open.', accent: 'var(--accent)' },
   ath: { title: '200-DMA ATH breakout', sub: 'Close above the all-time high shortly after a 200-DMA reclaim; bought at that close.', accent: 'var(--gain)' },
 }
 
@@ -78,30 +77,6 @@ export const buildBuys = (sources: CallSource[], sessions: string[], window: Buy
 
   sources.forEach((src) => {
     const { sig } = src
-    const s = sig?.swing
-    const sc = s?.call
-    if (s && sc) {
-      const waiting = sc.queued && s.pending_order === 'BUY'
-      const open = !sc.queued && !!sc.entry_date && s.state === 'IN_POSITION' && s.entry_date === sc.entry_date
-      if (waiting || (open && inWindow(sc.entry_date))) {
-        const entry = waiting ? sc.signal_close : sc.entry_price
-        out.push({
-          key: `${src.code}-swing`,
-          src,
-          kind: 'swing',
-          date: waiting ? sc.signal_date : (sc.entry_date as string),
-          waiting,
-          live: sessionOpen && waiting && sc.signal_date === sig?.live_date,
-          price: entry,
-          priceNote: waiting ? 'indicative' : `signal ${short(sc.signal_date)}`,
-          why: `UT Bot buy at the ${short(sc.signal_date)} close, ${p(sc.signal_close)}`,
-          detail: `Close ${signed(sc.above_slow_pct)} over the 200-SMA; 50-SMA ${signed(sc.fast_over_slow_pct)} over it; 200-SMA ${signed(sc.slow_slope_pct)} in ${sc.slope_lookback} bars`,
-          tail: waiting ? 'Stop is set when it fills' : sc.stop != null ? `Stop ${p(sc.stop)}${sc.stop_pct != null ? `, ${weight(Math.abs(sc.stop_pct), 1)} below entry` : ''}` : 'No protective stop',
-          sinceRef: since(entry, src.ltp),
-        })
-      }
-    }
-
     const a = sig?.ath
     const ac = a?.call
     if (a && ac && a.state === 'IN_POSITION' && a.entry_date === ac.entry_date && inWindow(ac.entry_date)) {
@@ -128,7 +103,7 @@ export const buildBuys = (sources: CallSource[], sessions: string[], window: Buy
 }
 
 /**
- * Sells: trades the strategies closed inside the window, plus Swing sells signalled and not yet filled. Window
+ * Sells: trades the strategy closed inside the window. Window
  * 'open' means every closed trade on record (the latest few per stock and strategy), however long ago.
  */
 export const buildSells = (sources: CallSource[], sessions: string[], fmt: Fmt, sessionOpen: boolean, window: BuyWindow = 7): Row[] => {
@@ -140,42 +115,6 @@ export const buildSells = (sources: CallSource[], sessions: string[], fmt: Fmt, 
 
   sources.forEach((src) => {
     const { sig } = src
-    sig?.swing?.exits?.forEach((e, i) => {
-      if (!inWindow(e.exit_date)) return
-      const stop = e.reason === 'ATR STOP'
-      out.push({
-        key: `${src.code}-swing-exit-${i}`,
-        src,
-        kind: 'swing',
-        date: e.exit_date,
-        waiting: false,
-        live: false,
-        price: e.exit_price,
-        priceNote: stop ? 'stop hit' : 'at the open',
-        why: stop ? `Protective ATR stop hit on ${short(e.exit_date)}` : `UT Bot sell and a close under the 20-EMA on ${short(e.signal_date)}`,
-        detail: stop ? 'The stop sits 2 ATR below the entry and trails up with the position' : `Sold at the ${short(e.exit_date)} open`,
-        tail: ended(e.entry_date, e.entry_price, e.exit_price, e.pnl_pct),
-        tailTone: tone(e.pnl_pct),
-        sinceRef: since(e.exit_price, src.ltp),
-      })
-    })
-    const ps = sig?.swing?.pending_sell
-    if (ps) {
-      out.push({
-        key: `${src.code}-swing-pending`,
-        src,
-        kind: 'swing',
-        date: ps.signal_date,
-        waiting: true,
-        live: sessionOpen && ps.signal_date === sig?.live_date,
-        price: ps.signal_close,
-        priceNote: 'indicative',
-        why: `UT Bot sell and a close under the 20-EMA on the ${short(ps.signal_date)} close`,
-        detail: 'Sells at the next open',
-        tail: ps.entry_date ? `Bought ${short(ps.entry_date)} at ${p(ps.entry_price)}` : '',
-        sinceRef: since(ps.signal_close, src.ltp),
-      })
-    }
     sig?.ath?.exits?.forEach((e, i) => {
       if (!inWindow(e.exit_date)) return
       out.push({
@@ -376,7 +315,7 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
     }),
     [pool, s2, s7, fmt, sessionOpen],
   )
-  const hasExitData = sources.some((s) => s.sig?.swing?.exits || s.sig?.ath?.exits)
+  const hasExitData = sources.some((s) => s.sig?.ath?.exits)
 
   if (!hasDetail) {
     return (
@@ -389,7 +328,6 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
 
   const rows = side === 'buy' ? buys : sells
   const filled = rows.filter((r) => !r.waiting)
-  const waiting = rows.filter((r) => r.waiting)
   const anyLive = rows.some((r) => r.live)
   const inWindow = window === 7 ? s7 : s2
   const todayNote = today && inWindow.includes(today) ? ` plus today, live (${longDate(today)})` : ''
@@ -445,7 +383,7 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
       </p>
       {side === 'sell' && !hasExitData && <p className="calls-intro">Sell details are not in the saved signals yet. Press Refresh once to load them.</p>}
 
-      {(['swing', 'ath'] as const).map((kind) => (
+      {(['ath'] as const).map((kind) => (
         <CallTable
           key={`${side}-${kind}-${window}`}
           kind={kind}
@@ -456,20 +394,6 @@ export const CallsView: React.FC<{ sources: CallSource[]; fmt: Fmt; sessionOpen?
           empty={side === 'buy' ? (window === 'open' ? 'No open positions.' : 'No buys filled in this period.') : window === 'open' ? 'No closed trades on record.' : 'No sells in this period.'}
         />
       ))}
-      {waiting.length > 0 && (
-        <CallTable
-          key={`${side}-waiting`}
-          kind="swing"
-          side={side}
-          rows={waiting}
-          fmt={fmt}
-          title={side === 'buy' ? 'Swing buys waiting to fill' : 'Swing sells waiting to fill'}
-          sub={`The latest session's Swing ${side} signals. The strategy trades at the next open, so none has filled yet; the price shown is the signal close and the real fill can differ.`}
-          accent="var(--warn)"
-          startOpen={expand}
-          empty="Nothing is waiting to fill."
-        />
-      )}
     </div>
   )
 }

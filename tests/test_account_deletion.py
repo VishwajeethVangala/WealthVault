@@ -59,12 +59,16 @@ def test_delete_user_data_wipes_every_table_and_profile_last():
         account_deletion, "FeedbackRepository", lambda: repo("feedback")
     ), patch.object(
         account_deletion, "UserRepository", lambda: repo("profile")
+    ), patch.object(account_deletion, "DeviceTokenRepository", lambda: repo("devices")), patch.object(
+        account_deletion, "NotificationPrefsRepository", lambda: repo("notification_prefs")
+    ), patch.object(account_deletion, "NotificationRepository", lambda: repo("notifications")), patch.object(
+        account_deletion, "PushSentRepository", lambda: repo("push_sent")
     ), patch.object(account_deletion, "_forget_broker_sessions", AsyncMock(return_value=2)), patch.object(
         account_deletion, "purge_owner_blobs", AsyncMock(return_value=5)
     ):
         out = asyncio.run(account_deletion.delete_user_data("google_111"))
     assert order[-1] == "profile"
-    assert set(order) == {"holdings", "snapshots", "targets", "credentials", "connections", "feedback", "profile"}
+    assert set(order) == {"holdings", "snapshots", "targets", "credentials", "connections", "feedback", "profile", "devices", "notification_prefs", "notifications", "push_sent"}
     assert out["session_files"] == 2 and out["archived_payloads"] == 5
 
 
@@ -75,8 +79,12 @@ def test_blob_failure_does_not_stop_deletion():
         account_deletion, "TargetAllocationRepository"
     ) as t, patch.object(account_deletion, "BrokerCredentialRepository") as c, patch.object(
         account_deletion, "BrokerConnectionRepository"
-    ) as b, patch.object(account_deletion, "FeedbackRepository") as f, patch.object(account_deletion, "UserRepository") as u:
-        for m in (h, s, t, c, b, f, u):
+    ) as b, patch.object(account_deletion, "FeedbackRepository") as f, patch.object(account_deletion, "UserRepository") as u, patch.object(
+        account_deletion, "DeviceTokenRepository"
+    ) as d, patch.object(account_deletion, "NotificationPrefsRepository") as np_, patch.object(
+        account_deletion, "NotificationRepository"
+    ) as nr, patch.object(account_deletion, "PushSentRepository") as ps:
+        for m in (h, s, t, c, b, f, u, d, np_, nr, ps):
             m.return_value.delete_partition = AsyncMock(return_value=1)
             m.return_value.close = AsyncMock()
         out = asyncio.run(account_deletion.delete_user_data("google_111"))

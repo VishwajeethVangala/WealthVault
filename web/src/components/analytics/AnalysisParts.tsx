@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { AlertCircle, ExternalLink, RotateCcw, Search } from 'lucide-react'
 import { usePortfolio } from '../../context/PortfolioContext'
 import { classifyAssetClass } from '../../utils/portfolioFilters'
 import { searchStocks, type StockSuggestion } from '../../utils/api'
+import { cleanSearchTerm, screenName, track } from '../../utils/analytics'
 
 const SUGGEST_AFTER = 3
 
@@ -17,6 +19,7 @@ export const SymbolPicker: React.FC<{
   children?: React.ReactNode
 }> = ({ value, onChange, onSubmit, loading, activeInstrument, submitLabel, children }) => {
   const { holdings } = usePortfolio()
+  const page = screenName(useLocation().pathname)
 
   // Suggestions appear from the third typed character. Picking one runs it; typing again clears the choice.
   const [suggestions, setSuggestions] = useState<StockSuggestion[]>([])
@@ -54,7 +57,15 @@ export const SymbolPicker: React.FC<{
       window.clearTimeout(t)
     }
   }, [value])
+  // What people look for, once they pause typing (not every keystroke): the text and how many stocks matched
+  useEffect(() => {
+    const term = cleanSearchTerm(value)
+    if (!typed.current || !term || term.length < SUGGEST_AFTER) return
+    const t = window.setTimeout(() => track('search', { page, term, results: suggestions.length }), 1000)
+    return () => window.clearTimeout(t)
+  }, [value, suggestions, page])
   const choose = (s: StockSuggestion) => {
+    track('search_select', { page, term: cleanSearchTerm(value), symbol: cleanSearchTerm(s.symbol) })
     typed.current = false
     setOpen(false)
     setSuggestions([])
@@ -96,6 +107,7 @@ export const SymbolPicker: React.FC<{
       <form
         onSubmit={(e) => {
           e.preventDefault()
+          track('search_select', { page, term: cleanSearchTerm(value), symbol: cleanSearchTerm(value) })
           onSubmit(value)
         }}
         className="flex flex-col sm:flex-row gap-2"

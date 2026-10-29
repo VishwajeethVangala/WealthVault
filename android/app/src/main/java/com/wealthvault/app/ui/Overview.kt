@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -44,6 +45,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,6 +70,7 @@ import com.wealthvault.app.data.RiskResponse
 import com.wealthvault.app.data.SignalsResponse
 import com.wealthvault.app.data.StockSignals
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /**
@@ -131,7 +134,7 @@ fun dashSignals(
     return DashSignals(
         sells, buys, review,
         covered = all.count { hasAnySignal(it.sig) },
-        hasExit = all.any { it.sig?.swing?.exits != null || it.sig?.ath?.exits != null },
+        hasExit = all.any { it.sig?.ath?.exits != null },
         sellsPreset = SignalsPreset(view = "calls", side = "sell", market = market(sells), source = "held"),
         buysPreset = SignalsPreset(view = "calls", side = "buy", window = 2, market = market(buys), source = "held"),
         reviewPreset = SignalsPreset(view = "table", filter = "all-bear", market = if (usOnly(review)) "us" else "in", source = "held"),
@@ -208,8 +211,12 @@ fun OverviewScreen(
     val brief = overviewBrief(totals, cards, nifty, dash, drift, conc)
     val kite = sessions.firstOrNull { it.broker_name.contains("zerodha", ignoreCase = true) && !it.auth_url.isNullOrBlank() && needsLogin(it) }
 
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val pinSummary by pastItem(listState, "pnl-tiles")
+
     PullToRefreshBox(isRefreshing = holdingsRes.loading && all.isNotEmpty(), onRefresh = { vm.refreshAll(); avm.loadOverviewPanels() }) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { PageTitle("Overview", summary.data?.snapshot?.as_of_date?.let { "As of ${longDate(it)}" } ?: "Your whole portfolio") }
@@ -253,7 +260,7 @@ fun OverviewScreen(
             if (positions.isNotEmpty()) {
                 item { HeroCard(positions, totals, hist, period, filterActive) { period = it } }
                 item { TodayTile(totals, nifty, dayCoverage(positions)) }
-                item {
+                item(key = "pnl-tiles") {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         TotalPnlTile(totals, Modifier.weight(1f))
                         MarketGainTile(hist, period, Modifier.weight(1f))
@@ -282,6 +289,7 @@ fun OverviewScreen(
                 item { ByBrokerCard(filtered, totals.cur, onBrokers) }
             }
         }
+        SummaryPinBar(pinSummary && positions.isNotEmpty(), totals, onClick = { scope.launch { listState.animateScrollToItem(0) } })
     }
     if (editTargets) {
         val classes = (cards.map { it.cls } + targets.data.orEmpty().keys).distinct()
@@ -605,7 +613,7 @@ private fun SignalsPanelCard(d: DashSignals, failed: Boolean, hasStocks: Boolean
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Signals on your holdings", style = Wv.title, color = Wv.c.text)
-                Text("Swing V2.1 and ATH breakout calls, on live prices", style = Wv.small, color = Wv.c.text3)
+                Text("ATH breakout calls, on live prices", style = Wv.small, color = Wv.c.text3)
             }
             TextButton(onClick = { onSignals(SignalsPreset(source = "held")) }) { Text("Open", color = Wv.c.accent) }
         }
@@ -621,7 +629,7 @@ private fun SignalsPanelCard(d: DashSignals, failed: Boolean, hasStocks: Boolean
         if (!d.hasExit) Text("Sell history is added after the next signals refresh.", style = Wv.small, color = Wv.c.text3)
         if (d.review.isNotEmpty()) {
             Text(
-                "To review (all three signals bearish): " + d.review.take(6).joinToString(", ") { it.name } + if (d.review.size > 6) " and ${d.review.size - 6} more" else "",
+                "To review (both signals bearish): " + d.review.take(6).joinToString(", ") { it.name } + if (d.review.size > 6) " and ${d.review.size - 6} more" else "",
                 style = Wv.small, color = Wv.c.text2,
             )
         }
@@ -651,7 +659,7 @@ private fun CallLine(r: CallRow, onOpen: (CallRow) -> Unit, sub: String, subTone
     Column(Modifier.fillMaxWidth().clickable { onOpen(r) }) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(r.src.name, style = Wv.sub, color = Wv.c.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            Badge(if (r.kind == Kind.Swing) "Swing" else "ATH", if (r.kind == Kind.Swing) Tone.Info else Tone.Ok)
+            Badge("ATH", Tone.Ok)
             if (r.waiting) Badge("Waiting", Tone.Warn)
         }
         Text(sub, style = Wv.small, color = if (subTone != null) toneOf(subTone) else Wv.c.text3, maxLines = 2, overflow = TextOverflow.Ellipsis)

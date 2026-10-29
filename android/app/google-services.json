@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "180858187533",
+    "project_id": "wealthvault-2026",
+    "storage_bucket": "wealthvault-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:180858187533:android:7867ea37cbbae22c6e0a44",
+        "android_client_info": {
+          "package_name": "com.vangala.wealthvault"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDyCyTBN08PgmpXXDGC0_PS5MPQy0OYlNQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

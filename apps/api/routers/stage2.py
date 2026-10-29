@@ -1,7 +1,7 @@
 """Stage 2 Router.
 
 Takes the stock list from a saved Chartink screener (the Stage 2 trend template) and runs every stock through
-the same momentum / Swing V2.1 / ATH-breakout signals as the Equity signals page.
+the same momentum / ATH-breakout signals as the Equity signals page.
 
 - GET  /api/v1/analytics/stage2          the stored list, what changed since the previous day, cached signals
 - POST /api/v1/analytics/stage2/refresh  re-read Chartink, then recompute signals (list + Indian holdings) in the background
@@ -176,7 +176,7 @@ async def _run_job(
                 job.failed += 1
                 await cache.save(
                     key,
-                    {"instrument": key, "momentum": None, "swing": None, "ath": None, "errors": {"all": "Price history unavailable"}},
+                    {"instrument": key, "momentum": None, "ath": None, "errors": {"all": "Price history unavailable"}},
                 )
             job.done += 1
 

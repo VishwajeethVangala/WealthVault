@@ -437,7 +437,20 @@ fun SettingsScreen(vm: AppViewModel) {
                 }
             }
         }
-        item { AppLockCard(vm, s.lock) }
+        item { AppLockCard(vm, s.lock, required = !s.demo) }
+        item { NotificationsCard(vm) }
+        item {
+            val shareContext = androidx.compose.ui.platform.LocalContext.current
+            WvCard {
+                Label("Share WealthVault")
+                Text("Send the app to a friend over WhatsApp or any other app. Nothing about your portfolio is included.", style = Wv.sub, color = Wv.c.text2)
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { ShareApp.open(shareContext, "settings") },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                ) { Text("Share WealthVault", color = Wv.c.accent) }
+            }
+        }
+        item { AnalyticsCard(vm, s.analytics == "granted") }
         item {
             WvCard {
                 Label("Account")

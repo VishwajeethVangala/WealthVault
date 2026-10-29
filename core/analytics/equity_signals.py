@@ -1,4 +1,4 @@
-"""One-pass signal bundle for a stock: momentum verdict, Swing V2.1 status and ATH-breakout status.
+"""One-pass signal bundle for a stock: momentum verdict and ATH-breakout status.
 
 The three analyses share the same daily candles, so the history is fetched once per stock and sliced
 for each. Each section fails independently (for example a recent listing has too little history for
@@ -14,8 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from core.analytics import analyze_momentum
 from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
-from core.analytics.strategy_calls import ath_buy_call, exit_calls, swing_buy_call, swing_pending_sell
-from core.analytics.swing_strategy import run_swing_strategy
+from core.analytics.strategy_calls import ath_buy_call, exit_calls
 from core.market_data.candle_store import get_india_candles
 from core.market_data.groww_market import get_user_groww_client
 from core.market_data.indmoney_market import get_user_indmoney_client
@@ -29,14 +28,13 @@ from core.market_data.history import (
     get_history_service,
     normalize_symbol,
 )
-from core.models import AthBreakoutParams, SwingStrategyParams
+from core.models import AthBreakoutParams
 from storage.tables.repositories import SignalCacheRepository
 
 logger = logging.getLogger("wealthvault.analytics.equity_signals")
 
 MIN_MOMENTUM_CANDLES = 50
 MOMENTUM_LOOKBACK_DAYS = 400
-SWING_YEARS = 5
 STRATEGY_WARMUP_DAYS = 330
 SESSIONS_KEPT = 7  # most recent sessions listed per row, for the buy and sell call windows
 
@@ -74,36 +72,6 @@ def _momentum_section(instrument_id: str, instrument: Dict[str, Any], candles, b
         "pct_from_52w_high": m.pct_from_52w_high,
         "range_pos": range_pos,
         "checks": [{"label": c.label, "passed": c.passed} for c in m.trend_checks],
-    }
-
-
-def _swing_section(instrument_id: str, instrument: Dict[str, Any], candles, drop_partial) -> Dict[str, Any]:
-    lookback = min(MAX_LOOKBACK_DAYS, SWING_YEARS * 365 + STRATEGY_WARMUP_DAYS)
-    use, partial = drop_partial(_since(candles, lookback))
-    params = SwingStrategyParams()
-    r = run_swing_strategy(
-        instrument=instrument_id,
-        candles=use,
-        params=params,
-        tick_size=float(instrument.get("tick_size") or 0.05),
-        name=instrument.get("name"),
-        partial_bar_excluded=partial,
-    )
-    s = r.status
-    return {
-        "state": s.state,
-        "headline": s.headline,
-        "detail": s.detail,
-        "pending_order": s.pending_order,
-        "entry_date": s.entry_date,
-        "entry_price": s.entry_price,
-        "stop_price": s.stop_price,
-        "bars_held": s.bars_held,
-        "regime_bullish": s.regime_bullish,
-        "as_of": r.as_of,
-        "call": swing_buy_call(r, params.slope_lookback),
-        "exits": exit_calls(r),
-        "pending_sell": swing_pending_sell(r),
     }
 
 
@@ -154,7 +122,6 @@ def build_signal_row(
         # the two most recent completed sessions, so pages can ask "what happened in the last 2 sessions"
         "last_sessions": [str(c["date"])[:10] for c in drop_partial(candles)[0][-SESSIONS_KEPT:]],
         "momentum": None,
-        "swing": None,
         "ath": None,
         "errors": {},
     }
@@ -162,7 +129,6 @@ def build_signal_row(
         row.update(extra)
     for key, build in (
         ("momentum", lambda: _momentum_section(instrument_id, instrument, candles, benchmark, benchmark_name)),
-        ("swing", lambda: _swing_section(instrument_id, instrument, candles, drop_partial)),
         ("ath", lambda: _ath_section(instrument_id, instrument, candles, drop_partial)),
     ):
         try:

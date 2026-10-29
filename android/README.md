@@ -5,9 +5,9 @@ app, so every number comes from your brokers and the Azure tables. It uses the w
 (`web/src/index.css`) one to one, in light and dark.
 
 Tabs: Overview (value, gain, today, value over time, asset mix against your targets, movers, signals summary,
-risk), Holdings (search, filter, sort; a stock opens its Momentum page), Signals (momentum, Swing V2.1 and ATH
+risk), Holdings (search, filter, sort; a stock opens its Momentum page), Signals (momentum and ATH
 breakout on each stock you hold, India and US, buy and sell calls), Stage 2 (the Chartink list with the same
-signals and calls) and More: Momentum, Strategies (Swing V2.1 and ATH breakout backtests), Brokers (sync, log
+signals and calls) and More: Momentum, the ATH Strategy (breakout backtest), Brokers (sync, log
 in, add with API keys, remove) and Settings (theme, sign out). Momentum and Strategies need today's Kite login;
 the app shows the login link when it is missing.
 

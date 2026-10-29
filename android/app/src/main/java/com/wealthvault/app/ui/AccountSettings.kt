@@ -30,18 +30,19 @@ import androidx.compose.ui.platform.LocalContext
 
 /** Turn the app lock on or off. Either way the person must pass the check, so a borrowed phone cannot change it. */
 @Composable
-fun AppLockCard(vm: AppViewModel, on: Boolean) {
+fun AppLockCard(vm: AppViewModel, on: Boolean, required: Boolean = false) {
     val context = LocalContext.current
     val activity = context.findFragmentActivity()
     var note by remember { mutableStateOf<String?>(null) }
     WvCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Label("App lock")
+                Label(if (required) "App lock · required" else "App lock")
                 Text("Ask for your fingerprint, face or screen lock each time the app is opened.", style = Wv.sub, color = Wv.c.text2)
             }
             Switch(
                 checked = on,
+                enabled = !(required && on), // required: it can be turned on but not off again
                 onCheckedChange = { want ->
                     note = null
                     when {
@@ -64,6 +65,7 @@ fun AppLockCard(vm: AppViewModel, on: Boolean) {
             )
         }
         note?.let { Note(it) }
+        if (required && on) Text("App lock is required to protect your portfolio, so it cannot be turned off.", style = Wv.small, color = Wv.c.text3)
         if (on) Text("The screen is hidden from screenshots and the recent-apps view while the lock is on.", style = Wv.small, color = Wv.c.text3)
     }
 }
