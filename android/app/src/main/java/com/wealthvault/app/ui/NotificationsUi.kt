@@ -48,7 +48,7 @@ fun NotificationsPromptScreen(vm: AppViewModel) {
         Spacer(Modifier.height(20.dp))
         Text("Get alerts that matter", style = Wv.h1, color = Wv.c.text)
         Text(
-            "ATH strategy calls on the stocks you hold, a daily and weekly net worth update, and a reminder when Kite needs its morning login. " +
+            "Strategy calls on the stocks you hold, a daily and weekly net worth update, an evening look at your US stocks, and a reminder when Kite needs its morning login. " +
                 "On the lock screen only a plain line shows, never a stock name or an amount. You can switch each kind off in Settings.",
             style = Wv.sub, color = Wv.c.text3,
         )
@@ -64,10 +64,11 @@ fun NotificationsPromptScreen(vm: AppViewModel) {
 }
 
 private val KINDS = listOf(
-    "holdings_ath" to "ATH calls on my holdings",
-    "stage2_ath" to "ATH calls on the Stage 2 list",
+    "holdings_ath" to "Strategy calls on my holdings",
+    "stage2_ath" to "Strategy calls on the Stage 2 list",
     "networth_daily" to "Daily net worth, after the close",
     "networth_weekly" to "Weekly net worth, Sunday morning",
+    "us_stocks" to "US stocks look, 9 PM on US trading days",
     "kite_login" to "Kite login reminder, mornings",
 )
 

@@ -15,6 +15,7 @@ import { Account } from './pages/Account'
 import { DeleteAccountInfo, PrivacyPolicy } from './pages/Legal'
 import { getToken, getStoredUser, verifySession } from './utils/api'
 import { identify } from './utils/analytics'
+import { refreshWebPush } from './utils/webPush'
 import type { User } from './types'
 
 const SignedInApp: React.FC = () => {
@@ -44,6 +45,7 @@ const SignedInApp: React.FC = () => {
 
   useEffect(() => {
     void identify(currentUser?.user_id)
+    if (currentUser) void refreshWebPush() // keeps browser notifications working across sign-ins
   }, [currentUser?.user_id])
 
   const handleLoginSuccess = (user: User) => {

@@ -28,6 +28,7 @@ class PrefsBody(BaseModel):
     stage2_ath: bool = True
     networth_daily: bool = True
     networth_weekly: bool = True
+    us_stocks: bool = True
     kite_login: bool = True
 
 
@@ -67,4 +68,4 @@ async def get_notification(notification_id: str, current_user_id: str = Depends(
     row = await NotificationRepository().get(current_user_id, notification_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-    return {k: str(row.get(k, "")) for k in ("kind", "title", "body", "body_masked", "public_title", "route", "created_at")}
+    return {k: str(row.get(k, "")) for k in ("kind", "title", "body", "body_masked", "public_title", "route", "extra", "created_at")}

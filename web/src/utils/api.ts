@@ -1,4 +1,6 @@
 import { cleanSearchTerm, track } from './analytics'
+import { saveSessionForWorker } from './pushSession'
+import { webPushSignOut } from './webPush'
 import type { LiveSignalsResponse } from '../components/signals/useLiveSignals'
 import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
 
@@ -6,10 +8,15 @@ const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
 
 export const getToken = (): string | null => localStorage.getItem(TOKEN_KEY)
-export const setToken = (token: string) => localStorage.setItem(TOKEN_KEY, token)
+export const setToken = (token: string) => {
+  localStorage.setItem(TOKEN_KEY, token)
+  void saveSessionForWorker()
+}
 export const clearToken = () => {
+  void webPushSignOut() // reads the sign-in before it goes, to stop this browser's alerts for the account
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  void saveSessionForWorker()
 }
 
 export const getStoredUser = (): User | null => {
@@ -310,3 +317,14 @@ export async function refreshStage2(): Promise<SignalsJob> {
 export async function fetchStage2Live(): Promise<Stage2LiveResponse> {
   return fetchApi<Stage2LiveResponse>('/api/v1/analytics/stage2/live')
 }
+
+// --- notifications (the same switches the Android app has) ---------------------------------------------------------
+
+export type NotificationPrefs = Record<string, boolean>
+
+export const fetchNotificationPrefs = () => fetchApi<NotificationPrefs>('/api/v1/notifications/prefs')
+
+export const saveNotificationPrefs = (prefs: NotificationPrefs) =>
+  fetchApi<NotificationPrefs>('/api/v1/notifications/prefs', { method: 'PUT', body: JSON.stringify(prefs) })
+
+export const sendTestNotification = () => fetchApi<{ delivered: number }>('/api/v1/notifications/test', { method: 'POST' })

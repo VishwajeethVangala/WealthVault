@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { saveSessionForWorker } from '../utils/pushSession'
 
 const STORAGE_KEY = 'wv_hide_amounts'
 
@@ -26,6 +27,7 @@ export const PrivacyProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const next = !h
       try {
         localStorage.setItem(STORAGE_KEY, String(next))
+        void saveSessionForWorker() // notifications follow the same choice
       } catch {
         // storage unavailable: the choice just will not persist
       }

@@ -5,6 +5,7 @@ import { clearToken, deleteAccount, getStoredUser, sendFeedback } from '../utils
 import { DISCLAIMER } from './Legal'
 import { AnalyticsSwitch } from '../components/AnalyticsConsent'
 import { ShareCard } from '../components/ShareCard'
+import { WebPushCard } from '../components/WebPushCard'
 
 type Category = 'idea' | 'problem' | 'praise' | 'other'
 const MAX_FEEDBACK = 2000
@@ -131,6 +132,8 @@ export const Account: React.FC = () => {
         </p>
         <AnalyticsSwitch />
       </section>
+
+      <WebPushCard />
 
       <ShareCard />
 

@@ -53,7 +53,7 @@ private fun grouped(value: Double, digits: Int): String {
     return "$rest,$last3$frac"
 }
 
-private fun plainMoney(v: Double, digits: Int): String = (if (v < 0) MINUS else "") + "₹" + grouped(abs(v), digits)
+fun plainMoney(v: Double, digits: Int): String = (if (v < 0) MINUS else "") + "₹" + grouped(abs(v), digits)
 
 /** ₹3,52,608 (hidden with the eye switch) */
 fun money(v: Double?, digits: Int = 0): String = if (v == null || v.isNaN()) DASH else if (masked(v)) MASK else plainMoney(v, digits)

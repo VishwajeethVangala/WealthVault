@@ -65,7 +65,7 @@ export const PrivacyPolicy: React.FC = () => (
         <b>Your settings</b>, such as target allocation.
       </li>
       <li>
-        <b>Your phone&apos;s notification address</b> (a code Google&apos;s push service gives the Android app), only if you allow notifications,
+        <b>Your phone&apos;s or browser&apos;s notification address</b> (a code Google&apos;s push service gives the Android app or the browser), only if you allow notifications,
         together with your notification choices. It is used to send you the alerts you picked and is removed when you sign out or delete your
         account. The alerts themselves are fetched from WealthVault when they arrive, so stock names and amounts do not pass through Google&apos;s
         push service, and the lock screen shows only a plain line.

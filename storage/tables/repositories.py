@@ -941,7 +941,7 @@ class DeviceTokenRepository(BaseTableStorage):
 class NotificationPrefsRepository(BaseTableStorage):
     """Which kinds of notification a person wants. PartitionKey = owner_id, RowKey = 'prefs'."""
 
-    KINDS = ("holdings_ath", "stage2_ath", "networth_daily", "networth_weekly", "kite_login")
+    KINDS = ("holdings_ath", "stage2_ath", "networth_daily", "networth_weekly", "us_stocks", "kite_login")
 
     def __init__(self, connection_string: Optional[str] = None) -> None:
         super().__init__(table_name="notifprefs", connection_string=connection_string)
@@ -969,7 +969,7 @@ class NotificationRepository(BaseTableStorage):
     def __init__(self, connection_string: Optional[str] = None) -> None:
         super().__init__(table_name="notifications", connection_string=connection_string)
 
-    async def create(self, owner_id: str, kind: str, title: str, body: str, body_masked: str, public_title: str, route: str) -> str:
+    async def create(self, owner_id: str, kind: str, title: str, body: str, body_masked: str, public_title: str, route: str, extra: str = "") -> str:
         now = datetime.now(timezone.utc)
         nid = f"{now.strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
         await self.upsert_entity(
@@ -977,7 +977,7 @@ class NotificationRepository(BaseTableStorage):
             entity_id=nid,
             data={
                 "kind": kind, "title": title, "body": body, "body_masked": body_masked,
-                "public_title": public_title, "route": route, "created_at": now.isoformat(),
+                "public_title": public_title, "route": route, "extra": extra, "created_at": now.isoformat(),
             },
             mode="replace",
         )

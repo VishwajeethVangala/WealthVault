@@ -1,20 +1,22 @@
 """What gets sent, to whom, and when.
 
-Four kinds of notification, each switchable per person:
-  holdings_ath    ATH entry/exit calls on stocks the person holds (only that person), on the live price, at the refresh
+Kinds of notification, each switchable per person (the app calls the ATH ones "Strategy calls"):
+  holdings_ath    strategy entry/exit calls on stocks the person holds (only that person), on the live price, at the refresh
                   that sees them, once per stock and direction per day, with a follow-up if a call did not hold at the close
   stage2_ath      the same calls for the Chartink Stage 2 list, to everyone (a stock someone holds is theirs, not repeated)
   networth_daily  after the close on trading days
   networth_weekly Sunday morning
+  us_stocks       a mid-session look at the person's US stocks (21:00 IST) on US trading days
   kite_login      morning reminder on trading days when Kite needs today's login
 
 The push message holds only a type and an id; the text lives in the notifications table and the phone fetches it.
 """
 
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, Iterable, List, Optional, Set
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Set
 from zoneinfo import ZoneInfo
 
 from core.push import fcm
@@ -77,7 +79,8 @@ async def send_to_user(
     if not tokens:
         return 0
     nid = await ports.notes.create(
-        owner_id, kind, msg["title"], msg["body"], msg.get("body_masked", msg["body"]), msg["public_title"], msg.get("route", "overview")
+        owner_id, kind, msg["title"], msg["body"], msg.get("body_masked", msg["body"]), msg["public_title"], msg.get("route", "overview"),
+        json.dumps(msg["extra"], separators=(",", ":")) if msg.get("extra") else "",
     )
     delivered = 0
     for token in tokens:
@@ -89,7 +92,7 @@ async def send_to_user(
     return delivered
 
 
-# --- ATH calls -------------------------------------------------------------------------------------------------
+# --- strategy calls -------------------------------------------------------------------------------------------------
 
 
 async def notify_calls(
@@ -99,10 +102,12 @@ async def notify_calls(
     held_keys: Dict[str, Set[str]],
     stage2_keys: Iterable[str],
     final: bool = False,
+    held_info: Optional[Dict[str, Dict[str, Dict[str, Any]]]] = None,
 ) -> Dict[str, int]:
     """Send today's new ATH calls.
 
     `rows` are live signal rows by cache key; `held_keys` maps each person to the keys of stocks they hold;
+    `held_info` gives each person's position in them ({'qty', 'pnl_pct'}), for the "You hold..." line;
     `stage2_keys` are the keys on the Chartink list. `final` marks the closing refresh, which also follows up on
     calls that no longer stand. Returns counts for the log."""
     counts = {"holdings": 0, "stage2": 0, "reversed": 0}
@@ -119,7 +124,7 @@ async def notify_calls(
             plans.append(("s", "stage2_ath", [e for e in stage2_events if e["sid"] not in mine and _alias(e["sid"]) not in mine]))
         for kind, pref_key, events in plans:
             fresh = [e for e in events if not await ports.sent.has(owner, event_key(kind, e))]
-            if fresh and await send_to_user(ports, owner, "ath_" + kind, pref_key, call_message(kind, fresh)):
+            if fresh and await send_to_user(ports, owner, "ath_" + kind, pref_key, call_message(kind, fresh, (held_info or {}).get(owner))):
                 for e in fresh:
                     await ports.sent.mark(owner, event_key(kind, e), sid=e["sid"], side=e["side"], kind=kind)
                 counts["holdings" if kind == "h" else "stage2"] += 1
@@ -150,6 +155,32 @@ async def _follow_up(ports: Ports, owner: str, kind: str, pref_key: str, today: 
 
 # --- net worth ---------------------------------------------------------------------------------------------------
 
+CLASS_NAME = {"EQUITY": "Stocks", "US_STOCKS": "US", "MUTUAL_FUND": "MF", "NPS": "NPS", "GOLD": "Gold", "DEBT": "Debt"}
+CLASS_ORDER = ["EQUITY", "US_STOCKS", "MUTUAL_FUND", "NPS", "GOLD", "DEBT"]
+STOCK_CLASSES = ("EQUITY", "US_STOCKS")
+
+
+def _arrow(v: float) -> str:
+    return "▲" if v >= 0 else "▼"
+
+
+def _tone(v: Optional[float]) -> str:
+    return "flat" if v is None or abs(v) < 0.005 else "up" if v > 0 else "down"
+
+
+def _class_key(h: Any) -> str:
+    c = getattr(h, "asset_class", "")
+    return str(getattr(c, "value", c) or "")
+
+
+def _short(sym: str) -> str:
+    """'RELIANCE' from 'RELIANCE' / 'NVDA (NVIDIA Corporation)'; the broker's own suffixes are dropped."""
+    code = (sym or "").strip().split()[0].upper() if (sym or "").strip() else ""
+    for suffix in ("-BE", "-BZ", "-BL", "-IL"):
+        if code.endswith(suffix):
+            code = code[: -len(suffix)]
+    return code
+
 
 def day_totals(holdings: List[Any]) -> Dict[str, Any]:
     total = sum(h.current_value for h in holdings)
@@ -158,29 +189,133 @@ def day_totals(holdings: List[Any]) -> Dict[str, Any]:
     return {"total": total, "day": day, "day_pct": (day / prev * 100.0) if prev > 0 else None}
 
 
-def networth_daily_message(t: Dict[str, Any], as_of: Optional[str] = None) -> Dict[str, str]:
-    mood = pct(t["day_pct"]) if t["day_pct"] is not None else "no day change reported"
-    note = f" Based on data from {as_of}." if as_of else ""
+def day_detail(holdings: List[Any]) -> Dict[str, Any]:
+    """What drove the day: the best and the worst stock, each class's move, and how many stocks fell."""
+    movers = []
+    for h in holdings:
+        pct_ = getattr(h, "day_change_percentage", None)
+        if _class_key(h) in STOCK_CLASSES and pct_ is not None and (getattr(h, "current_value", 0) or 0) > 0:
+            movers.append((_short(getattr(h, "instrument_symbol", "")), float(pct_)))
+    by_class: Dict[str, List[float]] = {}
+    for h in holdings:
+        if getattr(h, "day_pnl", None) is None:
+            continue
+        cls = _class_key(h)
+        row = by_class.setdefault(cls, [0.0, 0.0])
+        row[0] += h.current_value
+        row[1] += h.day_pnl
+    classes = []
+    for cls in CLASS_ORDER:
+        if cls in by_class:
+            cur, day = by_class[cls]
+            prev = cur - day
+            if prev > 0 and cls in CLASS_NAME:
+                classes.append((CLASS_NAME[cls], day / prev * 100.0))
+    best = max(movers, key=lambda m: m[1], default=None)
+    worst = min(movers, key=lambda m: m[1], default=None)
     return {
-        "title": "Net worth · today",
-        "body": f"{inr(t['total'])} · today {mood} ({inr(t['day'])}).{note}",
-        "body_masked": f"Today {mood}.{note}",
-        "public_title": "Your daily net worth update is ready",
-        "route": "overview",
+        "best": best if best and best[1] > 0 else None,
+        "drag": worst if worst and worst[1] < 0 else None,
+        "classes": classes,
+        "down": sum(1 for _n, v in movers if v < 0),
+        "stocks": len(movers),
     }
 
 
-def networth_weekly_message(total: float, then: float, then_date: str) -> Dict[str, str]:
+def _mood(day_pct: Optional[float], detail: Dict[str, Any]) -> str:
+    if day_pct is None:
+        return ""
+    if day_pct >= 1.5:
+        return "A strong day."
+    if day_pct >= 0.5:
+        return "A good day."
+    if day_pct > -0.5:
+        return "Quiet day, a small " + ("win." if day_pct >= 0 else "dip.")
+    if day_pct > -1.5:
+        return "A soft day."
+    if detail.get("stocks") and detail.get("down"):
+        return f"Rough one: {detail['down']} of {detail['stocks']} stocks down."
+    return "A rough day."
+
+
+def _versus(own: float, nifty: Optional[float]) -> str:
+    if nifty is None:
+        return ""
+    gap = own - nifty
+    verdict = f"you beat it by {abs(gap):.2f}%" if gap > 0.004 else f"you lagged by {abs(gap):.2f}%" if gap < -0.004 else "level with it"
+    return f"Nifty {_arrow(nifty)} {abs(nifty):.2f}% ({verdict})."
+
+
+def networth_daily_message(
+    t: Dict[str, Any], as_of: Optional[str] = None, detail: Optional[Dict[str, Any]] = None, nifty: Optional[float] = None
+) -> Dict[str, Any]:
+    day_pct = t["day_pct"]
+    mood = pct(day_pct) if day_pct is not None else "no day change reported"
+    detail = detail or {}
+    rest: List[str] = []
+    if day_pct is not None and nifty is not None:
+        rest.append(_versus(day_pct, nifty))
+    moves = []
+    if detail.get("best"):
+        moves.append(f"Best: {detail['best'][0]} {pct(detail['best'][1])}")
+    if detail.get("drag"):
+        moves.append(f"Drag: {detail['drag'][0]} {pct(detail['drag'][1])}")
+    if moves:
+        rest.append("   ".join(moves))
+    if detail.get("classes"):
+        rest.append("  ".join(f"{name} {_arrow(v)}{abs(v):.1f}%" for name, v in detail["classes"]))
+    line = _mood(day_pct, detail)
+    if line:
+        rest.append(line)
+    if as_of:
+        rest.append(f"Based on data from {as_of}.")
+    head = f"{inr(t['total'])} · today {mood} ({inr(t['day'])})"
+    head_masked = f"Today {mood}" + (f" · {_versus(day_pct, nifty).rstrip('.').replace('(', '· ').replace(')', '')}" if day_pct is not None and nifty is not None else "")
+    arrow = f" {_arrow(day_pct)} {abs(day_pct):.2f}%" if day_pct is not None else ""
+    return {
+        "title": f"Net worth · today{arrow}",
+        "body": "\n".join([head + "."] + rest),
+        "body_masked": "\n".join([head_masked + "."] + rest),
+        "public_title": "Your daily net worth update is ready",
+        "route": "overview",
+        "extra": {"tone": _tone(day_pct), "actions": [{"label": "Holdings", "route": "holdings"}, {"label": "Overview", "route": "overview"}]},
+    }
+
+
+def networth_weekly_message(
+    total: float, then: float, then_date: str, series: Optional[List[float]] = None, nifty: Optional[float] = None
+) -> Dict[str, Any]:
     change = total - then
     change_pct = (change / then * 100.0) if then > 0 else None
     mood = pct(change_pct) if change_pct is not None else ""
+    rest: List[str] = []
+    if change_pct is not None and nifty is not None:
+        rest.append(_versus(change_pct, nifty).replace("Nifty", "Nifty this week", 1))
+    extra: Dict[str, Any] = {"tone": _tone(change_pct), "actions": [{"label": "Overview", "route": "overview"}, {"label": "Holdings", "route": "holdings"}]}
+    if series and len(series) >= 3:
+        extra["series"] = series
+    arrow = f" {_arrow(change_pct)} {abs(change_pct):.2f}%" if change_pct is not None else ""
     return {
-        "title": "Net worth · this week",
-        "body": f"{inr(total)}, {mood} ({inr(change)}) since {then_date}.".replace(" ,", ""),
-        "body_masked": f"{mood} since {then_date}.".strip(),
+        "title": f"Net worth · this week{arrow}",
+        "body": "\n".join([f"{inr(total)}, {mood} ({inr(change)}) since {then_date}.".replace(" ,", "")] + rest),
+        "body_masked": "\n".join([f"{mood} since {then_date}.".strip()] + rest),
         "public_title": "Your weekly net worth update is ready",
         "route": "overview",
+        "extra": extra,
     }
+
+
+def _index_series(snaps: List[Any], total: float, since: str) -> List[float]:
+    """The week's net worth as a line indexed to 100 (so it shows the shape and no amounts): snapshots from the
+    reference day on, then today's value."""
+    values = [float(s.total_current_value) for s in sorted(snaps, key=lambda s: s.as_of_date) if s.as_of_date >= since]
+    values.append(float(total))
+    base = values[0]
+    return [round(v / base * 100.0, 2) for v in values] if base > 0 else []
+
+
+# `nifty(owner, since)` -> Nifty 50's move: today's change when `since` is None, else the change since that date
+NiftyMove = Callable[[str, Optional[str]], Awaitable[Optional[float]]]
 
 
 async def send_networth(
@@ -189,6 +324,7 @@ async def send_networth(
     snapshots_repo: Any,
     today: date,
     weekly: bool,
+    nifty: Optional[NiftyMove] = None,
 ) -> int:
     """The daily or weekly net worth push, once per person per day (or week)."""
     sent = 0
@@ -203,14 +339,97 @@ async def send_networth(
         t = day_totals(holdings)
         if weekly:
             target = (today - timedelta(days=7)).isoformat()
-            older = [s for s in await snapshots_repo.list_snapshots(owner, limit=40) if s.as_of_date <= target]
+            snaps = await snapshots_repo.list_snapshots(owner, limit=40)
+            older = [s for s in snaps if s.as_of_date <= target]
             if not older:
                 continue  # no snapshot a week old yet
             then = max(older, key=lambda s: s.as_of_date)
-            msg = networth_weekly_message(t["total"], then.total_current_value, then.as_of_date)
+            move = await _nifty_move(nifty, owner, then.as_of_date)
+            msg = networth_weekly_message(t["total"], then.total_current_value, then.as_of_date, _index_series(snaps, t["total"], then.as_of_date), move)
         else:
-            msg = networth_daily_message(t)
+            msg = networth_daily_message(t, detail=day_detail(holdings), nifty=await _nifty_move(nifty, owner, None))
         if await send_to_user(ports, owner, "networth_weekly" if weekly else "networth_daily", pref_key, msg):
+            await ports.sent.mark(owner, key)
+            sent += 1
+    return sent
+
+
+async def _nifty_move(nifty: Optional[NiftyMove], owner: str, since: Optional[str]) -> Optional[float]:
+    """Nifty's move for the comparison line; the line is left out whenever it cannot be had."""
+    if nifty is None:
+        return None
+    try:
+        return await nifty(owner, since)
+    except Exception as exc:
+        logger.warning("Nifty move unavailable: %s", exc)
+        return None
+
+
+# --- US stocks digest -----------------------------------------------------------------------------------------------
+
+
+def us_digest_message(rows: List[Dict[str, Any]], spy_pct: Optional[float]) -> Dict[str, Any]:
+    """How the person's US stocks look right now. `rows` hold each stock's ticker, today's % move and its weight (value);
+    the amount is an estimate from the stored values and the live move, and the masked text leaves it out."""
+    total = sum(r["value"] for r in rows)
+    move = sum(r["value"] * r["pct"] for r in rows) / total if total > 0 else 0.0
+    amount = sum(r["value"] - r["value"] / (1 + r["pct"] / 100.0) for r in rows)
+    up = sum(1 for r in rows if r["pct"] > 0)
+    head = f"{_arrow(move)} {abs(move):.2f}% so far today"
+    rest: List[str] = []
+    if spy_pct is not None:
+        gap = move - spy_pct
+        verdict = f"you're ahead by {abs(gap):.2f}%" if gap > 0.004 else f"you're behind by {abs(gap):.2f}%" if gap < -0.004 else "level with it"
+        rest.append(f"S&P 500 (SPY) {_arrow(spy_pct)} {abs(spy_pct):.2f}% ({verdict}).")
+    best = max(rows, key=lambda r: r["pct"])
+    worst = min(rows, key=lambda r: r["pct"])
+    moves = []
+    if best["pct"] > 0:
+        moves.append(f"Best: {best['ticker']} {pct(best['pct'])}")
+    if worst["pct"] < 0:
+        moves.append(f"Drag: {worst['ticker']} {pct(worst['pct'])}")
+    if moves:
+        rest.append("   ".join(moves))
+    rest.append(f"{up} of {len(rows)} stock{'s' if len(rows) != 1 else ''} up. The US session is still open.")
+    return {
+        "title": f"US stocks · so far today {_arrow(move)} {abs(move):.2f}%",
+        "body": "\n".join([f"{head} (about {inr(amount)})."] + rest),
+        "body_masked": "\n".join([head + "."] + rest),
+        "public_title": "Your US stocks update is ready",
+        "route": "holdings",
+        "extra": {"tone": _tone(move), "actions": [{"label": "Holdings", "route": "holdings"}, {"label": "Signals", "route": "signals"}]},
+    }
+
+
+# `quotes(owner, holdings)` -> {ticker: {'day_change_pct': ...}} including 'SPY' when available
+UsQuotes = Callable[[str, List[Any]], Awaitable[Dict[str, Any]]]
+
+
+async def send_us_digest(ports: Ports, holdings_repo: Any, today: date, quotes: UsQuotes) -> int:
+    """The US stocks push on a US trading day, once per person per day, from live prices."""
+    sent = 0
+    key = f"us|{today.isoformat()}"
+    for owner in await ports.devices.owners():
+        if await ports.sent.has(owner, key) or not (await ports.prefs.get(owner)).get("us_stocks", True):
+            continue
+        holdings = [h for h in await holdings_repo.get_holdings(owner_id=owner) if _class_key(h) == "US_STOCKS" and (h.current_value or 0) > 0]
+        if not holdings:
+            continue
+        try:
+            q = await quotes(owner, holdings)
+        except Exception as exc:
+            logger.warning("US quotes unavailable for %s: %s", owner, exc)
+            continue
+        rows = []
+        for h in holdings:
+            ticker = _short(h.instrument_symbol)
+            move = (q.get(ticker) or {}).get("day_change_pct")
+            if move is not None:
+                rows.append({"ticker": ticker, "pct": float(move), "value": float(h.current_value)})
+        spy = (q.get("SPY") or {}).get("day_change_pct")
+        if not rows or all(r["pct"] == 0 for r in rows) and not spy:
+            continue  # nothing priced, or the US market is shut today
+        if await send_to_user(ports, owner, "us_digest", "us_stocks", us_digest_message(rows, float(spy) if spy is not None else None)):
             await ports.sent.mark(owner, key)
             sent += 1
     return sent
@@ -234,10 +453,11 @@ async def send_kite_reminders(ports: Ports, today: date, needs_login) -> int:
             continue
         msg = {
             "title": "Kite needs today's login",
-            "body": "Log in to Zerodha (Kite) so live prices and ATH calls keep working today.",
-            "body_masked": "Log in to Zerodha (Kite) so live prices and ATH calls keep working today.",
+            "body": "Log in to Zerodha (Kite) so live prices and strategy calls keep working today.",
+            "body_masked": "Log in to Zerodha (Kite) so live prices and strategy calls keep working today.",
             "public_title": "Kite needs today's login",
             "route": "brokers",
+            "extra": {"tone": "flat", "actions": [{"label": "Log in to Kite", "route": "brokers"}]},
         }
         if await send_to_user(ports, owner, "kite_login", "kite_login", msg):
             await ports.sent.mark(owner, key)

@@ -135,10 +135,11 @@ class MainActivity : FragmentActivity() {
             // `--es wv_fake_push ath_h` shows a sample notification of that kind, with no push and no server
             intent.getStringExtra("wv_fake_push")?.let { kind ->
                 val note = com.wealthvault.app.data.PushNote(
-                    kind = kind, title = "ATH strategy · your holdings",
+                    kind = kind, title = "Strategy calls · your holdings",
                     body = "RELIANCE: entry signal on today's live price. A strategy signal, not advice.",
                     body_masked = "RELIANCE: entry signal on today's live price. A strategy signal, not advice.",
-                    public_title = "ATH strategy update", route = "holdings",
+                    public_title = "Strategy calls update", route = "strategy:NSE:RELIANCE",
+                    extra = debugExtra(kind),
                 )
                 Notifier.show(applicationContext, kind, "debug-$kind", note, hideAmounts = false)
             }
@@ -155,6 +156,8 @@ class MainActivity : FragmentActivity() {
             }
             // the eye switch: hide every rupee amount, as the phone remembers it
             LaunchedEffect(session?.hideAmounts) { com.wealthvault.app.ui.Privacy.hidden = session?.hideAmounts != false }
+            // the home screen widget follows the eye switch, the app lock and signing in or out
+            LaunchedEffect(session?.hideAmounts, session?.lock, session?.token) { if (session != null) com.wealthvault.app.widget.NetWorthWidget.requestUpdate(applicationContext) }
             // usage analytics and crash reports follow the person's choice (off until they allow it)
             LaunchedEffect(session?.analytics) { if (session != null) com.wealthvault.app.ui.Analytics.apply(session?.analytics == "granted") }
             LaunchedEffect(session?.token, session?.userId) { com.wealthvault.app.ui.Analytics.identify(if (session?.token != null) session?.userId else null) }
@@ -193,6 +196,14 @@ class MainActivity : FragmentActivity() {
         rememberTappedNotification(intent)
     }
 
+    /** Debug builds only: the extras a sample notification of this kind would carry. */
+    private fun debugExtra(kind: String): String = when (kind) {
+        "networth_weekly" -> """{"tone":"up","series":[100,99.5,100.2,101.1,100.6,101.8,102.4],"actions":[{"label":"Overview","route":"overview"},{"label":"Holdings","route":"holdings"}]}"""
+        "networth_daily", "us_digest" -> """{"tone":"down","actions":[{"label":"Holdings","route":"holdings"},{"label":"Overview","route":"overview"}]}"""
+        "kite_login" -> """{"tone":"flat","actions":[{"label":"Log in to Kite","route":"brokers"}]}"""
+        else -> """{"tone":"up","actions":[{"label":"Open strategy","route":"strategy:NSE:RELIANCE"},{"label":"Holdings","route":"holdings"}]}"""
+    }
+
     /** A tapped notification says which page to open; the signed-in screen picks it up once it is showing. */
     private fun rememberTappedNotification(intent: android.content.Intent?) {
         val page = intent?.getStringExtra(Notifier.EXTRA_OPEN) ?: return
@@ -204,6 +215,7 @@ class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         if (!isChangingConfigurations) vm.unlocked.value = false
+        com.wealthvault.app.widget.NetWorthWidget.requestUpdate(applicationContext) // the widget shows what the app last saw
     }
 }
 
@@ -234,7 +246,11 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
     val tapped by vm.pendingOpen.collectAsState()
     LaunchedEffect(tapped) {
         tapped?.let { (page, kind) ->
-            if (page in SUB_PAGES) nav.navigate(page) else if (TABS.any { it.route == page }) goTab(page)
+            // 'strategy:NSE:RELIANCE' opens the Strategy tab on that stock; a plain page name just opens the page
+            val target = page.substringBefore(':')
+            val stock = page.substringAfter(':', "")
+            if (stock.isNotBlank() && (target == "strategy" || target == "momentum")) avm.requestStock(target, stock)
+            if (target in SUB_PAGES) nav.navigate(target) else if (TABS.any { it.route == target }) goTab(target)
             com.wealthvault.app.ui.Analytics.log("notification_opened", "kind" to kind)
             vm.pendingOpen.value = null
         }
@@ -262,6 +278,7 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
     Scaffold(
         containerColor = Wv.c.bg,
         topBar = {
+          Column {
             TopBar(
                 vm, attention,
                 onBrokers = { openSub("brokers") },
@@ -269,6 +286,8 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
                 onFeedback = { openSub("feedback") },
                 onRate = { com.wealthvault.app.ui.openPlayListing(context) },
             )
+            com.wealthvault.app.ui.UpdateBanner()
+          }
         },
         bottomBar = {
             // five tabs share the width, so their labels do not grow with large system text (they would be cut off)

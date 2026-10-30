@@ -1,1 +1,4 @@
-<resources><string name="app_name">WealthVault</string></resources>
+<resources>
+    <string name="app_name">WealthVault</string>
+    <string name="widget_description">Today\'s change in your net worth, at a glance</string>
+</resources>

@@ -1,6 +1,6 @@
-"""Sending Android push messages through Firebase Cloud Messaging (HTTP v1).
+"""Sending push messages (Android and browsers) through Firebase Cloud Messaging (HTTP v1).
 
-Only a type and an id are ever sent. The phone then asks WealthVault's own server for the text of the notification,
+Only a type and an id are ever sent. The phone or browser then asks WealthVault's own server for the text of the notification,
 so stock names and amounts never pass through Google's push service.
 """
 
@@ -38,6 +38,8 @@ class FcmSender:
                 "token": device_token,
                 "data": {k: str(v) for k, v in data.items()},
                 "android": {"priority": "HIGH", "ttl": "3600s"},
+                # browsers: deliver at once, and drop it after an hour like on a phone
+                "webpush": {"headers": {"Urgency": "high", "TTL": "3600"}},
             }
         }
         try:

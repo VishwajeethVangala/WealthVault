@@ -31,6 +31,8 @@ data class PushNote(
     val body_masked: String = "",
     val public_title: String = "",
     val route: String = "",
+    /** JSON: {"tone": up|down|flat, "actions": [{label, route}], "series": [index values]} */
+    val extra: String = "",
 )
 
 @Serializable

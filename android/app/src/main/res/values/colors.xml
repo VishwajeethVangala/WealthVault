@@ -2,4 +2,7 @@
     <color name="bg">#F5F6F8</color>
     <color name="accent">#3346D3</color>
     <color name="icon_bg">#070B1A</color>
+    <color name="widget_bg">#FFFFFF</color>
+    <color name="widget_text">#111827</color>
+    <color name="widget_sub">#5B6B7B</color>
 </resources>
