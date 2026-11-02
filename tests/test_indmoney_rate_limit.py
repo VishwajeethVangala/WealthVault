@@ -121,7 +121,7 @@ def test_price_refreshes_skip_the_per_member_calls_and_are_spaced_out():
         run(indmoney_live._fresh_for_connection("o", "conn_indmoney_live"))
         run(indmoney_live._fresh_for_connection("o", "conn_indmoney_live"))  # served from the cache
     assert calls == [False]
-    assert indmoney_live.CACHE_SECONDS >= 120
+    assert indmoney_live.CACHE_SECONDS >= 600
 
 
 def test_a_sync_still_asks_for_the_complete_lists():
@@ -146,3 +146,39 @@ def test_a_rate_limited_overlay_leaves_the_stored_holdings_untouched():
     with patch.object(IndmoneyMCPClient, "get_family_asset_holdings", AsyncMock(side_effect=IndmoneyRateLimitError("slow", retry_after=5))):
         out = run(indmoney_live.overlay_indmoney_live("o", [h]))
     assert out == [h]
+
+
+def test_a_refused_read_keeps_the_last_good_reading_for_half_an_hour_then_gives_up():
+    import time
+
+    indmoney_live._cache.clear()
+    good = {"h1": holding()}
+    key = ("o", "conn_indmoney_live")
+    refuse = AsyncMock(side_effect=IndmoneyRateLimitError("slow", retry_after=5))
+    with patch.object(IndmoneyMCPClient, "get_family_asset_holdings", refuse):
+        indmoney_live._cache[key] = (time.monotonic() - indmoney_live.CACHE_SECONDS - 5, good)  # stale for a read, fresh enough to reuse
+        assert run(indmoney_live._fresh_for_connection("o", "conn_indmoney_live")) is good
+        indmoney_live._cache[key] = (time.monotonic() - indmoney_live.STALE_SECONDS - 5, good)  # too old to trust
+        with pytest.raises(IndmoneyRateLimitError):
+            run(indmoney_live._fresh_for_connection("o", "conn_indmoney_live"))
+    indmoney_live._cache.clear()
+
+
+def test_pages_reading_at_the_same_moment_cost_one_indmoney_call():
+    import asyncio
+
+    calls = []
+
+    async def slow(self, asset="overall", complete=True):
+        calls.append(1)
+        await asyncio.sleep(0.05)
+        return {"family_asset_holdings": []}
+
+    async def together():
+        return await asyncio.gather(*(indmoney_live._fresh_for_connection("o", "conn_indmoney_live") for _ in range(5)))
+
+    indmoney_live._cache.clear()
+    with patch.object(IndmoneyMCPClient, "get_family_asset_holdings", slow):
+        run(together())
+    assert len(calls) == 1
+    indmoney_live._cache.clear()

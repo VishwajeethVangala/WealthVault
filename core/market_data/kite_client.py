@@ -27,6 +27,11 @@ class KiteRateLimitError(RuntimeError):
     """Kite throttled the request; the session is fine and the call can be retried after a pause."""
 
 
+class KiteToolError(RuntimeError):
+    """Kite answered a call with an error although the login is live (the profile check passed): the request itself
+    failed, for example a symbol Kite refuses. The session is fine and must not be reported as logged out."""
+
+
 class KiteAuthRequiredError(Exception):
     """Raised when Kite MCP session requires daily interactive OAuth login."""
 
@@ -185,7 +190,7 @@ class KiteMCPClient:
                 return
             await self._init_new_session()
 
-    async def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None, _retry_session_errors: bool = True) -> Any:
+    async def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None, _retry_session_errors: bool = True, _confirm: bool = True) -> Any:
         """Invoke an MCP tool directly over HTTP JSON-RPC 2.0 with session persistence."""
         await self.ensure_connected()
 
@@ -245,6 +250,17 @@ class KiteMCPClient:
                     if is_error or "log in first" in lower_text or (
                         lower_text.startswith("failed to ") and ("execute" in lower_text or "get" in lower_text)
                     ):
+                        # Kite words many failed requests ("Failed to get quotes") like an expired login. Only an
+                        # explicit "log in first", or a profile call that fails too, means the login is really gone.
+                        if "log in first" not in lower_text and _confirm and name != "get_profile":
+                            try:
+                                await self.call_tool("get_profile", _retry_session_errors=False, _confirm=False)
+                            except KiteAuthRequiredError:
+                                raise  # the profile call has recorded the lapse and refreshed the login link
+                            except Exception as probe_exc:
+                                logger.debug("Kite profile check could not run: %s", probe_exc)  # cannot tell: treat as lapsed
+                            else:
+                                raise KiteToolError(f"Kite could not complete '{name}' (the login is live): {text}")
                         self.is_authenticated = False
                         await self._refresh_auth_url()
                         self._save_session()

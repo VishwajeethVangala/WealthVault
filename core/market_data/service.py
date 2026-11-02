@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 from mcp import ClientSession
 from core.market_data.groww_market import fetch_groww_quotes, get_user_groww_client
 from core.market_data.indmoney_market import fetch_quotes as fetch_indmoney_quotes, get_user_indmoney_client
-from core.market_data.kite_client import KiteAuthRequiredError, get_kite_mcp_client
+from core.market_data.kite_client import KiteAuthRequiredError, KiteToolError, get_kite_mcp_client
 from core.market_data.symbol_resolver import resolve_indmoney_symbols, split_indmoney_symbol
 from core.models import AssetClass, Holding, QuoteItem
 
@@ -28,6 +28,7 @@ logger = logging.getLogger("wealthvault.market_data.service")
 
 INDMONEY_FALLBACK_SECONDS = 8.0
 MIN_FALLBACK_SECONDS = 0.05
+MAX_QUOTE_SPLITS = 16  # extra Kite calls one quote request may spend looking for the symbols Kite refuses
 
 NPX_BIN = shutil.which("npx") or shutil.which("npx.cmd") or "npx"
 
@@ -145,6 +146,23 @@ class MCPMarketDataService:
         root = clean.split()[0]  # keep series suffixes such as HFCL-BE as Kite lists them
         return f"NSE:{root}"
 
+    async def _quotes_or_split(self, client: Any, batch: List[str], state: List[Any]) -> Dict[str, Any]:
+        """One quotes call. When Kite refuses it although the login is live, one bad symbol may be spoiling the whole
+        batch: split it in halves to save the rest, within a small budget of extra calls (state[0]); state[1] records
+        that Kite refused something."""
+        try:
+            return await client.get_quotes(batch)
+        except KiteToolError as exc:
+            state[1] = True
+            if len(batch) == 1 or state[0] < 2:
+                logger.warning("Kite refused quotes for %s: %s", ", ".join(batch[:3]), exc)
+                return {}
+            state[0] -= 2
+            middle = len(batch) // 2
+            first = await self._quotes_or_split(client, batch[:middle], state)
+            second = await self._quotes_or_split(client, batch[middle:], state)
+            return {**first, **second}
+
     async def fetch_live_quotes(
         self,
         instruments: List[str],
@@ -172,10 +190,11 @@ class MCPMarketDataService:
         batches = [missing[i : i + batch_size] for i in range(0, len(missing), batch_size)]
         client = client or get_kite_mcp_client()
         kite_login_lapsed = False
+        split_state = [MAX_QUOTE_SPLITS, False]  # extra calls left, and whether Kite refused anything
 
         for batch in batches:
             try:
-                payload = await client.get_quotes(batch)
+                payload = await self._quotes_or_split(client, batch, split_state)
                 now_iso = datetime.now(timezone.utc).isoformat()
                 for inst_key, data in payload.items():
                     if not isinstance(data, dict):
@@ -229,7 +248,8 @@ class MCPMarketDataService:
         # first, then Groww, inside one shared time budget. A live Kite session is never second-guessed, and slow
         # brokers must not hold up the page.
         owner_id = getattr(client, "owner_id", None)
-        if kite_login_lapsed and owner_id:
+        # Kite refusing every quote with a live login is treated like a lapsed one: the other brokers price instead
+        if (kite_login_lapsed or (split_state[1] and not live_fetched)) and owner_id:
             deadline = time.monotonic() + INDMONEY_FALLBACK_SECONDS
             for name, get_client, fetch in (
                 ("INDmoney", get_user_indmoney_client, fetch_indmoney_quotes),

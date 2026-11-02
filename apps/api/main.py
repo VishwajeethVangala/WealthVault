@@ -34,6 +34,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("wealthvault.api")
+# the Azure storage client logs every request and its headers at INFO; that buries the app's own lines
+logging.getLogger("azure").setLevel(logging.WARNING)
 
 
 def _register_frontend_method() -> None:

@@ -23,8 +23,8 @@ android {
         applicationId = "com.vangala.wealthvault" // the name registered on Google Play; code stays in com.wealthvault.app
         minSdk = 26
         targetSdk = 36 // Google Play requires the latest API level
-        versionCode = 20
-        versionName = "0.3.17"
+        versionCode = 21
+        versionName = "0.3.18"
         buildConfigField("String", "DEFAULT_BASE_URL", "\"${(project.findProperty("wvBaseUrl") as String?) ?: ""}\"")
     }
 

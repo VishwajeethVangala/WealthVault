@@ -87,7 +87,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshAll() {
         load(summary) { api.summary() }
         loadHoldings()
-        load(brokers) { api.sessions() }
+        loadBrokers()
     }
 
     /** The saved holdings first so screens fill at once, then the same list on live prices. */
@@ -105,7 +105,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun loadBrokers() = load(brokers) { api.sessions() }
+    private var brokersLoadedAt = 0L
+
+    fun loadBrokers() {
+        brokersLoadedAt = System.currentTimeMillis()
+        load(brokers) { api.sessions() }
+    }
+
+    /**
+     * The broker logins live on the server, so a login made elsewhere (the web, say) shows here too, but only once this
+     * list is read again. Called when the app comes back to the front; at most once every half minute.
+     */
+    fun loadBrokersIfStale() {
+        if (System.currentTimeMillis() - brokersLoadedAt > 30_000) loadBrokers()
+    }
 
     private fun shortName(b: BrokerSession) = b.display_name.substringBefore(" — ").ifBlank { b.broker_name }
 

@@ -270,6 +270,8 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
         Unit
     }
     LaunchedEffect(Unit) { vm.refreshAll() }
+    // a broker login made on the web while the app sat in the background shows here when it comes back
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.loadBrokersIfStale() }
     // after a few openings, ask (once in a while) for a Play Store review; Google decides whether it shows
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(20_000)

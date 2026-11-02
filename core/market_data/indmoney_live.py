@@ -6,6 +6,7 @@ Kite cannot price US stocks, NPS or INDmoney's own bookkeeping, but one INDmoney
 prices are overlaid; quantity and cost stay as stored, and a real sync remains the source of truth for them.
 """
 
+import asyncio
 import logging
 import time
 from datetime import datetime, timezone
@@ -18,9 +19,14 @@ from providers.brokers.indmoney import IndmoneyProvider
 
 logger = logging.getLogger("wealthvault.market_data.indmoney_live")
 
-# The holdings tool allows 250 cost units an hour at 3 per call. A read every 2 minutes uses 90, leaving room for syncs.
-CACHE_SECONDS = 120.0
+# The holdings tool allows 250 cost units an hour at 3 per call. Kite prices Indian stocks, so INDmoney is read only for
+# what Kite cannot price (US stocks, NPS, its own day change for shares bought today): one read every 10 minutes is 18
+# units an hour per person, leaving the allowance for syncs. When INDmoney refuses or fails, the last good reading is
+# kept for up to half an hour instead of dropping back to stored prices.
+CACHE_SECONDS = 600.0
+STALE_SECONDS = 1800.0
 _cache: Dict[Tuple[str, str], Tuple[float, Dict[str, Holding]]] = {}
+_locks: Dict[Tuple[str, str], asyncio.Lock] = {}
 
 
 async def _fresh_for_connection(owner_id: str, connection_id: str) -> Dict[str, Holding]:
@@ -28,14 +34,25 @@ async def _fresh_for_connection(owner_id: str, connection_id: str) -> Dict[str, 
     cached = _cache.get(key)
     if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
         return cached[1]
-    # prices only: the top holdings per member are enough, and the full lists are fetched by a sync, not on every read
-    raw = await IndmoneyProvider(connection_id=connection_id, owner_id=owner_id).get_holdings(complete=False)
-    rows = NormalizationService().normalize_holdings(
-        raw_data=raw, broker_name="indmoney", owner_id=owner_id, connection_id=connection_id
-    )
-    by_id = {h.holding_id: h for h in rows}
-    _cache[key] = (time.monotonic(), by_id)
-    return by_id
+    # several pages and phones read at once: one of them asks INDmoney, the others take its answer
+    async with _locks.setdefault(key, asyncio.Lock()):
+        cached = _cache.get(key)
+        if cached and time.monotonic() - cached[0] < CACHE_SECONDS:
+            return cached[1]
+        try:
+            # prices only: the top holdings per member are enough, and the full lists are fetched by a sync, not on every read
+            raw = await IndmoneyProvider(connection_id=connection_id, owner_id=owner_id).get_holdings(complete=False)
+        except Exception:
+            if cached and time.monotonic() - cached[0] < STALE_SECONDS:
+                logger.info("INDmoney re-read failed for %s; keeping the reading from %ds ago", connection_id, int(time.monotonic() - cached[0]))
+                return cached[1]
+            raise
+        rows = NormalizationService().normalize_holdings(
+            raw_data=raw, broker_name="indmoney", owner_id=owner_id, connection_id=connection_id
+        )
+        by_id = {h.holding_id: h for h in rows}
+        _cache[key] = (time.monotonic(), by_id)
+        return by_id
 
 
 async def overlay_indmoney_live(owner_id: str, holdings: List[Holding]) -> List[Holding]:

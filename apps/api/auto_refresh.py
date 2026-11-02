@@ -1,10 +1,12 @@
 """Refresh Momentum Stocks on a timer.
 
-Every AUTO_REFRESH_MINUTES (15) from 09:15 to 15:30 IST, Monday to Friday, the server does what the "Refresh
-Momentum Stocks" button does: re-read the Chartink Stage 2 list, then compute signals for it and for the holdings
-of every user whose Kite login is active, or failing that whose INDmoney/Groww login is (INDmoney/Groww can top up the price
+Every AUTO_REFRESH_MINUTES (15) from 09:15 to 15:30 IST, Monday to Friday, the server wakes up. Every
+SIGNALS_REFRESH_MINUTES (30) of those it does what the "Refresh Momentum Stocks" button does: re-read the Chartink Stage 2
+list, then compute signals for it and for the holdings of every user whose Kite login is active, or failing that whose INDmoney/Groww login is (INDmoney/Groww can top up the price
 history of stocks already stored; a stock never seen before still needs a Kite login for its first history). The
 list is read once per run and a stock already computed in this run for one user is not computed again for the next.
+On the other wake-ups only the cheap part runs: today's strategy calls are checked on the live prices (push notifications),
+using the list from the last full run. The button is always there for a refresh in between.
 
 A weekday the exchange does not trade (a market holiday) is recognised from Nifty 50: when its live quote shows no
 trading today compared with the last stored daily candle, the run is skipped. Nothing outside market hours runs.
@@ -40,6 +42,8 @@ WINDOW_TEXT = "09:15–15:30 IST, Monday to Friday"
 
 _task: Optional[asyncio.Task] = None
 _last: Dict[str, Any] = {}
+# the Chartink list of the last full run, by day, for the wake-ups in between
+_screener: Dict[str, Any] = {}
 
 
 def auto_enabled() -> bool:
@@ -69,6 +73,23 @@ def next_slot(now: datetime, every_minutes: int) -> datetime:
                     return t
         day += timedelta(days=1)
     raise RuntimeError("no run time found")  # not reachable: a weekday comes within a week
+
+
+def full_refresh_due(slot: datetime, every_minutes: int) -> bool:
+    """Whether this wake-up is one of the full refreshes: counting from the open, every `every_minutes`."""
+    slot = slot.astimezone(IST)
+    minutes = (slot - datetime.combine(slot.date(), SESSION_OPEN, IST)).total_seconds() // 60
+    return int(minutes) % every_minutes == 0
+
+
+def next_full_slot(now: datetime, tick_minutes: int, full_minutes: int) -> datetime:
+    """The next wake-up that is a full refresh."""
+    t = next_slot(now, tick_minutes)
+    for _ in range(400):  # a few days of wake-ups at most
+        if full_refresh_due(t, full_minutes):
+            return t
+        t = next_slot(t, tick_minutes)
+    return t
 
 
 def kite_owners() -> List[str]:
@@ -148,7 +169,8 @@ async def _live_clients() -> List[Tuple[str, Any]]:
 
 
 async def run_tick(slot: datetime) -> None:
-    """One scheduled refresh: the Chartink list once, then each logged-in user's signals job in turn."""
+    """One scheduled wake-up. A full one reads the Chartink list once, then runs each logged-in user's signals job in
+    turn; the others only check strategy calls on the live prices, with the list from the last full run."""
     today = slot.astimezone(IST).date().isoformat()
     live = await _live_clients()
     if not live:
@@ -158,17 +180,24 @@ async def run_tick(slot: datetime) -> None:
         _record(slot, "skipped", "The exchange is not trading today.")
         return
 
-    screener = await read_screener()
+    # nothing to reuse (the app restarted during the day) makes any wake-up a full one
+    full = full_refresh_due(slot, get_settings().SIGNALS_REFRESH_MINUTES) or today not in _screener
     started = datetime.now(timezone.utc)
     ran = 0
-    for owner, _client in live:
-        current = _jobs.get(owner)
-        if current and current.state == "running":
-            continue  # a refresh that person started is already running
-        job = Job(state="running", started_at=datetime.now(timezone.utc).isoformat(), trigger="schedule")
-        _jobs[owner] = job
-        await _run_job(owner, job, fresh_since=started, screener=screener)
-        ran += 1
+    if full:
+        screener = await read_screener()
+        _screener.clear()
+        _screener[today] = screener
+        for owner, _client in live:
+            current = _jobs.get(owner)
+            if current and current.state == "running":
+                continue  # a refresh that person started is already running
+            job = Job(state="running", started_at=datetime.now(timezone.utc).isoformat(), trigger="schedule")
+            _jobs[owner] = job
+            await _run_job(owner, job, fresh_since=started, screener=screener)
+            ran += 1
+    else:
+        screener = _screener[today]
     try:
         from apps.api.push_jobs import after_tick
 
@@ -176,7 +205,11 @@ async def run_tick(slot: datetime) -> None:
     except Exception as exc:  # a failed notification must never fail the refresh
         logger.warning("Push notifications after the refresh failed: %s", exc)
     note = f" Chartink: {screener[1]}" if screener[1] else ""
-    _record(slot, "ran", f"Refreshed for {ran} user{'s' if ran != 1 else ''}.{note}", ran)
+    if full:
+        _record(slot, "ran", f"Refreshed for {ran} user{'s' if ran != 1 else ''}.{note}", ran)
+    else:
+        _record(slot, "ran", "Checked strategy calls on the live prices; the list is refreshed every "
+                f"{get_settings().SIGNALS_REFRESH_MINUTES} minutes.{note}", 0)
 
 
 async def _sleep_until(target: datetime) -> None:
@@ -190,7 +223,7 @@ async def _sleep_until(target: datetime) -> None:
 
 async def _loop() -> None:
     every = get_settings().AUTO_REFRESH_MINUTES
-    logger.info("Auto refresh on: every %d minutes, %s", every, WINDOW_TEXT)
+    logger.info("Auto refresh on: wakes every %d minutes (full refresh every %d), %s", every, get_settings().SIGNALS_REFRESH_MINUTES, WINDOW_TEXT)
     while True:
         slot = next_slot(datetime.now(IST), every)
         await _sleep_until(slot)
@@ -221,12 +254,12 @@ async def stop_auto_refresh() -> None:
 
 def auto_status() -> Dict[str, Any]:
     """What the Signals page shows about the timer."""
-    every = get_settings().AUTO_REFRESH_MINUTES
+    s = get_settings()
     on = auto_enabled()
     return {
         "enabled": on,
-        "every_minutes": every,
+        "every_minutes": s.SIGNALS_REFRESH_MINUTES,  # what the Signals page describes: the list and signals refresh
         "window": WINDOW_TEXT,
-        "next_run": next_slot(datetime.now(IST), every).isoformat() if on else None,
+        "next_run": next_full_slot(datetime.now(IST), s.AUTO_REFRESH_MINUTES, s.SIGNALS_REFRESH_MINUTES).isoformat() if on else None,
         "last_run": dict(_last) or None,
     }

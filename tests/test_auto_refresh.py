@@ -46,7 +46,7 @@ def test_logged_in_kite_users_are_found_from_their_session_files(tmp_path):
         assert ar.kite_owners() == ["google_1", "google_2"]
 
 
-def _tick(live, traded=True, running=None):
+def _tick(live, traded=True, running=None, when=(10, 15)):
     runs = []
 
     async def fake_run(owner, job, fresh_since=None, screener=None):
@@ -60,7 +60,7 @@ def _tick(live, traded=True, running=None):
     with patch.object(ar, "_live_clients", AsyncMock(return_value=[(o, object()) for o in live])), \
             patch.object(ar, "traded_today", AsyncMock(return_value=traded)), \
             patch.object(ar, "read_screener", read), patch.object(ar, "_run_job", fake_run):
-        asyncio.run(ar.run_tick(at(2026, 10, 21, 10, 0)))
+        asyncio.run(ar.run_tick(at(2026, 10, 21, *when)))
     stage2._jobs.clear()
     return runs, read.await_count, dict(ar._last)
 
@@ -99,7 +99,7 @@ def test_a_manual_refresh_resumes_only_after_an_interrupted_run():
 
 def test_on_in_production_off_elsewhere_unless_set():
     def settings(env, flag):
-        return SimpleNamespace(is_production=env, AUTO_REFRESH_ENABLED=flag, AUTO_REFRESH_MINUTES=15)
+        return SimpleNamespace(is_production=env, AUTO_REFRESH_ENABLED=flag, AUTO_REFRESH_MINUTES=15, SIGNALS_REFRESH_MINUTES=30)
 
     with patch.object(ar, "get_settings", return_value=settings(True, None)):
         assert ar.auto_enabled() is True
@@ -124,3 +124,34 @@ def test_a_holiday_is_told_from_nifty_showing_no_trade_today():
     assert traded(echo) is False
     assert traded(moving) is True
     assert traded(None) is None
+
+
+def test_the_list_and_signals_refresh_every_30_minutes_from_the_open():
+    full = [t.strftime("%H:%M") for t in ar.slots(at(2026, 10, 21, 0, 0).date(), 15) if ar.full_refresh_due(t, 30)]
+    assert full[:3] == ["09:15", "09:45", "10:15"] and full[-1] == "15:15"
+    assert ar.next_full_slot(at(2026, 10, 21, 9, 15), 15, 30) == at(2026, 10, 21, 9, 45)
+    assert ar.next_full_slot(at(2026, 10, 21, 9, 50), 15, 30) == at(2026, 10, 21, 10, 15)
+    assert ar.next_full_slot(at(2026, 10, 21, 15, 20), 15, 30) == at(2026, 10, 22, 9, 15)  # next morning
+
+
+def test_the_wake_up_in_between_only_checks_calls_and_reuses_the_list():
+    ar._screener.clear()
+    runs, reads, _ = _tick(["google_1"], when=(10, 15))  # a full refresh: reads Chartink, runs the job
+    assert len(runs) == 1 and reads == 1
+    seen = []
+
+    async def fake_after(slot, live, screener):
+        seen.append(screener)
+
+    with patch("apps.api.push_jobs.after_tick", fake_after):
+        runs, reads, last = _tick(["google_1"], when=(10, 30))  # in between
+    assert runs == [] and reads == 0 and last["outcome"] == "ran" and "30 minutes" in last["message"]
+    assert seen == [("LIST", None)]  # the calls are still checked, on the list from the full run
+    ar._screener.clear()
+
+
+def test_after_a_restart_the_first_wake_up_is_a_full_refresh_even_in_between():
+    ar._screener.clear()
+    runs, reads, _ = _tick(["google_1"], when=(10, 30))
+    assert len(runs) == 1 and reads == 1
+    ar._screener.clear()

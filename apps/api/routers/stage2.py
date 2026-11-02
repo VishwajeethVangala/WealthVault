@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from apps.api.routers.accounts import get_current_user
-from apps.api.routers.signals import Job, _equity_symbol_map, _job_dict, session_really_expired
+from apps.api.routers.signals import Job, _equity_symbol_map, _job_dict, current_job, session_really_expired
 from core.analytics.equity_signals import MOMENTUM_LOOKBACK_DAYS, compute_stock_signals, load_benchmark
 from core.analytics.live_signals import live_india_rows
 from core.market_data.history import NIFTY_50_TOKEN, get_history_service
@@ -217,7 +217,7 @@ async def refresh_stage2(current_user_id: str = Depends(get_current_user)) -> Di
 @router.get("", status_code=status.HTTP_200_OK, summary="Stage 2 list, daily changes and cached signals")
 async def get_stage2(current_user_id: str = Depends(get_current_user)) -> Dict[str, Any]:
     latest, previous = await ScreenerSnapshotRepository().latest_two(SLUG)
-    job = _jobs.get(current_user_id) or Job()
+    job = await current_job(_jobs, current_user_id, current_user_id)
     from apps.api.auto_refresh import auto_status
 
     if latest is None:

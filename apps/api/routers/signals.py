@@ -84,6 +84,21 @@ async def session_really_expired(client: Any) -> bool:
     return True
 
 
+async def current_job(store: Dict[str, Job], key: str, owner_id: str) -> Job:
+    """The refresh job to report. One that stopped for want of today's Kite login keeps saying so until the next refresh
+    runs; once the login is live again that note is out of date (the web, logged in an hour ago, and the phone, opened
+    now, would disagree), so it is dropped."""
+    job = store.get(key) or Job()
+    if job.state == "error" and job.auth_url:
+        try:
+            if (await get_user_kite_client(owner_id)).is_authenticated:
+                store.pop(key, None)
+                return Job()
+        except Exception as exc:  # cannot tell: leave the note
+            logger.debug("Could not check the Kite login for the job note: %s", exc)
+    return job
+
+
 def _job_dict(job: Job) -> Dict[str, Any]:
     return asdict(job)
 
@@ -341,7 +356,8 @@ async def get_signals(
     holdings = await HoldingsRepository().get_holdings(owner_id=current_user_id)
     symbol_map = _us_symbol_map(holdings) if market == "us" else await _equity_symbol_map(holdings, None)  # cache-only
     signals = await SignalCacheRepository().get_many(list(set(symbol_map.values())))
-    job = _jobs.get(_job_key(current_user_id, market)) or Job()
+    key = _job_key(current_user_id, market)
+    job = await current_job(_jobs, key, current_user_id) if market == "in" else (_jobs.get(key) or Job())
     return {"job": _job_dict(job), "symbol_map": symbol_map, "signals": signals}
 
 
