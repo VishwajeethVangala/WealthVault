@@ -66,6 +66,23 @@ class UserRepository(BaseTableStorage):
         )
         return user
 
+    async def record_sign_in(self, user_id: str, client: Dict[str, str]) -> None:
+        """Note how and when the person signed in, on their profile row (see core.client_info). The first_* fields are
+        set once, the first time a sign-in is recorded, so for accounts that existed before this they mean "first seen"."""
+        now = datetime.now(timezone.utc).isoformat()
+        data = await self.get_entity(user_id=user_id, entity_id="profile") or {}
+        fields: Dict[str, Any] = {
+            "last_login_at": now,
+            "last_platform": client.get("platform", ""),
+            "last_app_version": client.get("app_version", ""),
+            "last_device": client.get("device", ""),
+            "last_user_agent": client.get("user_agent", ""),
+            "login_count": int(data.get("login_count") or 0) + 1,
+        }
+        if not data.get("first_login_at"):
+            fields.update(first_login_at=now, first_platform=client.get("platform", ""), first_app_version=client.get("app_version", ""))
+        await self.upsert_entity(user_id=user_id, entity_id="profile", data=fields, mode="merge")
+
 
 def _parse_broker_status(val: Any) -> BrokerStatus:
     """Safely parse BrokerStatus from string or enum."""

@@ -4,11 +4,12 @@ Provides endpoints for verifying Google OAuth ID tokens and issuing internal ses
 """
 
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from apps.api.routers.accounts import get_current_user
 from core.account_deletion import delete_user_data
+from core.client_info import describe
 from core.config import get_settings
 from core.demo_account import check_demo_login, ensure_demo_account
 from core.models import DemoLoginRequest, GoogleAuthRequest, TokenResponse, User
@@ -36,6 +37,14 @@ async def get_auth_config():
     }
 
 
+async def _note_sign_in(user_repo: UserRepository, user_id: str, request: Request) -> None:
+    """Record app/web and version on the profile. Never lets a bookkeeping failure stop someone signing in."""
+    try:
+        await user_repo.record_sign_in(user_id, describe(request.headers.get("user-agent")))
+    except Exception as exc:
+        logger.warning("Could not record sign-in details for %s: %s", user_id, exc)
+
+
 class DeleteAccountRequest(BaseModel):
     confirm: str
 
@@ -61,7 +70,7 @@ async def delete_account(payload: DeleteAccountRequest, current_user_id: str = D
     summary="Authenticate with Google Identity Services",
     description="Verifies the Google OAuth ID token, provisions user if new, and issues an internal JWT session token.",
 )
-async def authenticate_google(payload: GoogleAuthRequest) -> TokenResponse:
+async def authenticate_google(payload: GoogleAuthRequest, request: Request) -> TokenResponse:
     """Authenticate via Google ID token credential."""
     # 1. Verify Google OAuth token
     id_info = verify_google_id_token(credential=payload.credential)
@@ -100,6 +109,7 @@ async def authenticate_google(payload: GoogleAuthRequest) -> TokenResponse:
                 user.name = name
                 user.picture = picture
                 await user_repo.save_user(user=user)
+        await _note_sign_in(user_repo, user.user_id, request)
     finally:
         await user_repo.close()
 
@@ -125,7 +135,7 @@ async def authenticate_google(payload: GoogleAuthRequest) -> TokenResponse:
     summary="Sign in to the sample account (for app-store reviewers)",
     description="Only works when DEMO_USERNAME and DEMO_PASSWORD are set on the server; otherwise it answers 404.",
 )
-async def authenticate_demo(payload: DemoLoginRequest) -> TokenResponse:
+async def authenticate_demo(payload: DemoLoginRequest, request: Request) -> TokenResponse:
     """Issue a session for the sample account when the demo username and password match."""
     settings = get_settings()
     if not settings.DEMO_USERNAME or not settings.DEMO_PASSWORD:
@@ -133,5 +143,10 @@ async def authenticate_demo(payload: DemoLoginRequest) -> TokenResponse:
     if not check_demo_login(payload.username, payload.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Wrong username or password.")
     user = await ensure_demo_account()
+    user_repo = UserRepository()
+    try:
+        await _note_sign_in(user_repo, user.user_id, request)
+    finally:
+        await user_repo.close()
     token = create_access_token(data={"sub": user.user_id, "email": user.email, "name": user.name})
     return TokenResponse(access_token=token, token_type="bearer", user=user)

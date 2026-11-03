@@ -1,5 +1,7 @@
 package com.wealthvault.app.data
 
+import android.os.Build
+import com.wealthvault.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -28,6 +30,14 @@ class Api(private val prefs: Prefs) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(180, TimeUnit.SECONDS) // a full broker sync can take a while
+        // tells the server this is the app (and which build and phone) when someone signs in: no IP or identifier is sent
+        .addInterceptor { chain ->
+            chain.proceed(
+                chain.request().newBuilder()
+                    .header("User-Agent", "WealthVault-Android/${BuildConfig.VERSION_NAME} (${Build.MODEL.take(40).replace(")", "")}; Android ${Build.VERSION.RELEASE})")
+                    .build(),
+            )
+        }
         .build()
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true; explicitNulls = false }
     private val jsonType = "application/json".toMediaType()

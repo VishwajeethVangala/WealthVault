@@ -3,7 +3,7 @@ import { fetchAuthConfig } from '../utils/api'
 
 /** Public pages (no sign-in): the privacy policy and how to delete an account. Google Play asks for both as web links. */
 
-const UPDATED = '16 October 2026'
+const UPDATED = '3 November 2026'
 
 export const DISCLAIMER =
   'WealthVault shows your own broker holdings and analysis built from public price history. It is information, not investment advice, and not a recommendation to buy or sell anything. Signals can be wrong; decide for yourself.'
@@ -52,6 +52,11 @@ export const PrivacyPolicy: React.FC = () => (
       <li>
         <b>Your Google account details</b> when you sign in: name, email address, profile picture and Google account id. They identify your
         account.
+      </li>
+      <li>
+        <b>Sign-in details</b>: each time you sign in we note when, whether it was the Android app or a web browser, the app version, the
+        phone model and Android version (or the browser&apos;s name text), and how many times you have signed in. We use it to understand which
+        versions are in use and to tell real use from automated test accounts. We do not keep your IP address.
       </li>
       <li>
         <b>Portfolio data from the brokers you connect</b> (for example Zerodha, INDmoney, Angel One): your holdings, quantities, prices and
@@ -172,7 +177,7 @@ export const DeleteAccountInfo: React.FC = () => (
 
     <h2>What is erased</h2>
     <ul>
-      <li>Your profile (name, email, picture)</li>
+      <li>Your profile (name, email, picture) and sign-in details</li>
       <li>All holdings and daily portfolio history</li>
       <li>Your target allocation and settings</li>
       <li>Broker connections and the saved broker logins and API keys</li>
