@@ -164,6 +164,17 @@ class TestIndmoneyClient(unittest.TestCase):
         self.assertIn(AssetClass.US_STOCKS, classes)
         self.assertIn(AssetClass.NPS, classes)
 
+    def test_indian_stocks_held_at_groww_are_not_listed_again_under_indmoney(self):
+        def stock(name, brokers):
+            return {"name": name, "investment_code": name, "current_value": 1000.0, "brokers": brokers}
+
+        raw = {"overall": {"family_asset_holdings": [{"name": "A", "asset": "indian_stock", "holdings": [
+            stock("MONEYVIEW", ["Groww"]), stock("ABB", ["zerodha"]), stock("NOBROKER", []), stock("TCS", ["INDmoney"])]},
+            {"name": "A", "asset": "us_stock", "holdings": [stock("AMZN", ["Alpaca"]), stock("AAPL", ["Groww"]), stock("MSFT", [])]}]}}
+        out = IndmoneyProvider._transform_live_payload(raw)
+        self.assertEqual([h["investment_code"] for h in out["IND_STOCK"]["holdings"]], ["TCS"])
+        self.assertEqual([h["investment_code"] for h in out["US_STOCK"]["holdings"]], ["AMZN", "AAPL", "MSFT"])  # no broker filter
+
 
 if __name__ == "__main__":
     unittest.main()

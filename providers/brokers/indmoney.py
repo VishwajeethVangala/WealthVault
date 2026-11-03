@@ -133,8 +133,9 @@ class IndmoneyProvider(BrokerProvider):
                 # Avoid duplicating mutual funds managed directly by Zerodha Coin
                 if m_asset == "mutual_fund":
                     continue
-                # Avoid duplicating Indian stocks managed by Zerodha (handled directly by Kite MCP)
-                if m_asset == "indian_stock" and "Zerodha" in brokers:
+                # INDmoney also lists Indian stocks held at brokers linked to it (Zerodha, Groww: read directly), so keep
+                # only those held at INDmoney itself. US stocks are not filtered by broker.
+                if m_asset == "indian_stock" and not any(str(b).strip().lower() == "indmoney" for b in brokers):
                     continue
                 # Filter out non-portfolio assets
                 if m_asset in ("vehicle", "savings_account", "stock_wallet", "digital_assets", "epf", "ppf"):
