@@ -21,6 +21,19 @@ SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 OK, UNREGISTERED, FAILED = "ok", "unregistered", "failed"
 
 
+def classify(status: int, text: str) -> str:
+    """What an FCM answer means for the token. Only an answer that says the token itself is dead (the app was removed or
+    its data cleared) may make us forget it; any other refusal, or a server error, leaves it alone so a blip never costs
+    someone their notifications."""
+    if status == 200:
+        return OK
+    if status == 404 or "UNREGISTERED" in text:
+        return UNREGISTERED
+    if status == 400 and "INVALID_ARGUMENT" in text and "registration token" in text.lower():
+        return UNREGISTERED
+    return FAILED
+
+
 class FcmSender:
     def __init__(self, info: Dict[str, Any]) -> None:
         self.project_id: str = info["project_id"]
@@ -42,21 +55,26 @@ class FcmSender:
                 "webpush": {"headers": {"Urgency": "high", "TTL": "3600"}},
             }
         }
-        try:
-            token = await self._access_token()
-            url = f"https://fcm.googleapis.com/v1/projects/{self.project_id}/messages:send"
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as http:
-                async with http.post(url, json=body, headers={"Authorization": f"Bearer {token}"}) as resp:
-                    if resp.status == 200:
-                        return OK
-                    text = await resp.text()
-                    if resp.status in (400, 404) and ("UNREGISTERED" in text or "NOT_FOUND" in text or "INVALID_ARGUMENT" in text):
-                        return UNREGISTERED
-                    logger.warning("FCM send failed (%s): %s", resp.status, text[:300])
-                    return FAILED
-        except Exception as exc:
-            logger.warning("FCM send error: %s", exc)
-            return FAILED
+        for attempt in (1, 2):
+            retry = False
+            try:
+                token = await self._access_token()
+                url = f"https://fcm.googleapis.com/v1/projects/{self.project_id}/messages:send"
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as http:
+                    async with http.post(url, json=body, headers={"Authorization": f"Bearer {token}"}) as resp:
+                        text = "" if resp.status == 200 else await resp.text()
+                        result = classify(resp.status, text)
+                        if result != FAILED:
+                            return result
+                        logger.warning("FCM send failed (%s): %s", resp.status, text[:300])
+                        retry = resp.status == 429 or resp.status >= 500  # Google's side: worth one more go
+            except Exception as exc:
+                logger.warning("FCM send error: %s", exc)
+                retry = True  # network blip
+            if not (retry and attempt == 1):
+                break
+            await asyncio.sleep(2)
+        return FAILED
 
 
 _sender: Optional[FcmSender] = None

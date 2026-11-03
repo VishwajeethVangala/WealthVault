@@ -353,3 +353,16 @@ def test_the_us_look_goes_once_a_day_only_to_people_with_us_stocks_who_want_it()
     assert run(send_us_digest(p, repo, date(2026, 10, 29), quotes)) == 1
     assert run(send_us_digest(p, repo, date(2026, 10, 29), quotes)) == 0
     assert [t for t, _ in p.sender.sent] == ["ta"]
+
+
+def test_only_a_dead_token_makes_us_forget_a_device():
+    from core.push import fcm
+
+    assert fcm.classify(200, "") == fcm.OK
+    assert fcm.classify(404, "NOT_FOUND") == fcm.UNREGISTERED
+    assert fcm.classify(400, '{"status":"UNREGISTERED"}') == fcm.UNREGISTERED
+    assert fcm.classify(400, '{"status":"INVALID_ARGUMENT","message":"The registration token is not a valid FCM registration token"}') == fcm.UNREGISTERED
+    # any other refusal or a server error keeps the token, so a blip never costs someone their notifications
+    assert fcm.classify(400, '{"status":"INVALID_ARGUMENT","message":"Invalid JSON payload"}') == fcm.FAILED
+    assert fcm.classify(403, "SENDER_ID_MISMATCH") == fcm.FAILED
+    assert fcm.classify(503, "UNAVAILABLE") == fcm.FAILED

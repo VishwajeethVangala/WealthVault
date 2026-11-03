@@ -88,7 +88,10 @@ async def send_to_user(
         if result == fcm.OK:
             delivered += 1
         elif result == fcm.UNREGISTERED:
+            logger.warning("Push: a %s device token is dead and was removed; that phone must open the app to register again", kind)
             await ports.devices.remove(owner_id, token)
+    if delivered == 0:
+        logger.warning("Push %s: not delivered to any of %d registered device(s)", kind, len(tokens))
     return delivered
 
 

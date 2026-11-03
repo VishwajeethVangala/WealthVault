@@ -158,8 +158,13 @@ def start_push_jobs() -> None:
     global _task
     from apps.api.auto_refresh import auto_enabled
 
-    if _task is None and auto_enabled() and push_ready():
+    if _task is not None:
+        return
+    if auto_enabled() and push_ready():
         _task = asyncio.create_task(_loop())
+    else:
+        logger.warning("Push notifications OFF: auto refresh %s, Firebase key %s",
+                       "on" if auto_enabled() else "off (production only, or AUTO_REFRESH_ENABLED)", "set" if push_ready() else "missing")
 
 
 async def stop_push_jobs() -> None:
