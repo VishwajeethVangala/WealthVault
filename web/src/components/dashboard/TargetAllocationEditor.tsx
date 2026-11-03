@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { CLASS_LABEL } from '../holdings/holdingsModel'
 import type { CanonicalAssetClass } from '../../utils/portfolioFilters'
 
-const TARGET_CLASSES: CanonicalAssetClass[] = ['EQUITY', 'MUTUAL_FUND', 'US_STOCKS', 'GOLD', 'NPS']
+const TARGET_CLASSES: CanonicalAssetClass[] = ['EQUITY', 'MUTUAL_FUND', 'US_STOCKS', 'GOLD']
 
 interface Props {
   initial: Record<string, number>

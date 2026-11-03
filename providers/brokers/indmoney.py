@@ -138,7 +138,7 @@ class IndmoneyProvider(BrokerProvider):
                 if m_asset == "indian_stock" and not any(str(b).strip().lower() == "indmoney" for b in brokers):
                     continue
                 # Filter out non-portfolio assets
-                if m_asset in ("vehicle", "savings_account", "stock_wallet", "digital_assets", "epf", "ppf"):
+                if m_asset in ("vehicle", "savings_account", "stock_wallet", "digital_assets", "epf", "ppf", "nps"):
                     continue
 
                 inv_code = str(h.get("id") or h.get("investment_code") or "").strip()

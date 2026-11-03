@@ -144,9 +144,8 @@ class TestIndmoneyClient(unittest.TestCase):
         self.assertEqual(len(transformed["US_STOCK"]["holdings"]), 1)
         self.assertEqual(transformed["US_STOCK"]["holdings"][0]["investment_code"], "AMZN")
 
-        # NPS should be included
-        self.assertEqual(len(transformed["NPS"]["holdings"]), 1)
-        self.assertEqual(transformed["NPS"]["holdings"][0]["investment"], "NPS Tier 1")
+        # NPS is not tracked
+        self.assertEqual(len(transformed["NPS"]["holdings"]), 0)
 
         # Mutual funds managed by Zerodha Coin should be deduplicated (excluded)
         self.assertEqual(len(transformed["MF"]["holdings"]), 0)
@@ -159,10 +158,8 @@ class TestIndmoneyClient(unittest.TestCase):
         normalized = normalizer.normalize_holdings(
             transformed, "indmoney", "test_user", "conn_indmoney_live"
         )
-        self.assertEqual(len(normalized), 2)
-        classes = {h.asset_class for h in normalized}
-        self.assertIn(AssetClass.US_STOCKS, classes)
-        self.assertIn(AssetClass.NPS, classes)
+        self.assertEqual(len(normalized), 1)
+        self.assertEqual({h.asset_class for h in normalized}, {AssetClass.US_STOCKS})
 
     def test_indian_stocks_held_at_groww_are_not_listed_again_under_indmoney(self):
         def stock(name, brokers):
@@ -174,6 +171,23 @@ class TestIndmoneyClient(unittest.TestCase):
         out = IndmoneyProvider._transform_live_payload(raw)
         self.assertEqual([h["investment_code"] for h in out["IND_STOCK"]["holdings"]], ["TCS"])
         self.assertEqual([h["investment_code"] for h in out["US_STOCK"]["holdings"]], ["AMZN", "AAPL", "MSFT"])  # no broker filter
+
+
+class SnapshotWithoutNpsTests(unittest.TestCase):
+    def test_nps_is_taken_out_of_snapshots_stored_while_it_was_tracked(self):
+        import json
+        from storage.tables.repositories import SnapshotsRepository
+
+        alloc = {"EQUITY": {"absolute_value": 800.0, "percentage_weight": 80.0}, "NPS": {"absolute_value": 200.0, "percentage_weight": 20.0}}
+        row = {"snapshot_id": "snapshot_2026-10-01", "owner_id": "u", "as_of_date": "2026-10-01", "total_current_value": 1000.0,
+               "total_invested_value": 800.0, "total_unrealized_pnl": 200.0, "total_pnl_percentage": 25.0,
+               "asset_allocation_json": json.dumps(alloc), "holdings_count": 3}
+        snap = SnapshotsRepository.__new__(SnapshotsRepository)._parse_snapshot(row)
+        self.assertEqual(snap.total_current_value, 800.0)
+        self.assertEqual(snap.total_invested_value, 640.0)  # NPS removed at the day's own invested/value ratio (0.8)
+        self.assertEqual(snap.total_unrealized_pnl, 160.0)
+        self.assertEqual(list(snap.asset_allocation), ["EQUITY"])
+        self.assertEqual(snap.asset_allocation["EQUITY"]["percentage_weight"], 100.0)
 
 
 if __name__ == "__main__":

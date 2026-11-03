@@ -414,12 +414,6 @@ export const GlobalFilters: React.FC = () => {
       count: counts.byAssetClass.GOLD,
       colorDot: 'bg-wv-warn',
     },
-    {
-      value: 'NPS',
-      label: 'NPS Retirement',
-      count: counts.byAssetClass.NPS,
-      colorDot: 'bg-wv-accent',
-    },
   ]
 
   return (

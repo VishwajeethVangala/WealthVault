@@ -328,6 +328,8 @@ class HoldingsRepository(BaseTableStorage):
         items = await self.query_entities(user_id=owner_id, filter_query=filter_expr)
         results: List[Holding] = []
         for item in items:
+            if item.get("asset_class") == AssetClass.NPS.value:
+                continue  # NPS is not tracked: rows stored before it was dropped stay out of every total
             try:
                 results.append(
                     Holding(
@@ -564,15 +566,30 @@ class SnapshotsRepository(BaseTableStorage):
                 if isinstance(alloc, str):
                     alloc = json.loads(alloc)
 
+            value = float(data["total_current_value"])
+            invested = float(data["total_invested_value"])
+            pnl = float(data["total_unrealized_pnl"])
+            pnl_pct = float(data["total_pnl_percentage"])
+            nps = float((alloc.pop(AssetClass.NPS.value, None) or {}).get("absolute_value", 0.0))
+            if nps:
+                # NPS is no longer tracked: take it out of snapshots stored while it was. Its cost basis was never
+                # kept per class, so it is removed at the portfolio's own invested-to-value ratio that day.
+                ratio = invested / value if value > 0 else 1.0
+                value = max(round(value - nps, 2), 0.0)
+                invested = max(round(invested - nps * ratio, 2), 0.0)
+                pnl = round(value - invested, 2)
+                pnl_pct = round(pnl / invested * 100.0, 2) if invested > 0 else 0.0
+                for entry in alloc.values():
+                    entry["percentage_weight"] = round(entry.get("absolute_value", 0.0) / value * 100.0, 2) if value > 0 else 0.0
             return PortfolioSnapshot(
                 snapshot_id=data["snapshot_id"],
                 owner_id=data["owner_id"],
                 as_of_date=data["as_of_date"],
                 calculation_version=data.get("calculation_version", "v1"),
-                total_current_value=float(data["total_current_value"]),
-                total_invested_value=float(data["total_invested_value"]),
-                total_unrealized_pnl=float(data["total_unrealized_pnl"]),
-                total_pnl_percentage=float(data["total_pnl_percentage"]),
+                total_current_value=value,
+                total_invested_value=invested,
+                total_unrealized_pnl=pnl,
+                total_pnl_percentage=pnl_pct,
                 asset_allocation=alloc,
                 holdings_count=int(data.get("holdings_count", 0)),
                 created_at=data.get("created_at", ""),
