@@ -505,3 +505,23 @@ export interface AthCall {
   above_dma_pct: number | null
   queued: boolean
 }
+
+export interface WatchlistItem {
+  symbol: string
+  name: string
+  notes: string
+  target_price: number | null
+  price_when_added: number | null
+  added_at: string
+  last_price: number | null
+  pct_since_added: number | null
+  trend_verdict: string | null
+  trend_score: number | null
+  signal_state: string | null
+}
+
+export interface WatchlistResponse {
+  items: WatchlistItem[]
+  count: number
+}
+

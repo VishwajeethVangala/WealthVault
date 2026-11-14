@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   CheckCircle2,
   Minus,
+  Star,
   TrendingDown,
   TrendingUp,
   XCircle,
@@ -27,9 +28,9 @@ import {
 } from '../components/analytics/AnalysisParts'
 import { createEndLabelStack } from '../components/analytics/chartLabels'
 import { useAnalysisRequest } from '../components/analytics/useAnalysisRequest'
-import { fetchMomentum } from '../utils/api'
+import { addToWatchlist, fetchMomentum, fetchWatchlist, removeFromWatchlist } from '../utils/api'
 import { formatINR, formatMonth, formatPct, monthTicks, signedTone } from '../utils/format'
-import type { MomentumAnalysis, ReturnWindow } from '../types'
+import type { MomentumAnalysis, ReturnWindow, WatchlistItem } from '../types'
 
 // Validated categorical palette (light surface): close, 50-DMA, 200-DMA
 const SERIES = [
@@ -95,6 +96,88 @@ export const MomentumAnalyzer: React.FC = () => {
   const [input, setInput] = useState(searchParams.get('symbol') || '')
   const [lastQuery, setLastQuery] = useState<string | null>(null)
   const { data: report, loading, error, authUrl, run } = useAnalysisRequest<MomentumAnalysis>()
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
+  const [watchLoading, setWatchLoading] = useState(false)
+  const [watchlistToast, setWatchlistToast] = useState<string | null>(null)
+
+  const showToast = (msg: string) => {
+    setWatchlistToast(msg)
+    window.setTimeout(() => setWatchlistToast(null), 3000)
+  }
+
+  const loadWatchlist = () => {
+    fetchWatchlist()
+      .then((res) => setWatchlist(res.items || []))
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadWatchlist()
+  }, [])
+
+  const isWatched = Boolean(
+    report &&
+      watchlist.some((w) => {
+        const clean = report.instrument.toUpperCase()
+        const wSym = w.symbol.toUpperCase()
+        return wSym === clean || clean.endsWith(`:${wSym}`) || wSym.endsWith(`:${clean}`)
+      })
+  )
+
+  const toggleWatch = async () => {
+    if (!report || watchLoading) return
+    const targetSymbol = report.instrument
+    const currentlyWatched = isWatched
+
+    // Instant optimistic update
+    if (currentlyWatched) {
+      setWatchlist((prev) =>
+        prev.filter((w) => {
+          const wSym = w.symbol.toUpperCase()
+          const clean = targetSymbol.toUpperCase()
+          return !(wSym === clean || clean.endsWith(`:${wSym}`) || wSym.endsWith(`:${clean}`))
+        })
+      )
+      showToast(`Removed ${targetSymbol} from Watchlist`)
+    } else {
+      const optimisticItem: WatchlistItem = {
+        symbol: targetSymbol,
+        name: report.name || targetSymbol,
+        notes: `${report.trend_verdict} (${report.trend_score}/${report.trend_max_score})`,
+        target_price: null,
+        price_when_added: report.last_price,
+        added_at: new Date().toISOString(),
+        last_price: report.last_price,
+        pct_since_added: 0,
+        trend_verdict: report.trend_verdict,
+        trend_score: report.trend_score,
+        signal_state: null,
+      }
+      setWatchlist((prev) => [optimisticItem, ...prev])
+      showToast(`Added ${targetSymbol} to Watchlist`)
+    }
+
+    setWatchLoading(true)
+    try {
+      if (currentlyWatched) {
+        await removeFromWatchlist(targetSymbol)
+      } else {
+        await addToWatchlist(targetSymbol, {
+          name: report.name || undefined,
+          notes: `${report.trend_verdict} (${report.trend_score}/${report.trend_max_score})`,
+        })
+      }
+      const res = await fetchWatchlist()
+      setWatchlist(res.items || [])
+    } catch (e: any) {
+      console.error('Watchlist toggle error:', e)
+      showToast(`Failed: ${e?.message || 'Could not update watchlist'}`)
+      const res = await fetchWatchlist().catch(() => null)
+      if (res) setWatchlist(res.items || [])
+    } finally {
+      setWatchLoading(false)
+    }
+  }
 
   const analyze = (symbol: string) => {
     const clean = symbol.trim().toUpperCase()
@@ -150,6 +233,7 @@ export const MomentumAnalyzer: React.FC = () => {
           loading={loading}
           activeInstrument={report?.instrument}
           submitLabel="Analyze Momentum"
+          watchlist={watchlist}
         />
       </div>
 
@@ -181,6 +265,26 @@ export const MomentumAnalyzer: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-wv-surface-2 text-wv-text-2">{report.instrument}</span>
+                <button
+                  type="button"
+                  onClick={toggleWatch}
+                  disabled={watchLoading}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all shadow-sm active:scale-95 cursor-pointer ${
+                    isWatched
+                      ? 'bg-amber-500/15 text-amber-500 border-amber-500/40 hover:bg-amber-500/25'
+                      : 'bg-wv-surface-2 text-wv-text-2 border-wv-border hover:text-wv-text hover:border-wv-border-strong'
+                  }`}
+                  title={isWatched ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                >
+                  <Star className={`w-3.5 h-3.5 ${isWatched ? 'fill-amber-500 text-amber-500' : 'text-wv-text-3'}`} />
+                  <span>{isWatched ? 'Watching' : 'Watch'}</span>
+                  {watchLoading && <span className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin ml-0.5" />}
+                </button>
+                {watchlistToast && (
+                  <span className="text-[11px] font-medium text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
+                    {watchlistToast}
+                  </span>
+                )}
                 <span className="text-[11px] text-wv-text-3">as of {report.as_of}{report.live_bar ? ' (live price)' : ''} · {report.candles_used} trading days</span>
               </div>
               <h2 className="font-serif text-2xl text-wv-text font-semibold tracking-tight mt-2">{report.name || report.instrument}</h2>

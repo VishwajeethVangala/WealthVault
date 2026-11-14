@@ -24,9 +24,10 @@ const STATUS_WORD: Record<string, string> = {
 interface SidebarProps {
   holdingsCount: number
   sessions: BrokerSessionInfo[]
+  watchlistCount?: number
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ holdingsCount, sessions }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ holdingsCount, sessions, watchlistCount }) => {
   const location = useLocation()
   const groups: NavItem['group'][] = ['Portfolio', 'Analysis']
 
@@ -54,6 +55,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ holdingsCount, sessions }) => 
                 <Icon size={18} strokeWidth={1.75} />
                 <span className="nav-text">{item.label}</span>
                 {item.id === 'holdings' && holdingsCount > 0 && <span className="count">{holdingsCount}</span>}
+                {item.id === 'watchlist' && watchlistCount !== undefined && watchlistCount > 0 && (
+                  <span className="count">{watchlistCount}</span>
+                )}
               </NavLink>
             )
           })}

@@ -2,7 +2,7 @@ import { cleanSearchTerm, track } from './analytics'
 import { saveSessionForWorker } from './pushSession'
 import { webPushSignOut } from './webPush'
 import type { LiveSignalsResponse } from '../components/signals/useLiveSignals'
-import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult } from '../types'
+import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult, WatchlistItem, WatchlistResponse } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -328,3 +328,51 @@ export const saveNotificationPrefs = (prefs: NotificationPrefs) =>
   fetchApi<NotificationPrefs>('/api/v1/notifications/prefs', { method: 'PUT', body: JSON.stringify(prefs) })
 
 export const sendTestNotification = () => fetchApi<{ delivered: number }>('/api/v1/notifications/test', { method: 'POST' })
+
+// --- watchlist -----------------------------------------------------------------------------------------------------
+
+export async function fetchWatchlist(): Promise<WatchlistResponse> {
+  const raw = await fetchApi<WatchlistResponse | WatchlistItem[]>('/api/v1/watchlist')
+  if (Array.isArray(raw)) {
+    return { items: raw, count: raw.length }
+  }
+  return raw && Array.isArray(raw.items) ? raw : { items: [], count: 0 }
+}
+
+export function notifyWatchlistUpdated() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('wv-watchlist-updated'))
+  }
+}
+
+export async function addToWatchlist(
+  symbol: string,
+  opts?: { name?: string | null; notes?: string | null; target_price?: number | null }
+): Promise<WatchlistItem> {
+  const res = await fetchApi<WatchlistItem>('/api/v1/watchlist', {
+    method: 'POST',
+    body: JSON.stringify({ symbol, ...opts }),
+  })
+  notifyWatchlistUpdated()
+  return res
+}
+
+export async function removeFromWatchlist(symbol: string): Promise<{ ok: boolean; symbol: string }> {
+  const res = await fetchApi<{ ok: boolean; symbol: string }>(`/api/v1/watchlist/${encodeURIComponent(symbol)}`, {
+    method: 'DELETE',
+  })
+  notifyWatchlistUpdated()
+  return res
+}
+
+export async function refreshWatchlist(): Promise<WatchlistResponse> {
+  const raw = await fetchApi<WatchlistResponse | WatchlistItem[]>('/api/v1/watchlist/refresh', {
+    method: 'POST',
+  })
+  notifyWatchlistUpdated()
+  if (Array.isArray(raw)) {
+    return { items: raw, count: raw.length }
+  }
+  return raw && Array.isArray(raw.items) ? raw : { items: [], count: 0 }
+}
+

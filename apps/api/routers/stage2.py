@@ -26,7 +26,7 @@ from core.market_data.kite_client import KiteAuthRequiredError
 from core.market_data.service import get_market_data_service
 from core.market_data.user_client import get_user_kite_client
 from core.screeners.chartink import ScreenerError, ScreenerResult, fetch_screener
-from storage.tables.repositories import HoldingsRepository, ScreenerSnapshotRepository, SignalCacheRepository
+from storage.tables.repositories import HoldingsRepository, ScreenerSnapshotRepository, SignalCacheRepository, WatchlistRepository
 
 logger = logging.getLogger("wealthvault.api.stage2")
 
@@ -110,6 +110,11 @@ async def _run_job(
             held_keys.add(_key_of(inst))
             work.setdefault(_key_of(inst), inst)
         job.list_count, job.holdings_count, job.overlap = len(list_keys), len(held_keys), len(list_keys & held_keys)
+        watch_items = await WatchlistRepository().list_items(owner_id=owner_id)
+        for it in watch_items:
+            wsym = it.get("symbol")
+            if wsym:
+                work.setdefault(_key_of(wsym), wsym)
 
         if not work:
             job.state = "error"

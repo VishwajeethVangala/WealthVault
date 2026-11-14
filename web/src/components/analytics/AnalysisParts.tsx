@@ -5,6 +5,7 @@ import { usePortfolio } from '../../context/PortfolioContext'
 import { classifyAssetClass } from '../../utils/portfolioFilters'
 import { searchStocks, type StockSuggestion } from '../../utils/api'
 import { cleanSearchTerm, screenName, track } from '../../utils/analytics'
+import type { WatchlistItem } from '../../types'
 
 const SUGGEST_AFTER = 3
 
@@ -16,8 +17,9 @@ export const SymbolPicker: React.FC<{
   loading: boolean
   activeInstrument?: string
   submitLabel: string
+  watchlist?: WatchlistItem[]
   children?: React.ReactNode
-}> = ({ value, onChange, onSubmit, loading, activeInstrument, submitLabel, children }) => {
+}> = ({ value, onChange, onSubmit, loading, activeInstrument, submitLabel, watchlist, children }) => {
   const { holdings } = usePortfolio()
   const page = screenName(useLocation().pathname)
 
@@ -183,6 +185,45 @@ export const SymbolPicker: React.FC<{
               {sym}
             </button>
           ))}
+        </div>
+      )}
+
+      {watchlist && watchlist.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Watchlist</span>
+          {watchlist.map((item) => {
+            const sym = item.symbol.replace(/^[A-Z]+:/i, '')
+            const isActive = activeInstrument === item.symbol || activeInstrument?.endsWith(`:${sym}`)
+            return (
+              <button
+                key={item.symbol}
+                type="button"
+                onClick={() => onSubmit(item.symbol)}
+                disabled={loading}
+                title={item.name ? `${item.name}${item.notes ? ` • ${item.notes}` : ''}` : undefined}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold border transition-colors flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : 'bg-wv-surface text-wv-text-2 border-wv-border hover:border-wv-border-strong'
+                }`}
+              >
+                <span>{sym}</span>
+                {item.trend_score != null && (
+                  <span
+                    className={`text-[9px] font-sans px-1 rounded ${
+                      isActive
+                        ? 'bg-black/20 text-white'
+                        : item.trend_score >= 4
+                        ? 'bg-wv-gain-weak text-wv-gain'
+                        : 'bg-wv-surface-2 text-wv-text-3'
+                    }`}
+                  >
+                    {item.trend_score}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
       )}
     </>

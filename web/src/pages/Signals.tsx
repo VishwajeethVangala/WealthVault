@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ArrowDown, ArrowUp, ExternalLink, RefreshCw, Search } from 'lucide-react'
-import { fetchLiveSignals, fetchSignals, fetchStage2, fetchStage2Live, fetchStage2LiveSignals, fetchUsLive, refreshSignals, refreshStage2 } from '../utils/api'
+import { fetchLiveSignals, fetchSignals, fetchStage2, fetchStage2Live, fetchStage2LiveSignals, fetchUsLive, fetchWatchlist, refreshSignals, refreshStage2 } from '../utils/api'
 import { useLiveSignals } from '../components/signals/useLiveSignals'
 import { FreshnessChip } from '../components/signals/FreshnessChip'
 import { StockLink } from '../components/StockLink'
@@ -12,7 +12,7 @@ import { classifyAssetClass, brokerLabel } from '../utils/portfolioFilters'
 import { pct, signedMoney as fmtSigned, tone } from '../utils/format'
 import { useMoney } from '../utils/useMoney'
 import { buildInstruments, type Instrument } from '../components/holdings/holdingsModel'
-import type { SignalsResponse, Stage2Response, Stage2Row, StockSignals, UsLiveQuote } from '../types'
+import type { SignalsResponse, Stage2Response, Stage2Row, StockSignals, UsLiveQuote, WatchlistItem } from '../types'
 import {
   ALIGN_ORDER,
   AlignmentCell,
@@ -32,7 +32,7 @@ import {
  */
 
 type Market = 'in' | 'us'
-type Source = 'all' | 'held' | 'stage2' | 'new'
+type Source = 'all' | 'held' | 'watchlist' | 'stage2' | 'new'
 type AlignFilter = 'all' | Alignment | 'trade' | 'fresh'
 type SortKey = 'sym' | 'price' | 'day' | 'pos' | 'pnlPct' | 'vol' | 'momentum' | 'ath' | 'align' | `x:${string}`
 
@@ -50,6 +50,7 @@ interface Row extends Reading {
   live?: UsLiveQuote
   /** an ATH trade that opened within the last FRESH_DAYS trading days */
   fresh: boolean
+  isWatchlist?: boolean
 }
 
 const FRESH_DAYS = 10
@@ -131,12 +132,13 @@ export const Signals: React.FC = () => {
   const startFilter = searchParams.get('filter')
   const [align, setAlign] = useState<AlignFilter>(startFilter === 'all-bear' || startFilter === 'all-bull' || startFilter === 'mixed' || startFilter === 'trade' ? startFilter : 'all')
   const startSource = searchParams.get('source')
-  const [source, setSource] = useState<Source>(startSource === 'held' || startSource === 'stage2' || startSource === 'new' ? startSource : 'all')
+  const [source, setSource] = useState<Source>(startSource === 'held' || startSource === 'watchlist' || startSource === 'stage2' || startSource === 'new' ? startSource : 'all')
   const [sector, setSector] = useState('all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'align', dir: -1 })
   const [shown, setShown] = useState(PAGE)
   const [view, setView] = useState<'calls' | 'table'>(searchParams.get('view') === 'table' || startFilter ? 'table' : 'calls')
   const timer = useRef<number | undefined>(undefined)
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
 
   const loadHeld = useCallback(async () => {
     try {
@@ -161,15 +163,27 @@ export const Signals: React.FC = () => {
     }
   }, [market])
 
+  const loadWatchlist = useCallback(async () => {
+    if (market !== 'in') return null
+    try {
+      const res = await fetchWatchlist()
+      setWatchlist(res.items || [])
+      return res
+    } catch {
+      return null
+    }
+  }, [market])
+
   const load = useCallback(async () => {
     setError(null)
-    return Promise.all([loadHeld(), loadStage2()])
-  }, [loadHeld, loadStage2])
+    return Promise.all([loadHeld(), loadStage2(), loadWatchlist()])
+  }, [loadHeld, loadStage2, loadWatchlist])
 
   // Each market has its own cache and refresh job, so start clean when switching
   useEffect(() => {
     setHeld(null)
     setStage2(null)
+    setWatchlist([])
     setShown(PAGE)
     load()
   }, [load])
@@ -306,38 +320,103 @@ export const Signals: React.FC = () => {
       return full
     }
 
+    const watchlistMap = new Map<string, WatchlistItem>()
+    watchlist.forEach((w) => {
+      watchlistMap.set(codeOf(w.symbol), w)
+    })
+
     ;(list?.rows ?? []).forEach((s2) => {
       const code = s2.nsecode.toUpperCase()
       const sig = listSigs[code]
       const lv = liveQuotes[s2.nsecode]
       const ltp = lv?.price ?? s2.close
-      byCode.set(code, add({ key: `s2:${code}`, code: s2.nsecode, name: s2.name, href: `/momentum?symbol=${encodeURIComponent(s2.nsecode)}`, s2, sig, ltp, dayPct: lv?.day_change_pct ?? s2.per_chg ?? null }))
+      const isWatchlist = watchlistMap.has(code)
+      byCode.set(
+        code,
+        add({
+          key: `s2:${code}`,
+          code: s2.nsecode,
+          name: s2.name,
+          href: `/momentum?symbol=${encodeURIComponent(s2.nsecode)}`,
+          s2,
+          sig,
+          ltp,
+          dayPct: lv?.day_change_pct ?? s2.per_chg ?? null,
+          isWatchlist,
+        })
+      )
     })
 
     instruments.forEach((inst) => {
       const id = inst.lots.map((l) => map[l.holding.instrument_symbol]).find(Boolean)
       const code = id ? codeOf(id) : null
+      const isWatchlist = (code && watchlistMap.has(code)) || watchlistMap.has(inst.sym.toUpperCase())
       const match = code ? byCode.get(code) : undefined
       if (match) {
         // on both lists: keep the Chartink row, attach the position, prefer the live holdings signals if the list has none
         const idx = out.indexOf(match)
         const sig = match.sig ?? (id ? heldSigs[id] : undefined)
         const ltp = liveQuotes[match.code]?.price ?? inst.ltp ?? match.ltp
-        const merged: Row = { ...match, inst, sig, ltp, href: stockHref(inst) ?? match.href, fresh: false, ...readSignals(sig, ltp) }
+        const merged: Row = {
+          ...match,
+          inst,
+          sig,
+          ltp,
+          href: stockHref(inst) ?? match.href,
+          fresh: false,
+          isWatchlist: match.isWatchlist || isWatchlist,
+          ...readSignals(sig, ltp),
+        }
         merged.fresh =
           sig?.ath?.state === 'IN_POSITION' && (sig.ath.bars_held ?? 999) <= FRESH_DAYS
         out[idx] = merged
         return
       }
       const sig = id ? heldSigs[id] : undefined
-      add({ key: `held:${inst.key}`, code: inst.sym, name: sig?.name || inst.sym, href: stockHref(inst), inst, sig, ltp: inst.ltp, dayPct: inst.dayPct })
+      const row = add({
+        key: `held:${inst.key}`,
+        code: inst.sym,
+        name: sig?.name || inst.sym,
+        href: stockHref(inst),
+        inst,
+        sig,
+        ltp: inst.ltp,
+        dayPct: inst.dayPct,
+        isWatchlist,
+      })
+      if (code) byCode.set(code, row)
+      byCode.set(inst.sym.toUpperCase(), row)
     })
+
+    watchlist.forEach((w) => {
+      const code = codeOf(w.symbol)
+      const match = byCode.get(code)
+      if (match) {
+        match.isWatchlist = true
+      } else {
+        const sig = listSigs[code] || heldSigs[w.symbol]
+        const ltp = w.last_price ?? 0
+        const row = add({
+          key: `wl:${code}`,
+          code,
+          name: w.name || code,
+          href: `/momentum?symbol=${encodeURIComponent(w.symbol)}`,
+          sig,
+          ltp,
+          dayPct: null,
+          isWatchlist: true,
+        })
+        byCode.set(code, row)
+      }
+    })
+
     return out
-  }, [held, stage2, liveHeld.signals, liveList.signals, liveQuotes, usLive, instruments, isUs, list, stockHref])
+  }, [held, stage2, watchlist, liveHeld.signals, liveList.signals, liveQuotes, usLive, instruments, isUs, list, stockHref])
 
   const inScope = useCallback(
     (r: Row) => {
       if (source === 'held') return !!r.inst
+      if (source === 'watchlist') return !!r.isWatchlist
       if (source === 'stage2') return !!r.s2
       if (source === 'new') return !!r.s2?.is_new
       return true
@@ -347,7 +426,13 @@ export const Signals: React.FC = () => {
   const scoped = useMemo(() => rows.filter(inScope), [rows, inScope])
 
   const sourceCounts = useMemo(
-    () => ({ all: rows.length, held: rows.filter((r) => r.inst).length, stage2: rows.filter((r) => r.s2).length, new: rows.filter((r) => r.s2?.is_new).length }),
+    () => ({
+      all: rows.length,
+      held: rows.filter((r) => r.inst).length,
+      watchlist: rows.filter((r) => r.isWatchlist).length,
+      stage2: rows.filter((r) => r.s2).length,
+      new: rows.filter((r) => r.s2?.is_new).length,
+    }),
     [rows],
   )
 
@@ -516,19 +601,33 @@ export const Signals: React.FC = () => {
               </button>
             ))}
           </div>
-          {!isUs && hasList && (
+          {!isUs && (hasList || watchlist.length > 0) && (
             <div className="seg" role="group" aria-label="Stocks from">
               {(
                 [
                   ['all', 'Everything'],
                   ['held', 'My holdings'],
-                  ['stage2', 'Stage 2'],
-                  ['new', 'New on Stage 2'],
+                  ['watchlist', 'Watchlist'],
+                  ...(hasList
+                    ? [
+                        ['stage2', 'Stage 2'],
+                        ['new', 'New on Stage 2'],
+                      ]
+                    : []),
                 ] as const
               ).map(([id, label]) => (
-                <button key={id} type="button" className={source === id ? 'on' : ''} aria-pressed={source === id} onClick={() => { setSource(id); setShown(PAGE) }}>
+                <button
+                  key={id}
+                  type="button"
+                  className={source === id ? 'on' : ''}
+                  aria-pressed={source === id}
+                  onClick={() => {
+                    setSource(id as Source)
+                    setShown(PAGE)
+                  }}
+                >
                   {label}
-                  <span className="cnt num">{sourceCounts[id]}</span>
+                  <span className="cnt num">{sourceCounts[id as keyof typeof sourceCounts] ?? 0}</span>
                 </button>
               ))}
             </div>
@@ -700,6 +799,18 @@ export const Signals: React.FC = () => {
                           {isUs ? <StockLink href={null}>{r.name}</StockLink> : r.href ? <Link className="sg-link" to={r.href} title="Open in Momentum">{r.name}</Link> : <StockLink href={null}>{r.name}</StockLink>}
                           {s2?.is_new && <span className="badge info">New</span>}
                           {inst && <span className="badge ok">Held</span>}
+                          {r.isWatchlist && (
+                            <span
+                              className="badge"
+                              style={{
+                                backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                                color: '#f59e0b',
+                                borderColor: 'rgba(245, 158, 11, 0.3)',
+                              }}
+                            >
+                              Watchlist
+                            </span>
+                          )}
                           {s2 && <span className="badge off">Stage 2</span>}
                         </div>
                         <div className="sg-sub mono">{r.code}</div>

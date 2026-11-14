@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowDown, ArrowUp, ArrowUpRight, CheckCircle2, CircleDot, Clock, Minus, XCircle } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowUpRight, CheckCircle2, CircleDot, Clock, Minus, Star, XCircle } from 'lucide-react'
 import {
   CartesianGrid,
   ComposedChart,
@@ -14,9 +14,9 @@ import {
 import { AnalysisErrorCard, LoadingState, MetricRow } from '../analytics/AnalysisParts'
 import { createEndLabelStack, triangleMarker } from '../analytics/chartLabels'
 import { useAnalysisRequest } from '../analytics/useAnalysisRequest'
-import { fetchAthBreakoutStrategy } from '../../utils/api'
+import { addToWatchlist, fetchAthBreakoutStrategy, fetchWatchlist, removeFromWatchlist } from '../../utils/api'
 import { formatDay, formatINR, formatMonth, formatPct, monthTicks, signedTone } from '../../utils/format'
-import type { AthBreakoutBar, AthBreakoutResult } from '../../types'
+import type { AthBreakoutBar, AthBreakoutResult, WatchlistItem } from '../../types'
 import {
   BacktestStats,
   EquityCurveCard,
@@ -111,6 +111,88 @@ export const AthBreakoutPanel: React.FC<StrategyPanelProps> = (props) => {
   const [capital, setCapital] = useState(50000)
   const [range, setRange] = useState(0)
   const { data: result, loading, error, authUrl, run } = useAnalysisRequest<AthBreakoutResult>()
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
+  const [watchLoading, setWatchLoading] = useState(false)
+  const [watchlistToast, setWatchlistToast] = useState<string | null>(null)
+
+  const showToast = (msg: string) => {
+    setWatchlistToast(msg)
+    window.setTimeout(() => setWatchlistToast(null), 3000)
+  }
+
+  const loadWatchlist = () => {
+    fetchWatchlist()
+      .then((res) => setWatchlist(res.items || []))
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadWatchlist()
+  }, [])
+
+  const isWatched = Boolean(
+    result &&
+      watchlist.some((w) => {
+        const clean = result.instrument.toUpperCase()
+        const wSym = w.symbol.toUpperCase()
+        return wSym === clean || clean.endsWith(`:${wSym}`) || wSym.endsWith(`:${clean}`)
+      })
+  )
+
+  const toggleWatch = async () => {
+    if (!result || watchLoading) return
+    const targetSymbol = result.instrument
+    const currentlyWatched = isWatched
+
+    // Instant optimistic update
+    if (currentlyWatched) {
+      setWatchlist((prev) =>
+        prev.filter((w) => {
+          const wSym = w.symbol.toUpperCase()
+          const clean = targetSymbol.toUpperCase()
+          return !(wSym === clean || clean.endsWith(`:${wSym}`) || wSym.endsWith(`:${clean}`))
+        })
+      )
+      showToast(`Removed ${targetSymbol} from Watchlist`)
+    } else {
+      const optimisticItem: WatchlistItem = {
+        symbol: targetSymbol,
+        name: result.name || targetSymbol,
+        notes: result.status?.headline ? `ATH Strategy: ${result.status.headline}` : 'ATH Strategy',
+        target_price: null,
+        price_when_added: result.status?.entry_price || null,
+        added_at: new Date().toISOString(),
+        last_price: result.live_price || null,
+        pct_since_added: 0,
+        trend_verdict: null,
+        trend_score: null,
+        signal_state: result.status?.state || null,
+      }
+      setWatchlist((prev) => [optimisticItem, ...prev])
+      showToast(`Added ${targetSymbol} to Watchlist`)
+    }
+
+    setWatchLoading(true)
+    try {
+      if (currentlyWatched) {
+        await removeFromWatchlist(targetSymbol)
+      } else {
+        await addToWatchlist(targetSymbol, {
+          name: result.name || undefined,
+          notes: result.status?.headline ? `ATH Strategy: ${result.status.headline}` : 'ATH Strategy',
+        })
+      }
+      const res = await fetchWatchlist()
+      setWatchlist(res.items || [])
+    } catch (e: any) {
+      console.error('Watchlist toggle error:', e)
+      showToast(`Failed: ${e?.message || 'Could not update watchlist'}`)
+      const res = await fetchWatchlist().catch(() => null)
+      if (res) setWatchlist(res.items || [])
+    } finally {
+      setWatchLoading(false)
+    }
+  }
 
   const execute = (symbol: string) =>
     run(() =>
@@ -194,6 +276,26 @@ export const AthBreakoutPanel: React.FC<StrategyPanelProps> = (props) => {
             <div className="lg:col-span-2 flex flex-col gap-3">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-wv-surface-2 text-wv-text-2">{result.instrument}</span>
+                <button
+                  type="button"
+                  onClick={toggleWatch}
+                  disabled={watchLoading}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all shadow-sm active:scale-95 cursor-pointer ${
+                    isWatched
+                      ? 'bg-amber-500/15 text-amber-500 border-amber-500/40 hover:bg-amber-500/25'
+                      : 'bg-wv-surface-2 text-wv-text-2 border-wv-border hover:text-wv-text hover:border-wv-border-strong'
+                  }`}
+                  title={isWatched ? 'Remove from Watchlist' : 'Add to Watchlist'}
+                >
+                  <Star className={`w-3.5 h-3.5 ${isWatched ? 'fill-amber-500 text-amber-500' : 'text-wv-text-3'}`} />
+                  <span>{isWatched ? 'Watching' : 'Watch'}</span>
+                  {watchLoading && <span className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin ml-0.5" />}
+                </button>
+                {watchlistToast && (
+                  <span className="text-[11px] font-medium text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
+                    {watchlistToast}
+                  </span>
+                )}
                 <span className="text-[11px] text-wv-text-3">as of {result.as_of} close</span>
                 <Link
                   to={`/momentum?symbol=${encodeURIComponent(result.instrument)}`}

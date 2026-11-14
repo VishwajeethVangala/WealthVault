@@ -24,6 +24,7 @@ from storage.tables.repositories import (
     SnapshotsRepository,
     TargetAllocationRepository,
     UserRepository,
+    WatchlistRepository,
 )
 
 logger = logging.getLogger("wealthvault.account_deletion")
@@ -73,6 +74,7 @@ async def delete_user_data(owner_id: str) -> Dict[str, Any]:
         ("notification_prefs", NotificationPrefsRepository()),
         ("notifications", NotificationRepository()),
         ("push_sent", PushSentRepository()),
+        ("watchlist", WatchlistRepository()),
     ):
         try:
             removed[label] = await repo.delete_partition(owner_id)

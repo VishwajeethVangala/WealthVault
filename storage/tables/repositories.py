@@ -1044,3 +1044,51 @@ class PushSentRepository(BaseTableStorage):
 
     async def with_prefix(self, owner_id: str, prefix: str) -> List[Dict[str, Any]]:
         return await self.query_entities(user_id=owner_id, filter_query=f"RowKey ge '{prefix}' and RowKey lt '{prefix}~'")
+
+
+class WatchlistRepository(BaseTableStorage):
+    """User-tracked watchlist symbols (for momentum analysis, setups, and signals).
+
+    PartitionKey = owner_id (so account deletion removes them)
+    RowKey = normalized symbol, e.g. 'NSE:TATAMOTORS' or 'BSE:500209'
+    """
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="watchlist", connection_string=connection_string)
+
+    async def add_item(
+        self,
+        owner_id: str,
+        symbol: str,
+        name: Optional[str] = None,
+        notes: Optional[str] = None,
+        target_price: Optional[float] = None,
+        price_when_added: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        clean_sym = sanitize_key(symbol.strip().upper())
+        now = datetime.now(timezone.utc).isoformat()
+        data = {
+            "symbol": clean_sym,
+            "name": name or clean_sym.split(":")[-1],
+            "notes": notes or "",
+            "target_price": float(target_price) if target_price is not None else None,
+            "price_when_added": float(price_when_added) if price_when_added is not None else None,
+            "added_at": now,
+        }
+        await self.upsert_entity(user_id=owner_id, entity_id=clean_sym, data=data, mode="merge")
+        return data
+
+    async def remove_item(self, owner_id: str, symbol: str) -> bool:
+        clean_sym = sanitize_key(symbol.strip().upper())
+        return await self.delete_entity(user_id=owner_id, entity_id=clean_sym)
+
+    async def get_item(self, owner_id: str, symbol: str) -> Optional[Dict[str, Any]]:
+        clean_sym = sanitize_key(symbol.strip().upper())
+        return await self.get_entity(user_id=owner_id, entity_id=clean_sym)
+
+    async def list_items(self, owner_id: str) -> List[Dict[str, Any]]:
+        rows = await self.query_entities(user_id=owner_id)
+        keys = ("symbol", "name", "notes", "target_price", "price_when_added", "added_at")
+        items = [{k: r.get(k) for k in keys} for r in rows]
+        items.sort(key=lambda r: r.get("added_at") or "", reverse=True)
+        return items

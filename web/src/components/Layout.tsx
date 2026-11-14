@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Eye, EyeOff, LogOut, Moon, RefreshCw, Sun } from 'lucide-react'
-import { clearToken, fetchBrokerSessions, getStoredUser, syncBroker } from '../utils/api'
+import { clearToken, fetchBrokerSessions, fetchWatchlist, getStoredUser, syncBroker } from '../utils/api'
 import { PRIVACY_READY_PATHS, SHOW_THEME_TOGGLE } from '../utils/features'
 import { trackScreen } from '../utils/analytics'
 import { AnalyticsBanner } from './AnalyticsConsent'
@@ -30,9 +30,28 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   const { hidden, toggle: toggleHidden } = usePrivacy()
 
   const [sessions, setSessions] = useState<BrokerSessionInfo[]>([])
+  const [watchlistCount, setWatchlistCount] = useState<number>(0)
   const [isSyncing, setIsSyncing] = useState(false)
   const [syncProgress, setSyncProgress] = useState('')
   const [syncStatus, setSyncStatus] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
+
+  const loadWatchlistCount = useCallback(async () => {
+    try {
+      const res = await fetchWatchlist()
+      setWatchlistCount(res.count ?? res.items?.length ?? 0)
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  useEffect(() => {
+    loadWatchlistCount()
+    const onUpdate = () => {
+      loadWatchlistCount()
+    }
+    window.addEventListener('wv-watchlist-updated', onUpdate)
+    return () => window.removeEventListener('wv-watchlist-updated', onUpdate)
+  }, [loadWatchlistCount])
 
   const loadSessions = useCallback(async () => {
     try {
@@ -53,7 +72,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   }, [path])
   // Portfolio filters do not apply to single-stock or broker pages
   // (Holdings has its own toolbar, built on the same URL filters)
-  const hideGlobalFilters = path === '/brokers' || path === '/signals' || path === '/momentum' || path === '/strategy' || path === '/holdings' || path === '/account'
+  const hideGlobalFilters = path === '/brokers' || path === '/signals' || path === '/momentum' || path === '/strategy' || path === '/holdings' || path === '/account' || path === '/watchlist'
 
   const connected = sessions.filter((s) => s.status === 'CONNECTED').length
   const lastSync = useMemo(
@@ -71,6 +90,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
       ? ` · Prices ${dataFreshness === 'live' ? 'live' : 'stored'}, updated ${lastRefreshedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}`
       : ''
     if (path === '/holdings') return { title: 'Holdings', sub: `Merged across ${sessions.length} ${sessions.length === 1 ? 'broker' : 'brokers'} · ${syncLine}${priceLine}` }
+    if (path === '/watchlist') return { title: 'Watchlist', sub: 'Pre-flight radar: momentum trends and breakout signals for prospect stocks' }
     if (path === '/brokers') return { title: 'Brokers', sub: 'Connect, sync and manage your broker accounts' }
     if (path === '/signals') return { title: 'Signals', sub: 'Momentum and 200-DMA ATH breakout for the stocks you hold and your Chartink Stage 2 list' }
     if (path === '/momentum') return { title: 'Momentum', sub: 'Trend, returns and relative strength for one stock' }
@@ -132,7 +152,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
 
   return (
     <div className="app">
-      <Sidebar holdingsCount={holdingsCount} sessions={sessions} />
+      <Sidebar holdingsCount={holdingsCount} sessions={sessions} watchlistCount={watchlistCount} />
 
       <div className="main">
         <header className="topbar">

@@ -1,8 +1,10 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { CandlestickChart } from 'lucide-react'
 import { SymbolPicker } from '../components/analytics/AnalysisParts'
 import { AthBreakoutPanel } from '../components/strategies/AthBreakoutPanel'
+import { fetchWatchlist } from '../utils/api'
+import type { WatchlistItem } from '../types'
 
 export const AthStrategy: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -10,6 +12,13 @@ export const AthStrategy: React.FC = () => {
   const [symbol, setSymbol] = useState<string | null>(searchParams.get('symbol')?.toUpperCase() || null)
   const [runSeq, setRunSeq] = useState(0)
   const [panelStatus, setPanelStatus] = useState<{ loading: boolean; instrument?: string }>({ loading: false })
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
+
+  useEffect(() => {
+    fetchWatchlist()
+      .then((res) => setWatchlist(res.items || []))
+      .catch(() => {})
+  }, [])
 
   const updateParams = (changes: Record<string, string>) =>
     setSearchParams(
@@ -55,6 +64,7 @@ export const AthStrategy: React.FC = () => {
           loading={panelStatus.loading}
           activeInstrument={panelStatus.instrument}
           submitLabel="Run Strategy"
+          watchlist={watchlist}
         />
       </div>
 

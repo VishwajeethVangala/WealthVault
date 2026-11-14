@@ -33,7 +33,7 @@ from core.market_data.us_history import UsHistoryError, ensure_history, get_cand
 from core.market_data.user_client import get_user_kite_client
 from core.models import AssetClass, Holding
 from providers.brokers.indmoney import IndmoneyProvider
-from storage.tables.repositories import HoldingsRepository, SignalCacheRepository
+from storage.tables.repositories import HoldingsRepository, SignalCacheRepository, WatchlistRepository
 
 logger = logging.getLogger("wealthvault.api.signals")
 
@@ -161,7 +161,10 @@ async def _run_job_in(owner_id: str, job: Job) -> None:
     try:
         client = await get_user_kite_client(owner_id)
         holdings = await HoldingsRepository().get_holdings(owner_id=owner_id)
-        symbols = sorted(set((await _equity_symbol_map(holdings, client)).values()))
+        held_syms = set((await _equity_symbol_map(holdings, client)).values())
+        watch_items = await WatchlistRepository().list_items(owner_id=owner_id)
+        watch_syms = {it["symbol"] for it in watch_items if it.get("symbol")}
+        symbols = sorted(held_syms | watch_syms)
         job.total = len(symbols)
 
         benchmark = None
