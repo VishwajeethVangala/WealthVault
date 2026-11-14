@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse
 from apps.api.routers.accounts import get_current_user
 from core.market_data import get_market_data_service
 from core.market_data.indmoney_client import IndmoneyAuthRequiredError, IndmoneyMCPClient, IndmoneyRateLimitError, get_indmoney_mcp_client
-from core.market_data.kite_client import get_kite_mcp_client
+from core.market_data.kite_client import complete_kite_authorization, get_kite_mcp_client
 from core.market_data.indmoney_live import overlay_indmoney_live
 from core.market_data.mf_nav import apply_mf_values
 from core.market_data.user_client import get_user_kite_client
@@ -60,9 +60,9 @@ logger = logging.getLogger("wealthvault.api.portfolio")
 BROKER_METADATA_CATALOG = {
     "zerodha": {
         "display_name": "Zerodha Kite Connect",
-        "auth_type": "Daily Kite OAuth / Enctoken",
+        "auth_type": "OAuth 2.1 + PKCE (Daily Session)",
         "mcp_server_url": "https://mcp.kite.trade/mcp",
-        "mcp_protocol": "MCP Stdio / JSON-RPC v2.0",
+        "mcp_protocol": "MCP Streamable HTTP / JSON-RPC v2.0",
         "color": "#e03a3c",
         "tag": "ZK",
         "supported": True,
@@ -680,11 +680,11 @@ async def get_broker_sessions(
                     last_sync_time=conn_obj.last_sync_time or now_iso,
                     account_id=zk_account_id,
                     account_label=conn_obj.account_label,
-                    auth_type="Daily Kite OAuth / Enctoken",
+                    auth_type="OAuth 2.1 + PKCE (Daily Session)",
                     session_expires_at=kite_expiry.isoformat(),
                     is_expired=zk_is_expired,
                     mcp_server_url="https://mcp.kite.trade/mcp",
-                    mcp_protocol="MCP Stdio / JSON-RPC v2.0",
+                    mcp_protocol="MCP Streamable HTTP / JSON-RPC v2.0",
                     holdings_count=len(c_holdings),
                     total_valuation=c_val,
                     auth_url=zk_auth_url,
@@ -1157,6 +1157,28 @@ async def indmoney_oauth_callback(
         </html>
         """
     )
+
+
+@router.get(
+    "/oauth/kite/callback",
+    response_class=HTMLResponse,
+    summary="Zerodha Kite OAuth 2.1 PKCE Callback",
+    description="Receives OAuth 2.1 authorization code from Zerodha Kite MCP, exchanges for Bearer tokens, and persists session.",
+)
+async def kite_oauth_callback(
+    code: Optional[str] = Query(None, description="Authorization code from Zerodha Kite"),
+    state: Optional[str] = Query(None, description="PKCE state token"),
+    error: Optional[str] = Query(None, description="Error returned from Zerodha Kite"),
+    error_description: Optional[str] = Query(None, description="Error description"),
+) -> HTMLResponse:
+    """Handle Zerodha Kite OAuth 2.1 redirect and PKCE token exchange."""
+    status_code, body = await complete_kite_authorization(
+        code=code,
+        state=state,
+        error=error,
+        error_description=error_description,
+    )
+    return HTMLResponse(content=body, status_code=status_code)
 
 
 @router.get(

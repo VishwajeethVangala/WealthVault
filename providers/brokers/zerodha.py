@@ -46,13 +46,11 @@ class ZerodhaProvider(BrokerProvider):
         return get_kite_mcp_client(connection_id=self.connection_id, owner_id=self.owner_id)
 
     async def get_login_url(self) -> Optional[str]:
-        """Get interactive session authorization URL from persistent Kite MCP bridge."""
+        """Get interactive OAuth 2.1 PKCE authorization URL from persistent Kite MCP bridge."""
         client = self.client
         try:
-            await client.ensure_connected()
-            if not client.auth_url:
-                await client.reset_session()
-            self.login_url = client.auth_url
+            await client.ensure_client()
+            self.login_url = client.get_authorization_url()
             return self.login_url
         except Exception as exc:
             logger.warning("Could not retrieve Kite MCP auth URL: %s", exc)
