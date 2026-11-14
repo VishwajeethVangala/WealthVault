@@ -178,10 +178,10 @@ fun OverviewScreen(
     val context = LocalContext.current
 
     LaunchedEffect(Unit) { if (avm.history.value.data == null) avm.loadOverviewPanels() }
-    // the Nifty moves through the session: read it again every minute while the market is open
+    // the Nifty moves through the session: read it again every 2 minutes while the market is open
     LaunchedEffect(Unit) {
         while (true) {
-            delay(if (indiaSessionOpen()) 60_000 else 600_000)
+            delay(if (indiaSessionOpen()) 120_000 else 600_000)
             avm.loadNifty()
         }
     }

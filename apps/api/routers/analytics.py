@@ -15,6 +15,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from apps.api.routers.accounts import get_current_user
 from core.analytics import analyze_momentum
 from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
+from core.market_data.groww_market import (
+    fetch_groww_daily_candles,
+    get_user_groww_client,
+    resolve_titles,
+    split_instrument,
+)
 from core.market_data.history import (
     MAX_LOOKBACK_DAYS,
     NIFTY_50_SYMBOL,
@@ -22,6 +28,10 @@ from core.market_data.history import (
     InstrumentNotFoundError,
     drop_incomplete_today,
     get_history_service,
+)
+from core.market_data.indmoney_market import (
+    fetch_daily_candles,
+    get_user_indmoney_client,
 )
 from core.market_data.kite_client import KiteAuthRequiredError, KiteMCPClient, get_kite_mcp_client
 from core.market_data.live_bar import apply_live_quote, india_today
@@ -70,39 +80,110 @@ async def _load_candles(
 ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Optional[List[Dict[str, Any]]]]:
     """Resolve the symbol and fetch daily candles (and optionally NIFTY 50), mapping errors to HTTP.
 
-    With `full_history`, pages back to the listing date instead of using `lookback_days`.
+    Follows tiered broker priority:
+    1. Zerodha Kite (when authenticated)
+    2. Groww (when Kite unauthenticated, absent, or failed)
+    3. INDmoney (when Groww unauthenticated, absent, or failed)
     """
     history = get_history_service()
     client = await _get_user_kite_client(owner_id)
+    kite_exc: Optional[KiteAuthRequiredError] = None
+    is_kite_auth = getattr(client, "is_authenticated", None)
 
-    try:
-        instrument = await history.resolve_instrument(client, symbol)
-        token = int(instrument["instrument_token"])
-        if full_history:
-            candles = await history.get_full_daily_history(client, token, earliest=instrument.get("listing_date") or None)
-        else:
-            candles = await history.get_daily_candles(client, token, lookback_days)
+    # 1. Priority 1: Zerodha Kite
+    if is_kite_auth is not False:
+        try:
+            instrument = await history.resolve_instrument(client, symbol)
+            token = int(instrument["instrument_token"])
+            if full_history:
+                candles = await history.get_full_daily_history(client, token, earliest=instrument.get("listing_date") or None)
+            else:
+                candles = await history.get_daily_candles(client, token, lookback_days)
 
-        benchmark_candles: Optional[List[Dict[str, Any]]] = None
-        if with_benchmark and token != NIFTY_50_TOKEN:
-            try:
-                benchmark_candles = await history.get_daily_candles(client, NIFTY_50_TOKEN, lookback_days)
-            except KiteAuthRequiredError:
-                raise
-            except Exception as exc:
-                logger.warning("Benchmark candles unavailable, skipping relative strength: %s", exc)
-    except InstrumentNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except KiteAuthRequiredError as exc:
-        raise _kite_auth_exception(exc)
-    except Exception as exc:
-        logger.error("Price history fetch failed for %s: %s", symbol, exc, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Could not fetch price history from Kite: {exc}",
-        )
+            benchmark_candles: Optional[List[Dict[str, Any]]] = None
+            if with_benchmark and token != NIFTY_50_TOKEN:
+                try:
+                    benchmark_candles = await history.get_daily_candles(client, NIFTY_50_TOKEN, lookback_days)
+                except Exception as exc:
+                    logger.warning("Benchmark candles unavailable: %s", exc)
 
-    return instrument, candles, benchmark_candles
+            if candles:
+                return instrument, candles, benchmark_candles
+        except KiteAuthRequiredError as exc:
+            kite_exc = exc
+        except InstrumentNotFoundError:
+            pass
+        except Exception as exc:
+            logger.warning("Kite price history fetch note for %s: %s", symbol, exc)
+
+    # 2. Priority 2: Groww
+    grw_client = await get_user_groww_client(owner_id)
+    if grw_client is not None:
+        try:
+            clean = symbol.strip().upper()
+            qualified = clean if ":" in clean else f"NSE:{clean}"
+            exchange, ticker = split_instrument(qualified)
+            titles = await resolve_titles(grw_client, [qualified])
+            title_info = titles.get(qualified)
+            name = title_info[0] if title_info else ticker
+
+            instrument = {
+                "id": qualified,
+                "instrument_token": abs(hash(qualified)) % 100000000,
+                "tradingsymbol": ticker,
+                "exchange": exchange,
+                "name": name,
+                "segment": exchange,
+            }
+            days = 1825 if full_history else min(lookback_days, 1825)
+            candles = await fetch_groww_daily_candles(grw_client, qualified, days)
+            if candles:
+                benchmark_candles = None
+                ind_cli = await get_user_indmoney_client(owner_id)
+                if with_benchmark and ind_cli is not None:
+                    try:
+                        benchmark_candles = await fetch_daily_candles(ind_cli, NIFTY_50_SYMBOL, days)
+                    except Exception:
+                        benchmark_candles = None
+                return instrument, candles, benchmark_candles
+        except Exception as exc:
+            logger.warning("Groww price history fallback note for %s: %s", symbol, exc)
+
+    # 3. Priority 3: INDmoney
+    ind_client = await get_user_indmoney_client(owner_id)
+    if ind_client is not None:
+        try:
+            clean = symbol.strip().upper()
+            qualified = clean if ":" in clean else f"NSE:{clean}"
+            exchange, _, ticker = qualified.partition(":")
+            instrument = {
+                "id": qualified,
+                "instrument_token": abs(hash(qualified)) % 100000000,
+                "tradingsymbol": ticker,
+                "exchange": exchange or "NSE",
+                "name": ticker,
+                "segment": exchange or "NSE",
+            }
+            candles = await fetch_daily_candles(ind_client, qualified, lookback_days)
+            if candles:
+                benchmark_candles = None
+                if with_benchmark:
+                    try:
+                        benchmark_candles = await fetch_daily_candles(ind_client, NIFTY_50_SYMBOL, lookback_days)
+                    except Exception:
+                        benchmark_candles = None
+                return instrument, candles, benchmark_candles
+        except Exception as exc:
+            logger.warning("INDmoney price history fallback note for %s: %s", symbol, exc)
+
+    # Neither Kite, Groww, nor INDmoney could provide candles
+    if kite_exc is not None and grw_client is None and ind_client is None:
+        raise _kite_auth_exception(kite_exc)
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"No price history found for '{symbol}' from Kite, Groww, or INDmoney.",
+    )
 
 
 async def _apply_live(
@@ -111,14 +192,16 @@ async def _apply_live(
     candles: List[Dict[str, Any]],
     benchmark: Optional[List[Dict[str, Any]]] = None,
 ) -> Tuple[List[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[float]]:
-    """Fold the live Kite quote into today's candle (and the benchmark's). Returns the live price when applied."""
+    """Fold the live quote into today's candle (and the benchmark's). Returns the live price when applied."""
     today = india_today()
     if not today:
         return candles, benchmark, None
     own_id = _qualified_symbol(instrument).upper()
     ids = [own_id] + ([NIFTY_50_SYMBOL.upper()] if benchmark else [])
     try:
-        quotes, _ok = await get_market_data_service().fetch_live_quotes(ids, client=await _get_user_kite_client(owner_id))
+        quotes, _ok = await get_market_data_service().fetch_live_quotes(
+            ids, client=await _get_user_kite_client(owner_id), owner_id=owner_id
+        )
     except Exception as exc:
         logger.warning("Live quote unavailable, using completed candles: %s", exc)
         return candles, benchmark, None

@@ -11,6 +11,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
+from core.market_data.groww_market import get_user_groww_client
 from core.market_data.indmoney_market import details_for, get_user_indmoney_client
 
 logger = logging.getLogger("wealthvault.market_data.stock_search")
@@ -47,6 +48,34 @@ def rank(query: str, rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     return [_suggestion(r) for r in sorted(seen.values(), key=order)[:LIMIT]]
 
 
+async def _from_groww(owner_id: str, query: str) -> List[Dict[str, str]]:
+    client = await get_user_groww_client(owner_id)
+    if client is None:
+        return []
+    res = await client.call_tool("curate_symbols", {"query": query, "entity_type": "Stocks"})
+    inner = res.get("result", res) if isinstance(res, dict) else {}
+    matches = inner.get("matches", []) if isinstance(inner, dict) else []
+    out = []
+    seen = set()
+    for m in matches:
+        if not isinstance(m, dict) or not m.get("symbol"):
+            continue
+        sym = str(m["symbol"]).upper()
+        exch = str(m.get("exchange", "NSE")).upper()
+        if sym in seen:
+            continue
+        seen.add(sym)
+        out.append({
+            "symbol": sym,
+            "instrument": f"{exch}:{sym}",
+            "name": str(m.get("title") or sym),
+            "exchange": exch,
+        })
+        if len(out) >= LIMIT:
+            break
+    return out
+
+
 async def _from_indmoney(owner_id: str, query: str) -> List[Dict[str, str]]:
     client = await get_user_indmoney_client(owner_id)
     if client is None:
@@ -68,15 +97,28 @@ async def search_stocks(kite_client: Any, owner_id: str, query: str) -> List[Dic
     hit = _cache.get(q.upper())
     if hit and time.monotonic() - hit[0] < CACHE_SECONDS:
         return hit[1]
-    try:
-        by_symbol, by_name = await asyncio.gather(kite_client.search_instruments(q), kite_client.search_instruments(q, "name"))
-        result = rank(q, list(by_symbol) + list(by_name))
-    except Exception as exc:
-        logger.warning("Kite instrument search failed (%s); trying INDmoney", exc)
+    is_kite_auth = getattr(kite_client, "is_authenticated", None)
+    if is_kite_auth is not False:
         try:
-            return await _from_indmoney(owner_id, q)
-        except Exception as exc2:
-            logger.warning("INDmoney name lookup failed: %s", exc2)
-            return []
-    _cache[q.upper()] = (time.monotonic(), result)
-    return result
+            by_symbol, by_name = await asyncio.gather(kite_client.search_instruments(q), kite_client.search_instruments(q, "name"))
+            result = rank(q, list(by_symbol) + list(by_name))
+            if result:
+                _cache[q.upper()] = (time.monotonic(), result)
+                return result
+        except Exception as exc:
+            logger.warning("Kite instrument search failed (%s); trying Groww/INDmoney", exc)
+    try:
+        groww_res = await _from_groww(owner_id, q)
+        if groww_res:
+            _cache[q.upper()] = (time.monotonic(), groww_res)
+            return groww_res
+    except Exception as exc_grw:
+        logger.warning("Groww symbol search failed: %s", exc_grw)
+    try:
+        ind_res = await _from_indmoney(owner_id, q)
+        if ind_res:
+            _cache[q.upper()] = (time.monotonic(), ind_res)
+            return ind_res
+    except Exception as exc2:
+        logger.warning("INDmoney name lookup failed: %s", exc2)
+    return []

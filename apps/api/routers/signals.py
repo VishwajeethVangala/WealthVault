@@ -24,6 +24,8 @@ from core.analytics.equity_signals import MOMENTUM_LOOKBACK_DAYS, _no_partial, b
 from core.analytics.live_signals import live_india_rows, live_us_rows
 from core.analytics.portfolio_risk import portfolio_risk
 from core.market_data.candle_store import get_india_candles
+from core.market_data.groww_market import get_user_groww_client
+from core.market_data.indmoney_market import get_user_indmoney_client
 from core.market_data.history import NIFTY_50_SYMBOL, NIFTY_50_TOKEN
 from core.market_data.indmoney_client import IndmoneyAuthRequiredError
 from core.market_data.kite_client import KiteAuthRequiredError
@@ -171,7 +173,8 @@ async def _run_job_in(owner_id: str, job: Job) -> None:
         try:
             benchmark = await load_benchmark(client)
         except KiteAuthRequiredError:
-            raise
+            if await get_user_groww_client(owner_id) is None and await get_user_indmoney_client(owner_id) is None:
+                raise
         except Exception as exc:
             logger.warning("Benchmark unavailable for signals: %s", exc)
 
@@ -191,7 +194,8 @@ async def _run_job_in(owner_id: str, job: Job) -> None:
                 # Kite reports some per-stock failures the same way as an expired login, so confirm
                 # the session is really gone before stopping the whole run.
                 if await session_really_expired(client):
-                    auth_error.append(exc)
+                    if await get_user_groww_client(owner_id) is None and await get_user_indmoney_client(owner_id) is None:
+                        auth_error.append(exc)
                 return False
             except Exception as exc:
                 logger.warning("Signals attempt failed for %s: %s", symbol, exc)
