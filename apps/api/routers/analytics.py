@@ -142,7 +142,7 @@ async def _load_candles(
                 ind_cli = await get_user_indmoney_client(owner_id)
                 if with_benchmark and ind_cli is not None:
                     try:
-                        benchmark_candles = await fetch_daily_candles(ind_cli, NIFTY_50_SYMBOL, days)
+                        benchmark_candles = await fetch_daily_candles(ind_cli, NIFTY_50_SYMBOL, min(days, 360))
                     except Exception:
                         benchmark_candles = None
                 return instrument, candles, benchmark_candles
@@ -164,12 +164,13 @@ async def _load_candles(
                 "name": ticker,
                 "segment": exchange or "NSE",
             }
-            candles = await fetch_daily_candles(ind_client, qualified, lookback_days)
+            ind_days = min(lookback_days, 360)
+            candles = await fetch_daily_candles(ind_client, qualified, ind_days)
             if candles:
                 benchmark_candles = None
                 if with_benchmark:
                     try:
-                        benchmark_candles = await fetch_daily_candles(ind_client, NIFTY_50_SYMBOL, lookback_days)
+                        benchmark_candles = await fetch_daily_candles(ind_client, NIFTY_50_SYMBOL, ind_days)
                     except Exception:
                         benchmark_candles = None
                 return instrument, candles, benchmark_candles

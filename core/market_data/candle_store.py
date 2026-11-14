@@ -185,7 +185,7 @@ async def get_india_candles(
                 ind_client = await get_user_indmoney_client(owner_id)
                 if ind_client is not None:
                     try:
-                        full = _clean(await fetch_daily_candles(ind_client, str(instrument.get("id") or ""), 365))
+                        full = _clean(await fetch_daily_candles(ind_client, str(instrument.get("id") or ""), 360))
                     except Exception as exc:
                         logger.warning("INDmoney full history fallback note for %s: %s", instrument.get("id"), exc)
 

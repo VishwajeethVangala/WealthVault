@@ -188,12 +188,15 @@ async def fetch_daily_candles(client: IndmoneyMCPClient, instrument: str, lookba
     """Daily candles for the last `lookback_days` days (at most a year), oldest first; [] when not matched."""
     if lookback_days > 360:
         return []
-    keys = await resolve_keys(client, [instrument])
-    key = keys.get(instrument.upper())
+    clean = instrument.strip().upper()
+    inst_key = clean if ":" in clean else f"NSE:{clean}"
+    keys = await resolve_keys(client, [inst_key])
+    key = keys.get(inst_key)
     if not key:
         return []
+    lookback = "14d" if 0 < lookback_days <= 14 else "1y"
     async with _gate():
-        raw = await client.call_tool("get_indian_stocks_ohlc", {"ind_key": key, "interval": "1day", "lookback": "14d" if lookback_days <= 14 else "1y"})
+        raw = await client.call_tool("get_indian_stocks_ohlc", {"ind_key": key, "interval": "1day", "lookback": lookback})
     out: List[Dict[str, Any]] = []
     for c in (raw or {}).get("candles") or []:
         try:
