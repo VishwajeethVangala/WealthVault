@@ -36,7 +36,7 @@ NPX_BIN = shutil.which("npx") or shutil.which("npx.cmd") or "npx"
 class MarketQuoteCache:
     """Thread-safe in-memory cache with Time-To-Live (TTL) expiration."""
 
-    def __init__(self, default_ttl_seconds: float = 30.0) -> None:
+    def __init__(self, default_ttl_seconds: float = 120.0) -> None:
         self.default_ttl = default_ttl_seconds
         self._cache: Dict[str, Tuple[QuoteItem, float]] = {}
 
@@ -83,7 +83,7 @@ class MCPMarketDataService:
     def __init__(
         self,
         server_url: str = "https://mcp.kite.trade/mcp",
-        cache_ttl_seconds: float = 15.0,
+        cache_ttl_seconds: float = 120.0,
         request_timeout_seconds: float = 45.0,
     ) -> None:
         self.server_url = server_url
@@ -167,8 +167,12 @@ class MCPMarketDataService:
         self,
         instruments: List[str],
         client: Optional[Any] = None,
+        owner_id: Optional[str] = None,
     ) -> Tuple[Dict[str, QuoteItem], bool]:
-        """Fetch quotes for instruments, utilizing TTL cache and batching to Kite MCP.
+        """Fetch quotes for instruments, utilizing 2-minute TTL cache and tiered broker priority:
+        1. Zerodha Kite (when authenticated)
+        2. Groww (when Kite unauthenticated or missing quotes)
+        3. INDmoney (when Groww unauthenticated or missing quotes)
 
         Returns:
             Tuple of (Map of instrument to QuoteItem, boolean indicating if live fetch succeeded).
@@ -176,7 +180,7 @@ class MCPMarketDataService:
         if not instruments:
             return {}, True
 
-        # Check in-memory cache first
+        # Check in-memory cache first (2-min TTL)
         cached_quotes, missing = self.cache.get_multi(instruments)
         if not missing:
             logger.debug("Served %d market quotes entirely from TTL cache", len(cached_quotes))
@@ -185,88 +189,87 @@ class MCPMarketDataService:
         combined: Dict[str, QuoteItem] = dict(cached_quotes)
         live_fetched = False
 
-        # Batch query Kite MCP for missing instruments via persistent client (max 250 per batch)
-        batch_size = 250
-        batches = [missing[i : i + batch_size] for i in range(0, len(missing), batch_size)]
         client = client or get_kite_mcp_client()
-        kite_login_lapsed = False
+        resolved_owner = owner_id or getattr(client, "owner_id", None)
+        is_auth = getattr(client, "is_authenticated", None)
+        # If client explicitly reports is_authenticated == False, Kite login has lapsed / is absent
+        kite_login_lapsed = (is_auth is False)
         split_state = [MAX_QUOTE_SPLITS, False]  # extra calls left, and whether Kite refused anything
 
-        for batch in batches:
-            try:
-                payload = await self._quotes_or_split(client, batch, split_state)
-                now_iso = datetime.now(timezone.utc).isoformat()
-                for inst_key, data in payload.items():
-                    if not isinstance(data, dict):
-                        continue
+        # 1. Priority 1: Zerodha Kite (when authenticated or generic mock client)
+        if not kite_login_lapsed:
+            batch_size = 250
+            batches = [missing[i : i + batch_size] for i in range(0, len(missing), batch_size)]
+            for batch in batches:
+                try:
+                    payload = await self._quotes_or_split(client, batch, split_state)
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    for inst_key, data in payload.items():
+                        if not isinstance(data, dict):
+                            continue
 
-                    last_price = float(data.get("last_price", 0.0) or 0.0)
-                    ohlc = data.get("ohlc", {})
-                    close_price = float(ohlc.get("close", 0.0) or 0.0)
-                    open_price = float(ohlc.get("open", 0.0) or 0.0)
-                    high_price = float(ohlc.get("high", 0.0) or 0.0)
-                    low_price = float(ohlc.get("low", 0.0) or 0.0)
+                        last_price = float(data.get("last_price", 0.0) or 0.0)
+                        ohlc = data.get("ohlc", {})
+                        close_price = float(ohlc.get("close", 0.0) or 0.0)
+                        open_price = float(ohlc.get("open", 0.0) or 0.0)
+                        high_price = float(ohlc.get("high", 0.0) or 0.0)
+                        low_price = float(ohlc.get("low", 0.0) or 0.0)
 
-                    # Kite's own `net_change` reads 0 through the MCP even while the price is moving, so the day
-                    # change is always last price minus the previous close; net_change is only a fallback.
-                    net_change = data.get("net_change")
-                    if close_price > 0:
-                        day_change = round(last_price - close_price, 2)
-                    elif net_change is not None:
-                        day_change = float(net_change)
-                    else:
-                        day_change = 0.0
+                        net_change = data.get("net_change")
+                        if close_price > 0:
+                            day_change = round(last_price - close_price, 2)
+                        elif net_change is not None:
+                            day_change = float(net_change)
+                        else:
+                            day_change = 0.0
 
-                    day_pct = (
-                        round((day_change / close_price) * 100.0, 2)
-                        if close_price > 0
-                        else 0.0
-                    )
+                        day_pct = (
+                            round((day_change / close_price) * 100.0, 2)
+                            if close_price > 0
+                            else 0.0
+                        )
 
-                    item = QuoteItem(
-                        instrument=inst_key.upper(),
-                        last_price=last_price,
-                        day_change=day_change,
-                        day_change_percentage=day_pct,
-                        open_price=open_price,
-                        high_price=high_price,
-                        low_price=low_price,
-                        close_price=close_price,
-                        timestamp=now_iso,
-                    )
-                    self.cache.set(inst_key.upper(), item)
-                    combined[inst_key.upper()] = item
+                        item = QuoteItem(
+                            instrument=inst_key.upper(),
+                            last_price=last_price,
+                            day_change=day_change,
+                            day_change_percentage=day_pct,
+                            open_price=open_price,
+                            high_price=high_price,
+                            low_price=low_price,
+                            close_price=close_price,
+                            timestamp=now_iso,
+                        )
+                        self.cache.set(inst_key.upper(), item)
+                        combined[inst_key.upper()] = item
 
-                if payload:
-                    live_fetched = True
-            except Exception as exc:
-                logger.warning("Live MCP market quotes query note (%s): %s", self.server_url, exc)
-                kite_login_lapsed = isinstance(exc, KiteAuthRequiredError)
-                break
+                    if payload:
+                        live_fetched = True
+                except Exception as exc:
+                    logger.warning("Live MCP market quotes query note (%s): %s", self.server_url, exc)
+                    kite_login_lapsed = isinstance(exc, KiteAuthRequiredError)
+                    break
 
-        # Only when Kite's login has lapsed (it does daily): the user's other brokers price what is missing, INDmoney
-        # first, then Groww, inside one shared time budget. A live Kite session is never second-guessed, and slow
-        # brokers must not hold up the page.
-        owner_id = getattr(client, "owner_id", None)
-        # Kite refusing every quote with a live login is treated like a lapsed one: the other brokers price instead
-        if (kite_login_lapsed or (split_state[1] and not live_fetched)) and owner_id:
+        # Fallback hierarchy when Kite is absent/lapsed or refused quotes:
+        # Priority 2: Groww, Priority 3: INDmoney
+        if (kite_login_lapsed or (split_state[1] and not live_fetched)) and resolved_owner:
             deadline = time.monotonic() + INDMONEY_FALLBACK_SECONDS
             for name, get_client, fetch in (
-                ("INDmoney", get_user_indmoney_client, fetch_indmoney_quotes),
                 ("Groww", get_user_groww_client, fetch_groww_quotes),
+                ("INDmoney", get_user_indmoney_client, fetch_indmoney_quotes),
             ):
                 left = [i for i in missing if i not in combined]
                 remaining = deadline - time.monotonic()
                 if not left or remaining < MIN_FALLBACK_SECONDS:  # a sliver of budget cannot finish a broker call
                     break
                 try:
-                    other = await get_client(owner_id)
+                    other = await get_client(resolved_owner)
                     if other is None:
                         continue
                     found = await asyncio.wait_for(fetch(other, left), timeout=max(0.1, deadline - time.monotonic()))
                     for inst_key, item in found.items():
-                        self.cache.set(inst_key, item)
-                        combined[inst_key] = item
+                        self.cache.set(inst_key.upper(), item)
+                        combined[inst_key.upper()] = item
                         live_fetched = True
                 except Exception as exc:
                     logger.warning("%s quote fallback unavailable: %s", name, exc)
@@ -277,6 +280,7 @@ class MCPMarketDataService:
         self,
         holdings: List[Holding],
         client: Optional[Any] = None,
+        owner_id: Optional[str] = None,
     ) -> Tuple[List[Holding], str]:
         """Enrich a list of holdings with live market prices, updating current value and P&L.
 
@@ -303,7 +307,8 @@ class MCPMarketDataService:
             symbol_to_instrument.update(await resolve_indmoney_symbols(indmoney_codes, client))
 
         instruments_to_query = list(set(symbol_to_instrument.values()))
-        quotes_map, live_succeeded = await self.fetch_live_quotes(instruments_to_query, client=client)
+        resolved_owner = owner_id or getattr(client, "owner_id", None) or (holdings[0].owner_id if holdings else None)
+        quotes_map, live_succeeded = await self.fetch_live_quotes(instruments_to_query, client=client, owner_id=resolved_owner)
 
         enriched: List[Holding] = []
         for h in holdings:

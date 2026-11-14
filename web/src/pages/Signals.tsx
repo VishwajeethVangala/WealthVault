@@ -210,7 +210,7 @@ export const Signals: React.FC = () => {
   const list = isUs ? null : stage2?.list ?? null
   const hasList = !!list
 
-  // Live Kite prices for the Chartink stocks: every 20s during the session, every 5 min otherwise; paused while the tab is hidden
+  // Live prices for the Chartink stocks: every 2 minutes (120s) during the session, every 5 min otherwise; paused while the tab is hidden
   useEffect(() => {
     if (!hasList) return
     let stop = false
@@ -224,7 +224,7 @@ export const Signals: React.FC = () => {
           /* keep the last prices */
         }
       }
-      if (!stop) t = window.setTimeout(tick, indiaSessionActive() ? 20_000 : 300_000)
+      if (!stop) t = window.setTimeout(tick, indiaSessionActive() ? 120_000 : 300_000)
     }
     tick()
     return () => {
@@ -233,7 +233,7 @@ export const Signals: React.FC = () => {
     }
   }, [hasList])
 
-  // Live USD prices: every 20s while the US session is active, every 5 min otherwise
+  // Live USD prices: every 2 minutes (120s) while the US session is active, every 5 min otherwise
   useEffect(() => {
     if (!isUs) return
     let stop = false
@@ -250,7 +250,7 @@ export const Signals: React.FC = () => {
           /* keep the last prices */
         }
       }
-      if (!stop) t = window.setTimeout(tick, usSessionActive() ? 20_000 : 300_000)
+      if (!stop) t = window.setTimeout(tick, usSessionActive() ? 120_000 : 300_000)
     }
     tick()
     return () => {

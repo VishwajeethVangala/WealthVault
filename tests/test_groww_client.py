@@ -590,24 +590,24 @@ class StandInTests(unittest.TestCase):
                 patch("core.market_data.service.INDMONEY_FALLBACK_SECONDS", budget):
             return run(svc.fetch_live_quotes(list(instruments), client=kite))
 
-    def test_indmoney_first_then_groww_for_what_is_left(self):
-        ind = AsyncMock(return_value={"NSE:A": quote("NSE:A", 10.0)})
-        grw = AsyncMock(return_value={"NSE:B": quote("NSE:B", 20.0)})
+    def test_groww_first_then_indmoney_for_what_is_left(self):
+        grw = AsyncMock(return_value={"NSE:A": quote("NSE:A", 10.0)})
+        ind = AsyncMock(return_value={"NSE:B": quote("NSE:B", 20.0)})
         quotes, ok = self.fetch(LoggedOutKite(), (object(), ind), (object(), grw))
         self.assertTrue(ok)
         self.assertEqual({k: v.last_price for k, v in quotes.items()}, {"NSE:A": 10.0, "NSE:B": 20.0})
-        self.assertEqual(grw.await_args.args[1], ["NSE:B"])  # Groww is only asked for what INDmoney did not price
+        self.assertEqual(ind.await_args.args[1], ["NSE:B"])  # INDmoney is only asked for what Groww did not price
 
     def test_groww_alone_serves_a_user_without_indmoney(self):
         grw = AsyncMock(return_value={"NSE:A": quote("NSE:A", 10.0), "NSE:B": quote("NSE:B", 20.0)})
         quotes, _ = self.fetch(LoggedOutKite(), (None, AsyncMock()), (object(), grw))
         self.assertEqual(set(quotes), {"NSE:A", "NSE:B"})
 
-    def test_groww_is_not_asked_when_indmoney_priced_everything(self):
-        ind = AsyncMock(return_value={"NSE:A": quote("NSE:A", 1.0), "NSE:B": quote("NSE:B", 2.0)})
-        grw = AsyncMock(return_value={})
+    def test_indmoney_is_not_asked_when_groww_priced_everything(self):
+        grw = AsyncMock(return_value={"NSE:A": quote("NSE:A", 1.0), "NSE:B": quote("NSE:B", 2.0)})
+        ind = AsyncMock(return_value={})
         self.fetch(LoggedOutKite(), (object(), ind), (object(), grw))
-        self.assertFalse(grw.called)
+        self.assertFalse(ind.called)
 
     def test_neither_broker_is_asked_while_kite_is_up_or_fails_for_another_reason(self):
         class Flaky:
@@ -633,16 +633,16 @@ class StandInTests(unittest.TestCase):
             await asyncio.sleep(5)
             return {}
 
-        grw = AsyncMock(return_value={"NSE:A": quote("NSE:A", 1.0)})
+        ind = AsyncMock(return_value={"NSE:A": quote("NSE:A", 1.0)})
         started = time.monotonic()
-        quotes, _ = self.fetch(LoggedOutKite(), (object(), slow), (object(), grw), budget=0.4)
+        quotes, _ = self.fetch(LoggedOutKite(), (object(), ind), (object(), slow), budget=0.4)
         self.assertLess(time.monotonic() - started, 2.0)
-        self.assertEqual(quotes, {})  # INDmoney used the whole budget, so Groww was not waited for
-        self.assertFalse(grw.called)
+        self.assertEqual(quotes, {})  # Groww used the whole budget, so INDmoney was not waited for
+        self.assertFalse(ind.called)
 
     def test_a_broker_that_errors_does_not_stop_the_next_one(self):
-        ind = AsyncMock(side_effect=RuntimeError("down"))
-        grw = AsyncMock(return_value={"NSE:A": quote("NSE:A", 3.0)})
+        grw = AsyncMock(side_effect=RuntimeError("down"))
+        ind = AsyncMock(return_value={"NSE:A": quote("NSE:A", 3.0)})
         quotes, _ = self.fetch(LoggedOutKite(), (object(), ind), (object(), grw))
         self.assertEqual(quotes["NSE:A"].last_price, 3.0)
 
@@ -665,13 +665,13 @@ class CandleStandInTests(unittest.TestCase):
 
     ROW = [{"date": "2026-10-22", "open": 1, "high": 1, "low": 1, "close": 5.0, "volume": 1}]
 
-    def test_groww_tops_up_when_indmoney_is_absent_or_empty(self):
-        self.assertEqual(self.recent(None, object(), [], self.ROW), (self.ROW, True))
-        self.assertEqual(self.recent(object(), object(), [], self.ROW), (self.ROW, True))
+    def test_indmoney_tops_up_when_groww_is_absent_or_empty(self):
+        self.assertEqual(self.recent(object(), None, self.ROW, []), (self.ROW, True))
+        self.assertEqual(self.recent(object(), object(), self.ROW, []), (self.ROW, True))
 
-    def test_indmoney_wins_when_it_has_candles(self):
+    def test_groww_wins_when_it_has_candles(self):
         other = [{**self.ROW[0], "close": 9.0}]
-        self.assertEqual(self.recent(object(), object(), other, self.ROW), (other, True))
+        self.assertEqual(self.recent(object(), object(), self.ROW, other), (other, True))
 
     def test_with_neither_the_kite_login_error_stands(self):
         with self.assertRaises(KiteAuthRequiredError):

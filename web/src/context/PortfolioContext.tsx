@@ -98,7 +98,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     load()
 
-    // NSE cash session, Mon-Fri 09:15-15:30 IST: refresh prices every 20s then, every 5 min otherwise.
+    // NSE cash session, Mon-Fri 09:15-15:30 IST: refresh prices every 2 minutes (120s) then, every 5 min otherwise.
     // Nothing runs while the tab is hidden, and returning to the tab refreshes straight away.
     const marketOpen = () => {
       const ist = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
@@ -111,7 +111,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       timer = window.setTimeout(async () => {
         if (!document.hidden) await load(true)
         schedule()
-      }, marketOpen() ? 20_000 : 300_000)
+      }, marketOpen() ? 120_000 : 300_000)
     }
     const onVisible = () => {
       if (!document.hidden) {

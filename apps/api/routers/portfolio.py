@@ -274,7 +274,9 @@ async def get_portfolio_holdings(
             except asyncio.TimeoutError:
                 logger.warning("INDmoney live re-read timed out; showing stored INDmoney values")
             try:
-                enriched, _ = await market_service.enrich_holdings_with_live_quotes(filtered, client=await get_user_kite_client(current_user_id))
+                enriched, _ = await market_service.enrich_holdings_with_live_quotes(
+                    filtered, client=await get_user_kite_client(current_user_id), owner_id=current_user_id
+                )
                 return await apply_mf_values(enriched)
             except Exception as quote_err:
                 logger.warning("Market quote enrichment note for persisted holdings: %s", quote_err)
@@ -347,7 +349,9 @@ async def get_market_quotes(
     """Fetch live market data quotes from MCP with TTL cache protection."""
     market_service = get_market_data_service()
     inst_list = [i.strip().upper() for i in instruments.split(",") if i.strip()]
-    quotes_map, live_succeeded = await market_service.fetch_live_quotes(inst_list, client=await get_user_kite_client(current_user_id))
+    quotes_map, live_succeeded = await market_service.fetch_live_quotes(
+        inst_list, client=await get_user_kite_client(current_user_id), owner_id=current_user_id
+    )
     freshness = "live" if live_succeeded else "cached"
 
     return MarketQuotesResponse(

@@ -189,7 +189,7 @@ async def compute_stock_signals(client: Any, symbol: str, benchmark: Optional[Li
             await asyncio.sleep(1.0 * (attempt + 1))
         except KiteAuthRequiredError:
             owner = getattr(client, "owner_id", None)
-            if await get_user_indmoney_client(owner) is None and await get_user_groww_client(owner) is None:
+            if await get_user_groww_client(owner) is None and await get_user_indmoney_client(owner) is None:
                 raise
             instrument = await _stored_instrument(symbol) or {}
             if not instrument:

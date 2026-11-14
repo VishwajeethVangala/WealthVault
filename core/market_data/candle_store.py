@@ -72,22 +72,41 @@ async def _save(token: str, candles: List[Dict[str, Any]], years: List[str], met
 
 
 async def _recent(client: Any, history: Any, token: int, instrument: Dict[str, Any], lookback: int) -> Tuple[List[Dict[str, Any]], bool]:
-    """The latest finished candles: from Kite, or from INDmoney/Groww when Kite's login has lapsed (second item True)."""
-    try:
-        return _clean(await history.get_daily_candles(client, token, lookback)), False
-    except KiteAuthRequiredError:
-        owner_id = getattr(client, "owner_id", None)
-        ind_client = await get_user_indmoney_client(owner_id)
-        if ind_client is not None:
-            fresh = _clean(await fetch_daily_candles(ind_client, str(instrument.get("id") or ""), lookback))
-            if fresh:
-                return fresh, True
-        grw_client = await get_user_groww_client(owner_id)
-        if grw_client is not None:
+    """The latest finished candles following tiered broker priority:
+    1. Zerodha Kite (when authenticated)
+    2. Groww (when Kite unauthenticated or failed)
+    3. INDmoney (when Groww unauthenticated or failed)
+    """
+    if getattr(client, "is_authenticated", None) is not False:
+        try:
+            return _clean(await history.get_daily_candles(client, token, lookback)), False
+        except KiteAuthRequiredError:
+            pass
+        except Exception as exc:
+            logger.warning("Kite daily candle fetch note for token %s: %s", token, exc)
+
+    owner_id = getattr(client, "owner_id", None)
+    # Priority 2: Groww
+    grw_client = await get_user_groww_client(owner_id)
+    if grw_client is not None:
+        try:
             fresh = _clean(await fetch_groww_daily_candles(grw_client, str(instrument.get("id") or ""), lookback))
             if fresh:
                 return fresh, True
-        raise
+        except Exception as exc:
+            logger.warning("Groww daily candle fetch note for %s: %s", instrument.get("id"), exc)
+
+    # Priority 3: INDmoney
+    ind_client = await get_user_indmoney_client(owner_id)
+    if ind_client is not None:
+        try:
+            fresh = _clean(await fetch_daily_candles(ind_client, str(instrument.get("id") or ""), lookback))
+            if fresh:
+                return fresh, True
+        except Exception as exc:
+            logger.warning("INDmoney daily candle fetch note for %s: %s", instrument.get("id"), exc)
+
+    raise KiteAuthRequiredError("Neither Kite, Groww, nor INDmoney could provide recent candles.")
 
 
 async def get_india_candles(
@@ -142,7 +161,34 @@ async def get_india_candles(
         else:
             return candles, {**meta, "checked_at": time.time()}
     if not candles or rebuilt:
-        full = _clean(await history.get_full_daily_history(client, int(token), earliest=instrument.get("listing_date") or None))
+        full = []
+        if getattr(client, "is_authenticated", None) is not False:
+            try:
+                full = _clean(await history.get_full_daily_history(client, int(token), earliest=instrument.get("listing_date") or None))
+            except KiteAuthRequiredError:
+                full = []
+            except Exception as exc:
+                logger.warning("Kite full daily history note for token %s: %s", token, exc)
+
+        if not full:
+            owner_id = getattr(client, "owner_id", None)
+            # Priority 2: Groww (up to 5 years / 1825 days)
+            grw_client = await get_user_groww_client(owner_id)
+            if grw_client is not None:
+                try:
+                    full = _clean(await fetch_groww_daily_candles(grw_client, str(instrument.get("id") or ""), 1825))
+                except Exception as exc:
+                    logger.warning("Groww full history fallback note for %s: %s", instrument.get("id"), exc)
+
+            # Priority 3: INDmoney (up to 1 year / 365 days)
+            if not full:
+                ind_client = await get_user_indmoney_client(owner_id)
+                if ind_client is not None:
+                    try:
+                        full = _clean(await fetch_daily_candles(ind_client, str(instrument.get("id") or ""), 365))
+                    except Exception as exc:
+                        logger.warning("INDmoney full history fallback note for %s: %s", instrument.get("id"), exc)
+
         if not full:
             return candles, meta
         meta = {

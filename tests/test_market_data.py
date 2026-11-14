@@ -154,6 +154,124 @@ class TestMarketData(unittest.TestCase):
         self.assertEqual(enriched[0].data_freshness, "live")
         self.assertEqual(enriched[0].current_price, 414.74)
 
+    def test_default_cache_ttl_is_120_seconds(self):
+        """Verify 2-minute (120s) quote cache TTL for rate limiting."""
+        cache = MarketQuoteCache()
+        self.assertEqual(cache.default_ttl, 120.0)
+        service = MCPMarketDataService()
+        self.assertEqual(service.cache.default_ttl, 120.0)
+
+    @patch("core.market_data.service.get_user_indmoney_client")
+    @patch("core.market_data.service.get_user_groww_client")
+    def test_priority_order_when_kite_lapsed_or_absent(self, mock_groww_cli, mock_ind_cli):
+        """When Kite is absent or logged out: Priority 2 (Groww) is queried first, then Priority 3 (INDmoney)."""
+        service = MCPMarketDataService(cache_ttl_seconds=120.0)
+
+        # Kite is unauthenticated / absent
+        kite_client = AsyncMock()
+        kite_client.owner_id = "user_123"
+        kite_client.is_authenticated = False
+
+        # Mock Groww client that knows RELIANCE
+        groww_client = AsyncMock()
+        mock_groww_cli.return_value = groww_client
+
+        # Mock INDmoney client that knows TCS
+        ind_client = AsyncMock()
+        mock_ind_cli.return_value = ind_client
+
+        with patch("core.market_data.service.fetch_groww_quotes") as mock_groww_fetch, \
+             patch("core.market_data.service.fetch_indmoney_quotes") as mock_ind_fetch:
+
+            mock_groww_fetch.return_value = {
+                "NSE:RELIANCE": QuoteItem(instrument="NSE:RELIANCE", last_price=2800.0, day_change=30.0, day_change_percentage=1.08, close_price=2770.0)
+            }
+            mock_ind_fetch.return_value = {
+                "NSE:TCS": QuoteItem(instrument="NSE:TCS", last_price=4100.0, day_change=45.0, day_change_percentage=1.11, close_price=4055.0)
+            }
+
+            combined, live_succeeded = asyncio.run(service.fetch_live_quotes(
+                ["NSE:RELIANCE", "NSE:TCS"],
+                client=kite_client,
+                owner_id="user_123"
+            ))
+
+            self.assertTrue(live_succeeded)
+            self.assertEqual(len(combined), 2)
+            self.assertEqual(combined["NSE:RELIANCE"].last_price, 2800.0)
+            self.assertEqual(combined["NSE:TCS"].last_price, 4100.0)
+
+            # Groww was asked first for both RELIANCE and TCS
+            mock_groww_fetch.assert_called_once()
+            groww_asked = mock_groww_fetch.call_args[0][1]
+            self.assertIn("NSE:RELIANCE", groww_asked)
+            self.assertIn("NSE:TCS", groww_asked)
+
+            # INDmoney was asked second ONLY for TCS (since Groww resolved RELIANCE)
+            mock_ind_fetch.assert_called_once()
+            ind_asked = mock_ind_fetch.call_args[0][1]
+            self.assertEqual(ind_asked, ["NSE:TCS"])
+
+    @patch("core.market_data.service.get_user_groww_client")
+    def test_kite_unauthenticated_skips_to_groww_directly(self, mock_groww_cli):
+        """When Kite is unauthenticated (e.g. user has no Kite or logged out), Kite is skipped and Groww is queried directly."""
+        service = MCPMarketDataService(cache_ttl_seconds=120.0)
+
+        kite_client = AsyncMock()
+        kite_client.owner_id = "user_groww_only"
+        kite_client.is_authenticated = False
+        kite_client.get_quotes = AsyncMock()
+
+        groww_client = AsyncMock()
+        mock_groww_cli.return_value = groww_client
+
+        with patch("core.market_data.service.fetch_groww_quotes") as mock_groww_fetch:
+            mock_groww_fetch.return_value = {
+                "NSE:HDFCBANK": QuoteItem(instrument="NSE:HDFCBANK", last_price=1750.0, day_change=12.0, day_change_percentage=0.69, close_price=1738.0)
+            }
+
+            combined, live_succeeded = asyncio.run(service.fetch_live_quotes(
+                ["NSE:HDFCBANK"],
+                client=kite_client,
+                owner_id="user_groww_only"
+            ))
+
+            self.assertTrue(live_succeeded)
+            self.assertEqual(combined["NSE:HDFCBANK"].last_price, 1750.0)
+
+            # Kite get_quotes was NEVER called
+            kite_client.get_quotes.assert_not_called()
+            # Groww was called directly
+            mock_groww_fetch.assert_called_once()
+
+    @patch("core.market_data.service.get_user_groww_client")
+    def test_two_minute_cache_prevents_subsequent_broker_calls(self, mock_groww_cli):
+        """Within the 120-second TTL window, subsequent requests are served from memory cache with 0 broker calls."""
+        service = MCPMarketDataService(cache_ttl_seconds=120.0)
+
+        kite_client = AsyncMock()
+        kite_client.owner_id = "user_123"
+        kite_client.is_authenticated = False
+
+        groww_client = AsyncMock()
+        mock_groww_cli.return_value = groww_client
+
+        with patch("core.market_data.service.fetch_groww_quotes") as mock_groww_fetch:
+            mock_groww_fetch.return_value = {
+                "NSE:ITC": QuoteItem(instrument="NSE:ITC", last_price=470.0, day_change=3.0, day_change_percentage=0.64, close_price=467.0)
+            }
+
+            # Call 1: Fetches from Groww
+            res1, _ = asyncio.run(service.fetch_live_quotes(["NSE:ITC"], client=kite_client, owner_id="user_123"))
+            self.assertEqual(res1["NSE:ITC"].last_price, 470.0)
+            self.assertEqual(mock_groww_fetch.call_count, 1)
+
+            # Call 2: Within 120s TTL -> must be served from cache
+            res2, _ = asyncio.run(service.fetch_live_quotes(["NSE:ITC"], client=kite_client, owner_id="user_123"))
+            self.assertEqual(res2["NSE:ITC"].last_price, 470.0)
+            # Call count should STILL be 1!
+            self.assertEqual(mock_groww_fetch.call_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
