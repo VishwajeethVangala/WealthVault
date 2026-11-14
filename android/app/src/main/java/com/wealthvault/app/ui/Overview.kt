@@ -69,6 +69,7 @@ import com.wealthvault.app.data.HistoryPoint
 import com.wealthvault.app.data.RiskResponse
 import com.wealthvault.app.data.SignalsResponse
 import com.wealthvault.app.data.StockSignals
+import com.wealthvault.app.data.WatchlistItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -156,6 +157,7 @@ fun OverviewScreen(
 ) {
     val summary by vm.summary.collectAsState()
     val holdingsRes by vm.holdings.collectAsState()
+    val watchlist by vm.watchlist.collectAsState()
     val brokersRes by vm.brokers.collectAsState()
     val history by avm.history.collectAsState()
     val targets by avm.targets.collectAsState()
@@ -282,6 +284,7 @@ fun OverviewScreen(
                 }
                 item { DayMoveCard(cards, positions, totals.day, onStock) }
                 item { SignalsPanelCard(dash, dashFailed, positions.any { it.cls == "EQUITY" || it.cls == "US_STOCKS" }, onSignals, onStock) }
+                item { WatchlistRadarCard(watchlist.data.orEmpty(), onHoldings) }
                 item { DriftCard(drift, targets.data.orEmpty().values.any { it > 0 }) { editTargets = true } }
                 item { RiskCard(risk.data, conc, drawdown, usdPct) }
                 item { NotesCard(notes) }
@@ -640,6 +643,27 @@ private fun SignalsPanelCard(d: DashSignals, failed: Boolean, hasStocks: Boolean
         Text("NEW BUYS", style = Wv.over, color = Wv.c.gain, modifier = Modifier.clickable { onSignals(d.buysPreset) }.padding(top = 4.dp))
         if (d.buys.isEmpty()) Text("No new buys on your holdings in the last 2 sessions.", style = Wv.small, color = Wv.c.text3)
         d.buys.take(3).forEach { r -> CallLine(r, open, "${weekdayDate(r.date)} · ${r.why}", r.sinceRef?.abs) }
+    }
+}
+
+@Composable
+private fun WatchlistRadarCard(watchlist: List<WatchlistItem>, onOpenWatchlist: () -> Unit) {
+    if (watchlist.isEmpty()) return
+    val bullish = watchlist.count { it.trend_score != null && it.trend_score >= 4 }
+    val setups = watchlist.count { it.ath_breakout_state == "SETUP_ACTIVE" || it.ath_breakout_state == "IN_POSITION" }
+    WvCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Watchlist & Pre-Flight Radar", style = Wv.title, color = Wv.c.text)
+                Text("${watchlist.size} prospect stock${if (watchlist.size == 1) "" else "s"} tracked · $bullish bullish", style = Wv.small, color = Wv.c.text3)
+            }
+            TextButton(onClick = onOpenWatchlist) { Text("Open", color = Wv.c.accent) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SignalTile("${watchlist.size}", "Tracked", Wv.c.text, Modifier.weight(1f)) { onOpenWatchlist() }
+            SignalTile("$bullish", "Bullish", if (bullish > 0) Wv.c.gain else Wv.c.text, Modifier.weight(1f)) { onOpenWatchlist() }
+            SignalTile("$setups", "In setup", if (setups > 0) Wv.c.accent else Wv.c.text, Modifier.weight(1f)) { onOpenWatchlist() }
+        }
     }
 }
 

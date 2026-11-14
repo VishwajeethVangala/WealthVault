@@ -226,4 +226,23 @@ class Api(private val prefs: Prefs) {
     /** Live quotes for exchange ids such as "NSE:NIFTY 50" (the Overview sets your day against the Nifty). */
     suspend fun quotes(instruments: List<String>): MarketQuotesResponse =
         json.decodeFromString(call("GET", "/portfolio/quotes?instruments=${enc(instruments.joinToString(","))}"))
+
+    // --- watchlist -----------------------------------------------------------------------------------------
+
+    suspend fun watchlist(): WatchlistResponse = json.decodeFromString(call("GET", "/watchlist"))
+
+    suspend fun addToWatchlist(symbol: String, targetPrice: Double? = null, notes: String? = null): WatchlistItem {
+        val body = buildJsonObject {
+            put("symbol", symbol)
+            if (targetPrice != null) put("target_price", targetPrice)
+            if (!notes.isNullOrBlank()) put("notes", notes)
+        }.toString()
+        return json.decodeFromString(call("POST", "/watchlist", body))
+    }
+
+    suspend fun removeFromWatchlist(symbol: String) {
+        call("DELETE", "/watchlist/${enc(symbol)}")
+    }
+
+    suspend fun refreshWatchlist(): WatchlistResponse = json.decodeFromString(call("POST", "/watchlist/refresh", "{}"))
 }

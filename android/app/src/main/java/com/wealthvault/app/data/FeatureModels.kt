@@ -414,3 +414,29 @@ data class RiskResponse(val risk: PortfolioRisk? = null, val equity_value: Doubl
 
 /** Inputs for a 200-DMA ATH breakout run (the web's defaults). */
 data class AthOptions(val startDate: String = "2015-01-01", val dmaLength: Int = 200, val windowBars: Int = 200, val capital: Double = 50000.0)
+
+// --- watchlist ---------------------------------------------------------------------------------------------
+
+@Serializable
+data class WatchlistItem(
+    val symbol: String = "",
+    val name: String? = null,
+    val exchange: String? = null,
+    val entry_price: Double? = null,
+    val target_price: Double? = null,
+    val last_price: Double? = null,
+    val return_pct: Double? = null,
+    val notes: String? = null,
+    val trend_verdict: String? = null,
+    val trend_score: Int? = null,
+    val trend_max_score: Int? = 5,
+    val ath_breakout_state: String? = null,
+    val added_at: String? = null,
+)
+
+@Serializable
+data class WatchlistResponse(
+    val items: List<WatchlistItem> = emptyList(),
+    val count: Int = 0,
+)
+

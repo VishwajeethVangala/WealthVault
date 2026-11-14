@@ -18,6 +18,7 @@ import com.wealthvault.app.data.Holding
 import com.wealthvault.app.data.Prefs
 import com.wealthvault.app.data.Session
 import com.wealthvault.app.data.Summary
+import com.wealthvault.app.data.WatchlistItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +36,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val summary = MutableStateFlow(Load<Summary?>())
     val holdings = MutableStateFlow(Load<List<Holding>>())
+    val watchlist = MutableStateFlow(Load<List<WatchlistItem>>())
     val brokers = MutableStateFlow(Load<List<BrokerSession>>())
     val syncing = MutableStateFlow<String?>(null) // "all", a connection id, or null
     val message = MutableStateFlow<String?>(null)
@@ -88,6 +90,46 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         load(summary) { api.summary() }
         loadHoldings()
         loadBrokers()
+        loadWatchlist(force = true)
+    }
+
+    fun loadWatchlist(force: Boolean = false) {
+        if (!force && watchlist.value.data != null) return
+        load(watchlist) { api.watchlist().items }
+    }
+
+    fun refreshWatchlist() {
+        load(watchlist) { api.refreshWatchlist().items }
+    }
+
+    fun toggleWatch(symbol: String, targetPrice: Double? = null, notes: String? = null, onResult: ((Boolean) -> Unit)? = null) {
+        val clean = symbol.trim().uppercase()
+        val current = watchlist.value.data.orEmpty()
+        val isWatching = current.any { it.symbol.equals(clean, ignoreCase = true) || it.symbol.endsWith(":$clean") || clean.endsWith(":${it.symbol}") }
+        if (isWatching) {
+            watchlist.value = Load(data = current.filterNot { it.symbol.equals(clean, ignoreCase = true) || it.symbol.endsWith(":$clean") || clean.endsWith(":${it.symbol}") })
+            viewModelScope.launch {
+                try {
+                    api.removeFromWatchlist(clean)
+                    onResult?.invoke(false)
+                } catch (e: Exception) {
+                    watchlist.value = Load(data = current, error = e.message ?: "Could not remove from watchlist.")
+                }
+            }
+        } else {
+            val temp = WatchlistItem(symbol = clean, name = clean)
+            watchlist.value = Load(data = listOf(temp) + current)
+            viewModelScope.launch {
+                try {
+                    val added = api.addToWatchlist(clean, targetPrice, notes)
+                    val updated = watchlist.value.data.orEmpty().filterNot { it.symbol == clean }
+                    watchlist.value = Load(data = listOf(added) + updated)
+                    onResult?.invoke(true)
+                } catch (e: Exception) {
+                    watchlist.value = Load(data = current, error = e.message ?: "Could not add to watchlist.")
+                }
+            }
+        }
     }
 
     /** The saved holdings first so screens fill at once, then the same list on live prices. */

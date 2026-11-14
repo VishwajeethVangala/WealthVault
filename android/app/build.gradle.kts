@@ -99,4 +99,6 @@ dependencies {
     implementation("com.google.firebase:firebase-crashlytics")
     // Push notifications: the phone gets a type and an id, then asks WealthVault's server for the text
     implementation("com.google.firebase:firebase-messaging")
+
+    testImplementation("junit:junit:4.13.2")
 }

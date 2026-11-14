@@ -122,7 +122,15 @@ private fun trendTone(verdict: String) = when (trendBucket(verdict)) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
+fun HoldingsScreen(
+    vm: AppViewModel,
+    avm: AnalysisViewModel? = null,
+    onStock: (String) -> Unit = {},
+    onOpenStock: ((kind: String, symbol: String) -> Unit)? = null,
+) {
+    var activeTab by rememberSaveable { mutableStateOf("holdings") }
+    val watchlistRes by vm.watchlist.collectAsState()
+    val watchlistCount = watchlistRes.data?.size ?: 0
     val holdingsRes by vm.holdings.collectAsState()
     val brokerFilter by vm.brokerFilter.collectAsState()
     val classFilter by vm.classFilter.collectAsState()
@@ -170,7 +178,30 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
     val coverage = dayCoverage(rows)
     val maxCur = rows.maxOfOrNull { it.cur }?.coerceAtLeast(1.0) ?: 1.0
 
-    PullToRefreshBox(isRefreshing = holdingsRes.loading && all.isNotEmpty(), onRefresh = { vm.refreshAll() }) {
+    Column(Modifier.fillMaxSize()) {
+        if (avm != null) {
+            Box(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                Seg(
+                    options = listOf(
+                        "holdings" to "Holdings (${all.size})",
+                        "watchlist" to "★ Watchlist ($watchlistCount)",
+                    ),
+                    selected = activeTab,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { activeTab = it }
+            }
+        }
+
+        if (activeTab == "watchlist" && avm != null) {
+            WatchlistScreen(
+                vm = vm,
+                avm = avm,
+                modifier = Modifier.weight(1f),
+                onStock = { kind, symbol -> onOpenStock?.invoke(kind, symbol) ?: onStock(symbol) },
+            )
+        } else {
+            Box(Modifier.weight(1f)) {
+                PullToRefreshBox(isRefreshing = holdingsRes.loading && all.isNotEmpty(), onRefresh = { vm.refreshAll() }) {
         LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -282,7 +313,10 @@ fun HoldingsScreen(vm: AppViewModel, onStock: (String) -> Unit = {}) {
         SummaryPinBar(pinSummary && all.isNotEmpty(), totals, onClick = { scope.launch { listState.animateScrollToItem(0) } }) {
             if (pinSearch) HoldingsSearch(q, Modifier.padding(top = 6.dp)) { q = it }
         }
+            }
+        }
     }
+}
 }
 
 @Composable

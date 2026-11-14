@@ -165,7 +165,7 @@ private data class SigRow(
     val open: String,
 )
 
-private enum class Source(val label: String) { All("Everything"), Held("My holdings"), Stage2("Stage 2"), New("New on Stage 2") }
+private enum class Source(val label: String) { All("Everything"), Held("My holdings"), Watchlist("Watchlist"), Stage2("Stage 2"), New("New on Stage 2") }
 
 private enum class SSort(val label: String) { Align("Agreement"), Day("Day change"), Momentum("Momentum"), Position("Your position"), Name("Name"), Cap("Market cap") }
 
@@ -297,7 +297,7 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
         val p = preset ?: return@LaunchedEffect
         p.market?.let { if (it != avm.market.value) avm.setMarket(it) }
         view = p.view
-        source = when (p.source) { "held" -> Source.Held; "stage2" -> Source.Stage2; "new" -> Source.New; else -> Source.All }
+        source = when (p.source) { "held" -> Source.Held; "watchlist" -> Source.Watchlist; "stage2" -> Source.Stage2; "new" -> Source.New; else -> Source.All }
         filter = when (p.filter) { "all-bear" -> SigFilter.Bear; "all-bull" -> SigFilter.Bull; "mixed" -> SigFilter.Mixed; "trade" -> SigFilter.Trade; else -> SigFilter.All }
         p.side?.let { side ->
             calls.side = side
@@ -310,6 +310,19 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
     }
 
     val all = holdings.data.orEmpty()
+    val watchlist by vm.watchlist.collectAsState()
+    val watchedSymbols = remember(watchlist.data) {
+        watchlist.data.orEmpty().map { it.symbol.uppercase() }.toSet()
+    }
+    val isWatched = { r: SigRow ->
+        val sym = r.open.uppercase()
+        val code = r.code.uppercase()
+        val inst = r.sig?.instrument.orEmpty().uppercase()
+        watchedSymbols.any { w ->
+            w == sym || w == code || w == inst || w.endsWith(":$code") || w.endsWith(":$sym")
+        }
+    }
+
     val data = res.data
     val s2Data = if (us) null else s2Res.data
     val list = s2Data?.list
@@ -318,11 +331,18 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
         when (source) {
             Source.All -> true
             Source.Held -> r.inst != null
+            Source.Watchlist -> isWatched(r)
             Source.Stage2 -> r.s2 != null
             Source.New -> r.s2?.is_new == true
         }
     }
-    val sourceCounts = mapOf(Source.All to rows.size, Source.Held to rows.count { it.inst != null }, Source.Stage2 to rows.count { it.s2 != null }, Source.New to rows.count { it.s2?.is_new == true })
+    val sourceCounts = mapOf(
+        Source.All to rows.size,
+        Source.Held to rows.count { it.inst != null },
+        Source.Watchlist to rows.count { isWatched(it) },
+        Source.Stage2 to rows.count { it.s2 != null },
+        Source.New to rows.count { it.s2?.is_new == true },
+    )
 
     // India's job covers the Chartink list and the holdings; the US job is the holdings job
     val job = if (us) data?.job else s2Data?.job
@@ -466,7 +486,7 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
                             }
                         }
                     }
-                    items(visible.take(shown), key = { it.key }) { r -> SignalCard(r, fmt, us) { if (!us) onStock(r.open) } }
+                    items(visible.take(shown), key = { it.key }) { r -> SignalCard(r, fmt, us, isWatched(r)) { if (!us) onStock(r.open) } }
                     if (visible.isEmpty()) item { Note("No stocks match this filter.") }
                     if (visible.size > shown) {
                         item {
@@ -516,7 +536,7 @@ fun SignalsScreen(vm: AppViewModel, avm: AnalysisViewModel, onStock: (String) ->
 }
 
 @Composable
-private fun SignalCard(r: SigRow, fmt: PriceFmt, us: Boolean, onOpen: () -> Unit) {
+private fun SignalCard(r: SigRow, fmt: PriceFmt, us: Boolean, isWatched: Boolean = false, onOpen: () -> Unit) {
     val inst = r.inst
     WvCard(padding = 14, modifier = if (!us) Modifier.clickable(onClick = onOpen) else Modifier) {
         Row(verticalAlignment = Alignment.Top) {
@@ -524,6 +544,7 @@ private fun SignalCard(r: SigRow, fmt: PriceFmt, us: Boolean, onOpen: () -> Unit
                 Text(r.name, style = Wv.title, color = Wv.c.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (inst != null) Badge("Held", Tone.Ok)
+                    if (isWatched) Badge("Watchlist", Tone.Warn)
                     if (r.s2 != null) Badge("Stage 2", Tone.Off)
                     if (r.s2?.is_new == true) Badge("New", Tone.Info)
                 }

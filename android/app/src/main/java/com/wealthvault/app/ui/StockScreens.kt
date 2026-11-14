@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +21,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,22 +57,55 @@ import com.wealthvault.app.data.StrategyResult
 import com.wealthvault.app.data.StrategyTrade
 import com.wealthvault.app.data.TrendCheck
 
-/** The stocks you hold most of, as exchange ids where the signals know them (INDmoney's own codes mean nothing to Kite). */
+/** The stocks you hold most of or watch, as exchange ids where the signals know them (INDmoney's own codes mean nothing to Kite). */
 @Composable
 fun quickPicks(vm: AppViewModel, avm: AnalysisViewModel): List<Pair<String, String>> {
     val holdings by vm.holdings.collectAsState()
+    val watchlist by vm.watchlist.collectAsState()
     val signals by avm.signals.collectAsState()
     val map = signals.data?.symbol_map.orEmpty()
-    return remember(holdings.data, map) {
-        holdings.data.orEmpty().filter { it.asset_class == "EQUITY" }.sortedByDescending { it.current_value }
+    return remember(holdings.data, watchlist.data, map) {
+        val watchPairs = watchlist.data.orEmpty().map { w ->
+            val sym = w.symbol
+            sym to "\u2605 " + sym.substringAfter(':')
+        }
+        val holdPairs = holdings.data.orEmpty().filter { it.asset_class == "EQUITY" }.sortedByDescending { it.current_value }
             .mapNotNull { h ->
                 val id = map[h.instrument_symbol] ?: tickerOf(h.instrument_symbol).takeIf { !it.startsWith("INDS") } ?: return@mapNotNull null
                 id to id.substringAfter(':')
             }
-            .distinctBy { it.first }
-            .take(12)
+        (watchPairs + holdPairs).distinctBy { it.first }.take(16)
     }
 }
+
+@Composable
+fun WatchToggleButton(isWatching: Boolean, onToggle: () -> Unit) {
+    androidx.compose.material3.Button(
+        onClick = onToggle,
+        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+            containerColor = if (isWatching) Wv.c.surface2 else Wv.c.surface,
+            contentColor = if (isWatching) Wv.c.warn else Wv.c.text2,
+        ),
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (isWatching) Wv.c.warn else Wv.c.border),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(
+                if (isWatching) Icons.Filled.Star else Icons.Outlined.Star,
+                contentDescription = if (isWatching) "Watching" else "Watch",
+                modifier = Modifier.size(16.dp),
+                tint = if (isWatching) Wv.c.warn else Wv.c.text3,
+            )
+            Text(
+                if (isWatching) "Watching" else "Watch",
+                style = Wv.small.copy(fontWeight = FontWeight.SemiBold),
+                color = if (isWatching) Wv.c.warn else Wv.c.text2,
+            )
+        }
+    }
+}
+
 
 @Composable
 private fun SymbolPicker(
@@ -198,6 +234,15 @@ fun MomentumScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisVi
     LaunchedEffect(Unit) { if (avm.signals.value.data == null) avm.loadSignals() }
     val m = res.data
 
+    val watchlist by vm.watchlist.collectAsState()
+    val isWatched = remember(watchlist.data, m?.instrument) {
+        val inst = m?.instrument.orEmpty().uppercase()
+        if (inst.isBlank()) false else watchlist.data.orEmpty().any {
+            val sym = it.symbol.uppercase()
+            sym == inst || sym.endsWith(":$inst") || inst.endsWith(":$sym")
+        }
+    }
+
     LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             PageTitle(
@@ -208,7 +253,7 @@ fun MomentumScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisVi
         item { SymbolPicker(symbol ?: m?.instrument ?: "", picks, res.loading, "Analyse", avm::suggest, "momentum") { avm.analyse(it) } }
         res.problem?.let { item { ProblemNote(it) } }
         if (res.loading) item { Loading("Fetching one year of daily prices…") }
-        if (m != null && !res.loading) momentumBody(m, onStrategies)
+        if (m != null && !res.loading) momentumBody(m, isWatched, { vm.toggleWatch(m.instrument) }, onStrategies)
         if (m == null && !res.loading && res.problem == null) item { Note("Pick one of your holdings or type a symbol. NSE symbols work directly (INFY); use BSE:CODE for BSE-only stocks.") }
     }
 }
@@ -232,11 +277,25 @@ private fun ScaleBar(fraction: Double, marks: List<Double> = emptyList(), band: 
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.momentumBody(m: MomentumAnalysis, onStrategies: (String) -> Unit) {
+private fun androidx.compose.foundation.lazy.LazyListScope.momentumBody(
+    m: MomentumAnalysis,
+    isWatched: Boolean,
+    onToggleWatch: () -> Unit,
+    onStrategies: (String) -> Unit,
+) {
     item {
         WvCard {
-            Text("${m.instrument} · as of ${longDate(m.as_of)}${if (m.live_bar) " (live price)" else ""} · ${m.candles_used} trading days", style = Wv.small, color = Wv.c.text3)
-            Text(m.name ?: m.instrument, style = Wv.title, color = Wv.c.text)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("${m.instrument} · as of ${longDate(m.as_of)}${if (m.live_bar) " (live price)" else ""} · ${m.candles_used} trading days", style = Wv.small, color = Wv.c.text3)
+                    Text(m.name ?: m.instrument, style = Wv.title, color = Wv.c.text)
+                }
+                WatchToggleButton(isWatching = isWatched, onToggle = onToggleWatch)
+            }
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(price(m.last_price), style = Wv.kpi.copy(fontSize = Wv.title.fontSize * 1.5f), color = Wv.c.text)
                 m.returns["1M"]?.let { r -> Text("${pct(r)} 1M", style = Wv.sub.copy(fontFeatureSettings = "tnum", fontWeight = FontWeight.SemiBold), color = toneOf(r)) }
@@ -439,6 +498,16 @@ fun StrategyScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisVi
     }
     LaunchedEffect(Unit) { if (avm.signals.value.data == null) avm.loadSignals() }
 
+    val watchlist by vm.watchlist.collectAsState()
+    val stratStock = res.data?.instrument ?: current
+    val isWatched = remember(watchlist.data, stratStock) {
+        val inst = stratStock.trim().uppercase()
+        if (inst.isBlank()) false else watchlist.data.orEmpty().any {
+            val sym = it.symbol.uppercase()
+            sym == inst || sym.endsWith(":$inst") || inst.endsWith(":$sym")
+        }
+    }
+
     LazyColumn(Modifier.fillMaxSize(), contentPadding = pagePad, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { PageTitle("ATH Strategy", "The 200-DMA to all-time-high breakout on any NSE/BSE stock: today's signal, the chart with entries and exits, and a backtest of every past trade. Prices from Zerodha Kite.") }
         item {
@@ -451,7 +520,7 @@ fun StrategyScreen(vm: AppViewModel, avm: AnalysisViewModel, request: AnalysisVi
         item { StrategyInputs(avm, res.loading, current.isNotBlank()) { avm.runStrategy(current) } }
         res.problem?.let { item { ProblemNote(it) } }
         if (res.loading) item { Loading("Fetching the full daily price history and running the backtest…") }
-        if (!res.loading) res.data?.let { strategyBody(it) }
+        if (!res.loading) res.data?.let { strategyBody(it, isWatched, { vm.toggleWatch(stratStock) }) }
         if (res.data == null && !res.loading && res.problem == null) item { Note("Pick one of your holdings or type a symbol.") }
     }
 }
@@ -503,14 +572,27 @@ private fun StrategyPriceChart(r: StrategyResult) {
     }
 }
 
-private fun androidx.compose.foundation.lazy.LazyListScope.strategyBody(r: StrategyResult) {
+private fun androidx.compose.foundation.lazy.LazyListScope.strategyBody(
+    r: StrategyResult,
+    isWatched: Boolean,
+    onToggleWatch: () -> Unit,
+) {
     val st = r.status
     val s = r.stats
     val dmaLabel = "${r.params.dma_length ?: 200}-DMA"
     item {
         WvCard {
-            Text("${r.instrument} · signals as of ${longDate(r.as_of)} close", style = Wv.small, color = Wv.c.text3)
-            Text(r.name ?: r.instrument, style = Wv.title, color = Wv.c.text)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("${r.instrument} · signals as of ${longDate(r.as_of)} close", style = Wv.small, color = Wv.c.text3)
+                    Text(r.name ?: r.instrument, style = Wv.title, color = Wv.c.text)
+                }
+                WatchToggleButton(isWatching = isWatched, onToggle = onToggleWatch)
+            }
             val badge = when {
                 st.last_signal == "BUY" -> "Bought today" to Tone.Ok
                 st.last_signal == "SELL" -> "Sold today" to Tone.Bad

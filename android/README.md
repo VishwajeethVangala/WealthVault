@@ -5,19 +5,35 @@ app, so every number comes from your brokers and the Azure tables. It uses the w
 (`web/src/index.css`) one to one, in light and dark.
 
 Tabs: Overview (value, gain, today, value over time, asset mix against your targets, movers, signals summary,
-risk), Holdings (search, filter, sort; a stock opens its Momentum page), Signals (momentum and ATH
-breakout on each stock you hold, India and US, buy and sell calls), Stage 2 (the Chartink list with the same
+watchlist radar, risk), Holdings (search, filter, sort, with top segmented toggle for Holdings vs. Watchlist; a stock opens its Momentum page), Watchlist & Pre-Flight Radar (tracked prospect stocks, trend score verdict, ATH breakout status, quick add search with Zerodha Kite autocomplete, momentum & strategy links), Signals (momentum and ATH
+breakout on each stock you hold, India and US, buy and sell calls, amber Watchlist filter and badges), Stage 2 (the Chartink list with the same
 signals and calls) and More: Momentum, the ATH Strategy (breakout backtest), Brokers (sync, log
 in, add with API keys, remove) and Settings (theme, sign out). Momentum and Strategies need today's Kite login;
 the app shows the login link when it is missing.
 
-## Build
+## Build and Test
 
 Tools live outside the repo in `D:\Gravity\android-tools` (portable JDK 17, Android SDK 35, Gradle 8.11.1).
 
-```
+### In PowerShell:
+```powershell
+$env:JAVA_HOME = "D:\Gravity\android-tools\jdk-17.0.20.1+1"
+$env:GRADLE_USER_HOME = "D:\Gravity\android-tools\gradle-home"
 cd android
+
+# Run unit tests
+.\gradlew.bat testDebugUnitTest
+
+# Assemble debug APK
+.\gradlew.bat assembleDebug
+```
+
+### In Command Prompt (cmd.exe):
+```cmd
 set JAVA_HOME=D:\Gravity\android-tools\jdk-17.0.20.1+1
+set GRADLE_USER_HOME=D:\Gravity\android-tools\gradle-home
+cd android
+gradlew.bat testDebugUnitTest
 gradlew.bat assembleDebug
 ```
 

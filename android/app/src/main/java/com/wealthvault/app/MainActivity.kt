@@ -96,6 +96,7 @@ import com.wealthvault.app.ui.HoldingsScreen
 import com.wealthvault.app.ui.OverviewScreen
 import com.wealthvault.app.ui.SettingsScreen
 import com.wealthvault.app.ui.SignInScreen
+import com.wealthvault.app.ui.WatchlistScreen
 import com.wealthvault.app.ui.WealthVaultTheme
 import com.wealthvault.app.ui.Wv
 
@@ -111,7 +112,7 @@ private val TABS = listOf(
 )
 
 /** Pages opened from the profile menu (they sit over a tab, with a Back row). */
-private val SUB_PAGES = setOf("brokers", "settings", "feedback")
+private val SUB_PAGES = setOf("brokers", "settings", "feedback", "watchlist")
 
 class MainActivity : FragmentActivity() {
     private val vm: AppViewModel by viewModels()
@@ -332,7 +333,15 @@ private fun SignedIn(vm: AppViewModel, avm: AnalysisViewModel) {
                     onStock = { openStock("momentum", it) },
                 )
             }
-            composable("holdings") { HoldingsScreen(vm) { openStock("momentum", it) } }
+            composable("holdings") {
+                HoldingsScreen(
+                    vm = vm,
+                    avm = avm,
+                    onStock = { openStock("momentum", it) },
+                    onOpenStock = { kind, symbol -> openStock(kind, symbol) },
+                )
+            }
+            composable("watchlist") { SubPage({ nav.popBackStack() }) { WatchlistScreen(vm, avm, onStock = { k, s -> openStock(k, s) }) } }
             composable("signals") { SignalsScreen(vm, avm) { openStock("momentum", it) } }
             composable("momentum") {
                 val request by avm.stockRequest.collectAsState()
