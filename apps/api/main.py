@@ -25,7 +25,21 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from apps.api.routers import accounts_router, analytics_router, auth_router, feedback_router, health_router, history_router, notifications_router, portfolio_router, signals_router, stage2_router, targets_router, watchlist_router
+from apps.api.routers import (
+    accounts_router,
+    agents_router,
+    analytics_router,
+    auth_router,
+    feedback_router,
+    health_router,
+    history_router,
+    notifications_router,
+    portfolio_router,
+    signals_router,
+    stage2_router,
+    targets_router,
+    watchlist_router,
+)
 from core.config import get_settings, production_problems
 
 # Configure logging
@@ -66,10 +80,16 @@ def _register_frontend_method() -> None:
         if assets_dir.exists():
             self.mount("/assets", StaticFiles(directory=str(assets_dir)), name="spa_assets")
 
+        no_cache_headers = {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        }
+
         @self.get(f"{path.rstrip('/')}/", include_in_schema=False)
         @self.get(path, include_in_schema=False)
         async def serve_root():
-            return FileResponse(str(fallback_file))
+            return FileResponse(str(fallback_file), headers=no_cache_headers)
 
         @self.get("/{full_path:path}", include_in_schema=False)
         async def serve_spa_route(full_path: str):
@@ -77,8 +97,8 @@ def _register_frontend_method() -> None:
             candidate = target_dir / full_path
             if full_path and candidate.is_file():
                 return FileResponse(str(candidate))
-            # Client-side route fallback to index.html
-            return FileResponse(str(fallback_file))
+            # Client-side route fallback to index.html with no-cache so browsers always get newest build
+            return FileResponse(str(fallback_file), headers=no_cache_headers)
 
     FastAPI.frontend = frontend
 
@@ -164,6 +184,7 @@ def create_application() -> FastAPI:
     app.include_router(feedback_router, prefix=settings.API_V1_PREFIX)
     app.include_router(notifications_router, prefix=settings.API_V1_PREFIX)
     app.include_router(watchlist_router, prefix=settings.API_V1_PREFIX)
+    app.include_router(agents_router, prefix=settings.API_V1_PREFIX)
 
     # Native frontend serving attached after all API routers to prevent route swallowing
     app.frontend("/", directory="dist", fallback="index.html")

@@ -11,6 +11,7 @@ import { BrokerSync } from './pages/BrokerSync'
 import { MomentumAnalyzer } from './pages/MomentumAnalyzer'
 import { AthStrategy } from './pages/AthStrategy'
 import { Watchlist } from './pages/Watchlist'
+import { AgentBoardroom } from './pages/AgentBoardroom'
 import { Login } from './pages/Login'
 import { Account } from './pages/Account'
 import { DeleteAccountInfo, PrivacyPolicy } from './pages/Legal'
@@ -85,6 +86,8 @@ const SignedInApp: React.FC = () => {
             <Route path="/" element={<ExecutiveOverview />} />
             <Route path="/holdings" element={<HoldingsTable />} />
             <Route path="/watchlist" element={<Watchlist />} />
+            <Route path="/boardroom" element={<AgentBoardroom />} />
+            <Route path="/agents" element={<Navigate to="/boardroom" replace />} />
             <Route path="/stage2" element={<Navigate to="/signals?source=stage2" replace />} />
             <Route path="/signals" element={<Signals />} />
             <Route path="/momentum" element={<MomentumAnalyzer />} />

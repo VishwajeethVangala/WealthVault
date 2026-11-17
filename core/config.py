@@ -41,6 +41,10 @@ class Settings(BaseSettings):
         default="",
         description="Google OAuth 2.0 Client ID for verifying ID tokens",
     )
+    GEMINI_API_KEY: str = Field(
+        default="",
+        description="Google Gemini API Key for Tier 3 CIO Synthesis",
+    )
 
     # JWT Session Token Configuration
     # In .env: JWT_SECRET="<generate-a-strong-random-secret-key>"

@@ -7,6 +7,7 @@ and automatic token refreshing, eliminating child processes, port collisions, an
 
 import asyncio
 import base64
+import collections
 import hashlib
 import json
 import logging
@@ -84,6 +85,30 @@ class IndmoneyMCPClient:
         self._http_session: Optional[aiohttp.ClientSession] = None
         self._request_counter: int = 0
         self._blocked_until: Dict[str, float] = {}  # tool -> time.monotonic() until which INDmoney said to wait
+        self._call_timestamps: collections.deque = collections.deque()
+        self._last_call_time: float = 0.0
+        self._rate_limit_lock: Optional[asyncio.Lock] = None
+
+    @property
+    def rate_limit_lock(self) -> asyncio.Lock:
+        if self._rate_limit_lock is None:
+            self._rate_limit_lock = asyncio.Lock()
+        return self._rate_limit_lock
+
+    def is_rate_limited(self, tool_name: Optional[str] = None) -> bool:
+        """True if the tool (or any tool if None) is currently in cooldown from a rate limit."""
+        now = time.monotonic()
+        if tool_name:
+            return self._blocked_until.get(tool_name, 0.0) > now
+        return any(t > now for t in self._blocked_until.values())
+
+    def get_cooldown_remaining(self, tool_name: Optional[str] = None) -> float:
+        """Seconds remaining in cooldown, or 0.0 if not rate limited."""
+        now = time.monotonic()
+        if tool_name:
+            return max(0.0, self._blocked_until.get(tool_name, 0.0) - now)
+        waits = [max(0.0, t - now) for t in self._blocked_until.values()]
+        return max(waits) if waits else 0.0
 
         self.registration_endpoint = "https://mcp.indmoney.com/register"
         self._load_client_info()
@@ -380,6 +405,42 @@ class IndmoneyMCPClient:
         wait = self._blocked_until.get(name, 0.0) - time.monotonic()
         if wait > 0:  # told to wait: asking again only spends the calls that the wait is for
             raise IndmoneyRateLimitError(f"INDmoney rate limit on '{name}': try again in {int(wait) + 1}s", retry_after=wait)
+
+        async with self.rate_limit_lock:
+            now = time.monotonic()
+            wait = self._blocked_until.get(name, 0.0) - now
+            if wait > 0:
+                raise IndmoneyRateLimitError(f"INDmoney rate limit on '{name}': try again in {int(wait) + 1}s", retry_after=wait)
+
+            # Enforce minimum inter-call spacing to prevent burst tripping
+            elapsed = now - self._last_call_time
+            if elapsed < 0.10:
+                await asyncio.sleep(0.10 - elapsed)
+                now = time.monotonic()
+
+            # Sliding window: keep calls in last 60 seconds
+            cutoff = now - 60.0
+            while self._call_timestamps and self._call_timestamps[0] < cutoff:
+                self._call_timestamps.popleft()
+
+            # Limit to 45 calls per minute (server cap is 60/min)
+            if len(self._call_timestamps) >= 45:
+                sleep_needed = 60.0 - (now - self._call_timestamps[0]) + 0.1
+                if sleep_needed <= 2.0:
+                    await asyncio.sleep(sleep_needed)
+                    now = time.monotonic()
+                    cutoff = now - 60.0
+                    while self._call_timestamps and self._call_timestamps[0] < cutoff:
+                        self._call_timestamps.popleft()
+                else:
+                    raise IndmoneyRateLimitError(
+                        f"INDmoney self-rate-limit active ({len(self._call_timestamps)}/min): try again in {int(sleep_needed) + 1}s",
+                        retry_after=sleep_needed,
+                    )
+
+            self._call_timestamps.append(now)
+            self._last_call_time = now
+
         token = await self.ensure_valid_token()
 
         http = self._get_http_session()
@@ -451,11 +512,35 @@ class IndmoneyMCPClient:
                         parsed = json.loads(text)
                     except Exception:
                         return text
-                    if isinstance(parsed, dict) and "rate_limit" in str(parsed.get("error", "")).lower():
-                        retry = min(3600.0, max(1.0, float(parsed.get("retry_after_seconds") or 60)))
+
+                    is_rate_limit = (
+                        isinstance(parsed, dict) and (
+                            "rate_limit" in str(parsed.get("error", "")).lower()
+                            or "rate limit" in str(parsed.get("message", "")).lower()
+                            or "rate limit" in str(parsed.get("error_description", "")).lower()
+                        )
+                    )
+                    if is_rate_limit:
+                        msg = str(parsed.get("message") or parsed.get("error") or "INDmoney rate limit exceeded")
+                        retry = None
+                        if parsed.get("retry_after_seconds") is not None:
+                            try:
+                                retry = float(parsed["retry_after_seconds"])
+                            except (ValueError, TypeError):
+                                pass
+                        if retry is None:
+                            m = re.search(r"try\s+again\s+in\s+(\d+)\s*s", msg, re.IGNORECASE)
+                            if m:
+                                retry = float(m.group(1))
+                            else:
+                                retry = 60.0  # Default to 1 minute per user request
+
+                        retry = min(3600.0, max(1.0, retry))
+                        tool_key = str(parsed.get("tool") or name)
+                        self._blocked_until[tool_key] = time.monotonic() + retry
                         self._blocked_until[name] = time.monotonic() + retry
-                        logger.warning("INDmoney rate limit on %s: %s", name, parsed.get("message"))
-                        raise IndmoneyRateLimitError(str(parsed.get("message") or "INDmoney rate limit exceeded"), retry_after=retry)
+                        logger.warning("INDmoney rate limit on %s: %s", name, msg)
+                        raise IndmoneyRateLimitError(msg, retry_after=retry)
                     return parsed
                 elif "error" in data:
                     raise RuntimeError(f"INDmoney MCP error: {data['error']}")

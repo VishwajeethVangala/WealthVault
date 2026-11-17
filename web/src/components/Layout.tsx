@@ -72,7 +72,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   }, [path])
   // Portfolio filters do not apply to single-stock or broker pages
   // (Holdings has its own toolbar, built on the same URL filters)
-  const hideGlobalFilters = path === '/brokers' || path === '/signals' || path === '/momentum' || path === '/strategy' || path === '/holdings' || path === '/account' || path === '/watchlist'
+  const hideGlobalFilters = path === '/brokers' || path === '/signals' || path === '/momentum' || path === '/strategy' || path === '/holdings' || path === '/account' || path === '/watchlist' || path === '/boardroom' || path === '/agents'
 
   const connected = sessions.filter((s) => s.status === 'CONNECTED').length
   const lastSync = useMemo(
@@ -96,6 +96,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     if (path === '/momentum') return { title: 'Momentum', sub: 'Trend, returns and relative strength for one stock' }
     if (path === '/strategy') return { title: 'ATH Strategy', sub: 'The 200-DMA to all-time-high breakout: signal and backtest on daily candles' }
     if (path === '/account') return { title: 'Account', sub: 'Your sign-in, privacy and data' }
+    if (path === '/boardroom' || path === '/agents') return { title: 'Review', sub: 'Autonomous Fiduciary Review · Directives & Forensic Due Diligence' }
     return { title: 'Overview', sub: syncLine }
   }, [path, lastSync, connected, sessions.length, lastRefreshedAt, dataFreshness])
 

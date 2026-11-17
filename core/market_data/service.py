@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 from mcp import ClientSession
 from core.market_data.groww_market import fetch_groww_quotes, get_user_groww_client
+from core.market_data.indmoney_client import IndmoneyMCPClient, IndmoneyRateLimitError
 from core.market_data.indmoney_market import fetch_quotes as fetch_indmoney_quotes, get_user_indmoney_client
 from core.market_data.kite_client import KiteAuthRequiredError, KiteToolError, get_kite_mcp_client
 from core.market_data.symbol_resolver import resolve_indmoney_symbols, split_indmoney_symbol
@@ -146,6 +147,52 @@ class MCPMarketDataService:
         root = clean.split()[0]  # keep series suffixes such as HFCL-BE as Kite lists them
         return f"NSE:{root}"
 
+    async def _update_symbol_map_if_needed(self, old_kite_id: str, new_kite_id: str) -> None:
+        """Asynchronously update SymbolMapRepository when an instrument series shift is detected."""
+        try:
+            from storage.tables.repositories import SymbolMapRepository
+            repo = SymbolMapRepository()
+            all_maps = await repo.get_all()
+            for code, data in all_maps.items():
+                if data.get("kite_id") == old_kite_id:
+                    await repo.save(code, new_kite_id, data.get("name") or "")
+                    logger.info("Updated SymbolMapRepository for %s: %s -> %s", code, old_kite_id, new_kite_id)
+        except Exception as exc:
+            logger.debug("Failed updating symbol map: %s", exc)
+
+    async def _try_alternate_quotes(self, client: Any, inst: str) -> Dict[str, Any]:
+        """Attempt recovery for instruments where exchange series shifted (EQ <-> BE) or listing moved to BSE."""
+        if ":" in inst:
+            exch, sym = inst.split(":", 1)
+        else:
+            exch, sym = "NSE", inst
+
+        candidates = []
+        if sym.endswith("-BE"):
+            base = sym[:-3]
+            candidates.append(f"{exch}:{base}")
+            candidates.append(f"BSE:{base}")
+        else:
+            candidates.append(f"{exch}:{sym}-BE")
+            alt_exch = "BSE" if exch == "NSE" else "NSE"
+            candidates.append(f"{alt_exch}:{sym}")
+            candidates.append(f"{alt_exch}:{sym}-BE")
+
+        for cand in candidates:
+            try:
+                res = await client.get_quotes([cand])
+                if res and cand in res:
+                    logger.info("Recovered quote for %s using alternate symbol %s", inst, cand)
+                    val = res[cand]
+                    try:
+                        asyncio.create_task(self._update_symbol_map_if_needed(inst, cand))
+                    except Exception:
+                        pass
+                    return {inst: val, cand: val}
+            except Exception:
+                continue
+        return {}
+
     async def _quotes_or_split(self, client: Any, batch: List[str], state: List[Any]) -> Dict[str, Any]:
         """One quotes call. When Kite refuses it although the login is live, one bad symbol may be spoiling the whole
         batch: split it in halves to save the rest, within a small budget of extra calls (state[0]); state[1] records
@@ -154,9 +201,27 @@ class MCPMarketDataService:
             return await client.get_quotes(batch)
         except KiteToolError as exc:
             state[1] = True
-            if len(batch) == 1 or state[0] < 2:
-                logger.warning("Kite refused quotes for %s: %s", ", ".join(batch[:3]), exc)
+            if len(batch) == 1:
+                inst = batch[0]
+                alt = await self._try_alternate_quotes(client, inst)
+                if alt:
+                    return alt
+                logger.warning("Kite refused quotes for %s: %s", inst, exc)
                 return {}
+            if state[0] < 2:
+                results = {}
+                for inst in batch:
+                    try:
+                        res = await client.get_quotes([inst])
+                        results.update(res)
+                    except KiteToolError:
+                        alt = await self._try_alternate_quotes(client, inst)
+                        if alt:
+                            results.update(alt)
+                        else:
+                            logger.warning("Kite refused quotes for %s: %s", inst, exc)
+                return results
+
             state[0] -= 2
             middle = len(batch) // 2
             first = await self._quotes_or_split(client, batch[:middle], state)
@@ -266,13 +331,20 @@ class MCPMarketDataService:
                     other = await get_client(resolved_owner)
                     if other is None:
                         continue
+                    if isinstance(other, IndmoneyMCPClient) and other.is_rate_limited():
+                        cooldown = other.get_cooldown_remaining()
+                        logger.info("%s quote fallback in cooldown (%.1fs remaining), skipping", name, cooldown)
+                        continue
                     found = await asyncio.wait_for(fetch(other, left), timeout=max(0.1, deadline - time.monotonic()))
                     for inst_key, item in found.items():
                         self.cache.set(inst_key.upper(), item)
                         combined[inst_key.upper()] = item
                         live_fetched = True
                 except Exception as exc:
-                    logger.warning("%s quote fallback unavailable: %s", name, exc)
+                    if isinstance(exc, IndmoneyRateLimitError) or "rate limit" in str(exc).lower():
+                        logger.info("%s quote fallback rate-limited (cooling down): %s", name, exc)
+                    else:
+                        logger.warning("%s quote fallback unavailable: %s", name, exc)
 
         return combined, live_fetched
 

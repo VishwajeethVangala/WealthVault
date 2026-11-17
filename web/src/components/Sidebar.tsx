@@ -54,6 +54,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ holdingsCount, sessions, watch
               >
                 <Icon size={18} strokeWidth={1.75} />
                 <span className="nav-text">{item.label}</span>
+                {item.badge && (
+                  <span className="nav-badge hidden md:inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/25 ml-auto">
+                    {item.badge}
+                  </span>
+                )}
                 {item.id === 'holdings' && holdingsCount > 0 && <span className="count">{holdingsCount}</span>}
                 {item.id === 'watchlist' && watchlistCount !== undefined && watchlistCount > 0 && (
                   <span className="count">{watchlistCount}</span>

@@ -182,3 +182,41 @@ def test_pages_reading_at_the_same_moment_cost_one_indmoney_call():
         run(together())
     assert len(calls) == 1
     indmoney_live._cache.clear()
+
+
+def test_rate_limit_regex_parses_try_again_in_seconds():
+    raw_reply = {
+        "error": "rate_limit_exceeded",
+        "message": "Rate limit exceeded: 60 calls per min. Try again in 7s.",
+    }
+    c, _ = client_with(raw_reply)
+    with pytest.raises(IndmoneyRateLimitError) as exc_info:
+        run(c.call_tool("get_indian_stocks_details", {"ind_keys": ["test"]}))
+    assert exc_info.value.retry_after == 7.0
+    assert c.is_rate_limited("get_indian_stocks_details") is True
+    assert 6.0 <= c.get_cooldown_remaining("get_indian_stocks_details") <= 7.0
+
+
+def test_rate_limit_defaults_to_one_minute_when_no_seconds_specified():
+    raw_reply = {
+        "error": "rate_limit_exceeded",
+        "message": "Rate limit exceeded: 60 calls per min.",
+    }
+    c, _ = client_with(raw_reply)
+    with pytest.raises(IndmoneyRateLimitError) as exc_info:
+        run(c.call_tool("get_indian_stocks_details", {"ind_keys": ["test"]}))
+    assert exc_info.value.retry_after == 60.0
+    assert c.is_rate_limited("get_indian_stocks_details") is True
+
+
+def test_self_rate_limit_prevents_burst_over_45_calls_per_minute():
+    c, _ = client_with({"ok": True})
+    now = time.monotonic()
+    # Simulate 45 calls having occurred within the last 30 seconds
+    for i in range(45):
+        c._call_timestamps.append(now - 30.0 + (i * 0.5))
+
+    with pytest.raises(IndmoneyRateLimitError) as exc_info:
+        run(c.call_tool("get_indian_stocks_details", {}))
+    assert "self-rate-limit" in str(exc_info.value).lower()
+

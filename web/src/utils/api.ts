@@ -2,7 +2,7 @@ import { cleanSearchTerm, track } from './analytics'
 import { saveSessionForWorker } from './pushSession'
 import { webPushSignOut } from './webPush'
 import type { LiveSignalsResponse } from '../components/signals/useLiveSignals'
-import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult, WatchlistItem, WatchlistResponse } from '../types'
+import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult, WatchlistItem, WatchlistResponse, BoardroomOverview, DirectiveCard, InvestigationDossier, GroundSwarmOverview } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -375,4 +375,45 @@ export async function refreshWatchlist(): Promise<WatchlistResponse> {
   }
   return raw && Array.isArray(raw.items) ? raw : { items: [], count: 0 }
 }
+
+// --- Agent Boardroom API ---
+
+export async function fetchBoardroom(): Promise<BoardroomOverview> {
+  return fetchApi<BoardroomOverview>('/api/v1/agents/boardroom')
+}
+
+export async function runBoardroomReview(): Promise<BoardroomOverview> {
+  return fetchApi<BoardroomOverview>('/api/v1/agents/run', { method: 'POST' })
+}
+
+export async function updateDirectiveStatus(
+  directiveId: string,
+  status: string,
+  userComment?: string
+): Promise<DirectiveCard> {
+  return fetchApi<DirectiveCard>(`/api/v1/agents/directives/${encodeURIComponent(directiveId)}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status, user_comment: userComment || null }),
+  })
+}
+
+export async function fetchStockDossier(symbol: string): Promise<InvestigationDossier> {
+  return fetchApi<InvestigationDossier>(`/api/v1/agents/dossier/${encodeURIComponent(symbol)}`)
+}
+
+export async function fetchGroundSwarmOverview(): Promise<GroundSwarmOverview> {
+  return fetchApi<GroundSwarmOverview>('/api/v1/agents/ground/dossiers')
+}
+
+export async function triggerGroundSwarmScan(interStockDelay: number = 3.0): Promise<{ status: string; message: string; holdings_count?: number }> {
+  return fetchApi<{ status: string; message: string; holdings_count?: number }>(`/api/v1/agents/ground/scan?inter_stock_delay=${interStockDelay}`, {
+    method: 'POST',
+  })
+}
+
+export async function fetchGroundStatus(): Promise<GroundSwarmOverview['status']> {
+  return fetchApi<GroundSwarmOverview['status']>('/api/v1/agents/ground/status')
+}
+
+
 

@@ -272,6 +272,49 @@ class TestMarketData(unittest.TestCase):
             # Call count should STILL be 1!
             self.assertEqual(mock_groww_fetch.call_count, 1)
 
+    def test_alternate_quote_recovery_for_series_shift(self):
+        """When Kite refuses a quote due to series shift (e.g. -BE removed or added), alternate candidate is queried."""
+        from core.market_data.kite_client import KiteToolError
+        service = MCPMarketDataService()
+
+        kite_client = AsyncMock()
+        kite_client.owner_id = "user_123"
+        kite_client.is_authenticated = True
+
+        async def mock_get_quotes(instruments):
+            inst = instruments[0]
+            if inst == "NSE:GATECH-BE":
+                raise KiteToolError("No market data found for requested instrument")
+            elif inst == "NSE:GATECH":
+                return {
+                    "NSE:GATECH": {
+                        "last_price": 0.54,
+                        "ohlc": {"close": 0.6, "open": 0.59, "high": 0.62, "low": 0.54},
+                        "net_change": -0.06
+                    }
+                }
+            elif inst == "NSE:MAWANASUG":
+                raise KiteToolError("No market data found for requested instrument")
+            elif inst == "NSE:MAWANASUG-BE":
+                return {
+                    "NSE:MAWANASUG-BE": {
+                        "last_price": 146.08,
+                        "ohlc": {"close": 150.36, "open": 152.5, "high": 154.5, "low": 145.27},
+                        "net_change": -4.28
+                    }
+                }
+            raise KiteToolError("Unknown")
+
+        kite_client.get_quotes.side_effect = mock_get_quotes
+
+        quotes, success = asyncio.run(service.fetch_live_quotes(["NSE:GATECH-BE", "NSE:MAWANASUG"], client=kite_client, owner_id="user_123"))
+        self.assertTrue(success)
+        # Verifies recovery under original requested key as well as resolved alternate
+        self.assertIn("NSE:GATECH-BE", quotes)
+        self.assertEqual(quotes["NSE:GATECH-BE"].last_price, 0.54)
+        self.assertIn("NSE:MAWANASUG", quotes)
+        self.assertEqual(quotes["NSE:MAWANASUG"].last_price, 146.08)
+
 
 if __name__ == "__main__":
     unittest.main()

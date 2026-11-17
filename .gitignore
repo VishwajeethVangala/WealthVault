@@ -48,3 +48,5 @@ Thumbs.db
 storage/blobs/indmoney_client.json
 storage/blobs/groww_client.json
 storage/blobs/*oauth_clients*.json
+storage/blobs/*boardroom*.json
+storage/blobs/ground_dossiers.json

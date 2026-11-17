@@ -1,6 +1,7 @@
 """WealthVault API routers package."""
 
 from apps.api.routers.accounts import router as accounts_router
+from apps.api.routers.agents import router as agents_router
 from apps.api.routers.analytics import router as analytics_router
 from apps.api.routers.auth import router as auth_router
 from apps.api.routers.feedback import router as feedback_router
@@ -26,4 +27,5 @@ __all__ = [
     "feedback_router",
     "notifications_router",
     "watchlist_router",
+    "agents_router",
 ]

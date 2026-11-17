@@ -17,7 +17,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from core.market_data.indmoney_client import IndmoneyMCPClient, get_indmoney_mcp_client
+from core.market_data.indmoney_client import IndmoneyMCPClient, IndmoneyRateLimitError, get_indmoney_mcp_client
 from core.models import QuoteItem
 from storage.tables.repositories import BrokerConnectionRepository, SymbolMapRepository
 
@@ -94,7 +94,12 @@ async def _details(client: IndmoneyMCPClient, keys: List[str]) -> Dict[str, Dict
     out: Dict[str, Dict[str, Any]] = {}
     for i in range(0, len(keys), DETAILS_BATCH):
         async with _gate():
-            out.update(_stat_rows(await client.call_tool("get_indian_stocks_details", {"ind_keys": keys[i : i + DETAILS_BATCH]})))
+            try:
+                res = await client.call_tool("get_indian_stocks_details", {"ind_keys": keys[i : i + DETAILS_BATCH]})
+                out.update(_stat_rows(res))
+            except IndmoneyRateLimitError as exc:
+                logger.info("INDmoney details rate-limited: %s (backing off)", exc)
+                break
     return out
 
 
@@ -125,12 +130,25 @@ async def resolve_keys(client: IndmoneyMCPClient, instruments: List[str]) -> Dic
     await _load_keys()
     want = sorted({i.upper() for i in instruments if i.upper().startswith("NSE:")})
     out = {i: _keys[i] for i in want if i in _keys}
+    if hasattr(client, "is_rate_limited") and client.is_rate_limited():
+        return out
     now = time.monotonic()
     todo = [i for i in want if i not in out and now - _misses.get(i, -MISS_SECONDS) >= MISS_SECONDS]
+    if not todo:
+        return out
+
+    hit_rate_limit = False
 
     async def one(inst: str) -> None:
+        nonlocal hit_rate_limit
+        if hit_rate_limit:
+            return
         try:
             key = await _find_key(client, inst)
+        except IndmoneyRateLimitError as exc:
+            hit_rate_limit = True
+            logger.info("INDmoney key lookup rate-limited for %s: %s", inst, exc)
+            return
         except Exception as exc:
             logger.warning("INDmoney key lookup failed for %s: %s", inst, exc)
             return  # not a miss: the next try may work

@@ -536,6 +536,7 @@
   .side .brand .brand-name,
   .side .nav-label,
   .side .nav a .nav-text,
+  .side .nav a .nav-badge,
   .side .nav .count,
   .side .side-foot {
     display: none;

@@ -525,3 +525,306 @@ export interface WatchlistResponse {
   count: number
 }
 
+// --- Agent Boardroom Types ---
+
+export interface GuardrailCheck {
+  guardrail_id: string
+  name: string
+  threshold: string
+  mandate: string
+  status: 'CHECKED_AND_ACTIVE' | 'WARNING' | 'PENDING'
+  last_audit_result: string
+  severity: 'CRITICAL' | 'HIGH' | 'NORMAL'
+}
+
+export interface AgentExecutionSummary {
+  total_holdings_scanned?: number
+  subordinate_reports_reviewed?: number
+  executive_directives_issued?: number
+  breached_holdings_count?: number
+  deep_drawdown_count?: number
+  concentration_violations_count?: number
+  max_concentration_holding?: string | null
+  max_concentration_pct?: number | null
+  all_checks_verified?: boolean
+  capital_freed_target_inr?: number
+}
+
+export interface AgentProfile {
+  agent_id: string
+  name: string
+  title: string
+  tier: 'DOMAIN_SPECIALIST' | 'FIDUCIARY_REVIEWER' | 'EXECUTIVE_BOSS'
+  avatar_icon: string
+  philosophy: string
+  state: 'IDLE' | 'ANALYZING' | 'PROPOSAL_GENERATED' | 'WAITING_REVIEW' | 'REVISION_REQUESTED' | 'APPROVED' | 'SYNTHESIZED'
+  current_task?: string | null
+  last_run_at?: string | null
+  monitored_metrics: string[]
+  guardrails?: GuardrailCheck[]
+  execution_summary?: AgentExecutionSummary
+}
+
+export interface ProposedAction {
+  symbol: string
+  display_name?: string | null
+  broker: string
+  action: 'CUT_LOSS' | 'TRAILING_TRIM' | 'REBALANCE' | 'PYRAMID_ADD' | 'HOLD_DEFENSE' | 'EXIT_ALL'
+  quantity: number
+  estimated_price: number
+  trigger_reason: string
+  suggested_stop_loss?: number | null
+  target_price?: number | null
+  order_type: string
+  trend_verdict?: string | null
+  holding_quantity?: number | null
+  holding_avg_price?: number | null
+  pnl_pct?: number | null
+}
+
+export interface NewsCatalyst {
+  headline: string
+  source: string
+  published_at: string
+  sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL'
+  category: string
+  link?: string | null
+}
+
+export interface FundamentalVitals {
+  market_cap_cr?: number | null
+  pe_ratio?: number | null
+  book_value?: number | null
+  roce_pct?: number | null
+  roe_pct?: number | null
+  debt_to_equity?: number | null
+  sales_growth_yoy_pct?: number | null
+  net_profit_cr?: number | null
+  promoter_holding_pct?: number | null
+  promoter_pledged_pct?: number | null
+  fii_dii_trend: string
+  pros: string[]
+  cons: string[]
+}
+
+export interface InvestigationDossier {
+  symbol: string
+  timestamp: string
+  causality: 'SYSTEMIC_MARKET_BETA' | 'COMPANY_SPECIFIC' | 'SPECULATIVE_MANIPULATION'
+  causality_explanation: string
+  market_benchmark_delta: Record<string, number>
+  recent_news: NewsCatalyst[]
+  fundamental_vitals: FundamentalVitals
+  technical_trend?: string | null
+  trend_score?: number | null
+  trend_max?: number | null
+  volume_delivery_pct?: number | null
+  purpose_of_move: string
+  forensic_risk_score: number
+}
+
+export interface DirectiveCard {
+  directive_id: string
+  timestamp: string
+  title: string
+  display_name?: string | null
+  trend_verdict?: string | null
+  summary_thesis: string
+  priority: 'CRITICAL' | 'HIGH' | 'NORMAL' | 'LOW'
+  originating_subagents: string[]
+  actions: ProposedAction[]
+  review_verdict: string
+  review_summary: string
+  investigation_dossier?: InvestigationDossier | null
+  user_status: 'PENDING_REVIEW' | 'ORDER_PLACED_AT_BROKER' | 'IGNORED' | 'SNOOZED' | 'SIMULATED'
+  user_comment?: string | null
+  resolved_at?: string | null
+  holding_quantity?: number | null
+  holding_avg_price?: number | null
+  pnl_pct?: number | null
+  ai_deliberated?: boolean
+  ai_deliberation_status?: 'DELIBERATED_BY_GEMINI' | 'HELD_API_KEY_REQUIRED' | 'HELD_NETWORK_ERROR' | string
+  ai_synthesis_notes?: string | null
+}
+
+export interface TimelineEvent {
+  event_id: string
+  timestamp: string
+  agent_id: string
+  agent_name: string
+  event_type: string
+  message: string
+  proposal_id?: string | null
+  directive_id?: string | null
+  metadata: Record<string, unknown>
+}
+
+export interface BoardroomOverview {
+  agents: AgentProfile[]
+  active_directives: DirectiveCard[]
+  historical_directives: DirectiveCard[]
+  timeline: TimelineEvent[]
+  ai_deliberation_status?: 'DELIBERATED_BY_GEMINI' | 'HELD_API_KEY_REQUIRED' | 'HELD_NETWORK_ERROR' | string
+  ai_status_message?: string | null
+}
+
+// --- Ground-Level Scout Swarm Types ---
+
+export interface RiskIntelReport {
+  symbol: string
+  current_price: number
+  average_price: number
+  quantity: number
+  pnl_pct: number
+  portfolio_weight_pct: number
+  stop_loss_breach: boolean
+  deep_drawdown_breach: boolean
+  over_concentration: boolean
+  broker_source: string
+  status: string
+  summary: string
+  completed_at: string
+}
+
+export interface TechIntelReport {
+  symbol: string
+  current_price: number
+  sma_50?: number | null
+  sma_200?: number | null
+  slope_200_sma?: number | null
+  golden_cross?: boolean | null
+  stage_verdict: string
+  momentum_score: number
+  momentum_max: number
+  rs_score_vs_nifty?: number | null
+  rs_rating_label?: 'OUTPERFORMING' | 'IN_LINE' | 'UNDERPERFORMING' | string | null
+  market_regime?: 'BULL_MARKET' | 'NEUTRAL_CHOPPY' | 'BEAR_CORRECTION' | string | null
+  nifty_trend_summary?: string | null
+  status: string
+  summary: string
+  completed_at: string
+}
+
+export interface PatternIntelReport {
+  symbol: string
+  pattern_detected: boolean
+  pattern_name?: string | null
+  bias: 'BULLISH' | 'BEARISH' | 'NEUTRAL'
+  confidence: number
+  pivot_breakout_price?: number | null
+  support_stop_price?: number | null
+  pattern_stage?: string | null
+  volume_surge_ratio?: number | null
+  volume_dryup_confirmed?: boolean | null
+  is_low_volume_trap?: boolean
+  status: string
+  summary: string
+  completed_at: string
+}
+
+export interface FundaIntelReport {
+  symbol: string
+  is_etf: boolean
+  market_cap_cr?: number | null
+  pe_ratio?: number | null
+  roce_pct?: number | null
+  roe_pct?: number | null
+  debt_to_equity?: number | null
+  sales_growth_3y?: number | null
+  promoter_holding_pct?: number | null
+  promoter_pledged_pct?: number | null
+  status: string
+  summary: string
+  completed_at: string
+}
+
+export interface NewsArticleItem {
+  headline: string
+  source: string
+  published_at: string
+  link?: string | null
+  sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL'
+  confidence: number
+  category: string
+}
+
+export interface NewsIntelReport {
+  symbol: string
+  articles_scanned: number
+  positive_count: number
+  negative_count: number
+  neutral_count: number
+  dominant_sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL'
+  sentiment_confidence: number
+  material_threat: boolean
+  threat_reasons: string[]
+  articles: NewsArticleItem[]
+  status: string
+  summary: string
+  completed_at: string
+}
+
+export interface BulkDealItem {
+  date: string
+  client_name: string
+  buy_sell: 'BUY' | 'SELL'
+  quantity: number
+  price: number
+  deal_type: 'BULK' | 'BLOCK'
+  remarks?: string | null
+}
+
+export interface PITDisclosureItem {
+  date: string
+  person_name: string
+  category_of_person: string
+  transaction_type: 'BUY' | 'SELL' | 'PLEDGE' | 'REVOKE'
+  quantity: number
+  value_inr: number
+}
+
+export interface InsiderIntelReport {
+  symbol: string
+  is_etf: boolean
+  bulk_deals: BulkDealItem[]
+  block_deals: BulkDealItem[]
+  pit_disclosures: PITDisclosureItem[]
+  institutional_bias: 'ACCUMULATION' | 'DISTRIBUTION' | 'NEUTRAL' | 'NO_DEALS'
+  promoter_bias: 'BUYING' | 'SELLING' | 'NEUTRAL' | 'NO_FILINGS'
+  status: string
+  summary: string
+  completed_at: string
+}
+
+export interface GroundStockDossier {
+  symbol: string
+  company_name: string
+  is_etf: boolean
+  risk_report?: RiskIntelReport | null
+  tech_report?: TechIntelReport | null
+  pattern_report?: PatternIntelReport | null
+  funda_report?: FundaIntelReport | null
+  news_report?: NewsIntelReport | null
+  insider_report?: InsiderIntelReport | null
+  barrier_status: 'PENDING' | 'IN_PROGRESS' | 'READY_FOR_REVIEW' | 'QUARANTINED'
+  completed_scouts: string[]
+  required_scouts: string[]
+  missing_scouts: string[]
+  current_scout?: string | null
+  last_updated: string
+}
+
+export interface GroundSwarmOverview {
+  dossiers: GroundStockDossier[]
+  status: {
+    is_scanning: boolean
+    current_stock?: string | null
+    current_scout?: string | null
+    total_dossiers: number
+    ready_dossiers: number
+    timestamp: string
+  }
+}
+
+
+
