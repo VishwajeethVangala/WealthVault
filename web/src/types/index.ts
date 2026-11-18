@@ -416,6 +416,22 @@ export interface SupertrendOptions {
   capital_per_trade?: number
 }
 
+export interface ScreenerRecommendation {
+  symbol: string
+  name: string
+  close?: number
+  volume?: number
+  per_chg?: number
+}
+
+export interface ScreenerRecommendationsResponse {
+  slug: string
+  title: string
+  fetched_at: string
+  items: ScreenerRecommendation[]
+  count: number
+}
+
 export interface TargetAllocation {
   owner_id: string
   targets: Record<string, number>
