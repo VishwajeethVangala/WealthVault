@@ -18,7 +18,7 @@ import {
   Table,
   LayoutGrid,
 } from 'lucide-react'
-import { fetchGroundSwarmOverview, triggerGroundSwarmScan, fetchGroundStatus } from '../../utils/api'
+import { fetchGroundSwarmOverview, fetchGroundStatus } from '../../utils/api'
 import type { GroundStockDossier, GroundSwarmOverview } from '../../types'
 import { formatTicker, formatCompanyName } from '../../utils/tickerFormat'
 
@@ -66,6 +66,10 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
   const [inspectedDossier, setInspectedDossier] = useState<GroundStockDossier | null>(null)
   const [triageFilter, setTriageFilter] = useState<'all' | 'danger' | 'opportunity' | 'baseline'>('all')
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
+  const [patternFilter, setPatternFilter] = useState<string>('all')
+  const [roceFilter, setRoceFilter] = useState<string>('all')
+  const [newsFilter, setNewsFilter] = useState<string>('all')
+  const [stageFilter, setStageFilter] = useState<string>('all')
 
   const loadData = useCallback(async () => {
     try {
@@ -104,18 +108,6 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
     return () => clearInterval(interval)
   }, [scanning, loadData])
 
-  const handleStartScan = async () => {
-    try {
-      setScanning(true)
-      await triggerGroundSwarmScan(pacingDelay)
-      await loadData()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to initiate ground swarm scan'
-      setError(msg)
-      setScanning(false)
-    }
-  }
-
   // Filter dossiers
   const filteredDossiers = useMemo(() => {
     if (!data?.dossiers) return []
@@ -135,9 +127,47 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
       if (barrierFilter === 'ready' && d.barrier_status !== 'READY_FOR_REVIEW') return false
       if (barrierFilter === 'in_progress' && d.barrier_status !== 'IN_PROGRESS') return false
 
+      // Pattern Filter
+      if (patternFilter !== 'all') {
+        const pat = d.pattern_report
+        if (patternFilter === 'has_pattern' && !pat?.pattern_detected) return false
+        if (patternFilter === 'vcp' && !pat?.pattern_name?.toLowerCase().includes('vcp')) return false
+        if (patternFilter === 'cup_handle' && !pat?.pattern_name?.toLowerCase().includes('cup')) return false
+        if (patternFilter === 'double_bottom' && !pat?.pattern_name?.toLowerCase().includes('bottom')) return false
+        if (patternFilter === 'volume_surge' && (pat?.volume_surge_ratio || 0) < 1.4) return false
+        if (patternFilter === 'trap' && !pat?.is_low_volume_trap) return false
+      }
+
+      // ROCE Solvency Filter
+      if (roceFilter !== 'all') {
+        const roce = d.funda_report?.roce_pct
+        if (roceFilter === 'elite' && (roce == null || roce < 20)) return false
+        if (roceFilter === 'healthy' && (roce == null || roce < 12)) return false
+        if (roceFilter === 'subpar' && (roce == null || roce >= 12 || roce < 0)) return false
+        if (roceFilter === 'negative' && (roce == null || roce >= 0)) return false
+      }
+
+      // News Sentiment Filter
+      if (newsFilter !== 'all') {
+        const news = d.news_report
+        if (newsFilter === 'threat' && !news?.material_threat) return false
+        if (newsFilter === 'has_news' && (news?.articles_scanned || 0) <= 0) return false
+        if (newsFilter === 'positive' && !news?.articles?.some((a) => a.sentiment === 'POSITIVE')) return false
+        if (newsFilter === 'negative' && !news?.articles?.some((a) => a.sentiment === 'NEGATIVE')) return false
+      }
+
+      // Technical Stage Filter
+      if (stageFilter !== 'all') {
+        const tech = d.tech_report
+        if (stageFilter === 'stage_2' && !tech?.stage_verdict?.toLowerCase().includes('stage 2')) return false
+        if (stageFilter === 'stage_4' && !tech?.stage_verdict?.toLowerCase().includes('stage 4')) return false
+        if (stageFilter === 'above_200' && (!tech?.sma_200 || (tech.current_price ?? 0) < tech.sma_200)) return false
+        if (stageFilter === 'below_200' && (!tech?.sma_200 || (tech.current_price ?? 0) >= tech.sma_200)) return false
+      }
+
       return true
     })
-  }, [data?.dossiers, searchQuery, barrierFilter])
+  }, [data?.dossiers, searchQuery, barrierFilter, patternFilter, roceFilter, newsFilter, stageFilter])
 
   // 3-Bucket Triage Classification
   const buckets = useMemo(() => {
@@ -357,18 +387,90 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
                 <option value={1.0}>1.0s Rapid</option>
               </select>
             </div>
+          </div>
+        </div>
 
+        {/* Row 2: Intelligence Filters (Patterns, ROCE, News Sentiment, Technical Stage) */}
+        <div className="pt-2.5 border-t border-wv-border/70 flex items-center gap-2 flex-wrap text-xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3">
+            Filters:
+          </span>
+
+          {/* Pattern Filter */}
+          <select
+            value={patternFilter}
+            onChange={(e) => setPatternFilter(e.target.value)}
+            className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+          >
+            <option value="all">📐 All Patterns</option>
+            <option value="has_pattern">Any Pattern Detected</option>
+            <option value="vcp">VCP (Volatility Contraction)</option>
+            <option value="cup_handle">Cup &amp; Handle</option>
+            <option value="double_bottom">Double Bottom / Base</option>
+            <option value="volume_surge">Volume Surge (≥ 1.4x)</option>
+            <option value="trap">Low Volume Trap</option>
+          </select>
+
+          {/* ROCE Solvency Filter */}
+          <select
+            value={roceFilter}
+            onChange={(e) => setRoceFilter(e.target.value)}
+            className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+          >
+            <option value="all">⚖️ All ROCE</option>
+            <option value="elite">Elite ROCE (≥ 20%)</option>
+            <option value="healthy">Healthy ROCE (≥ 12%)</option>
+            <option value="subpar">Subpar ROCE (&lt; 12%)</option>
+            <option value="negative">Negative ROCE (&lt; 0%)</option>
+          </select>
+
+          {/* News Sentiment Filter */}
+          <select
+            value={newsFilter}
+            onChange={(e) => setNewsFilter(e.target.value)}
+            className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+          >
+            <option value="all">📰 All News</option>
+            <option value="threat">🚨 Material Threat Flagged</option>
+            <option value="positive">🟢 Positive Sentiment</option>
+            <option value="negative">🔴 Negative Sentiment</option>
+            <option value="has_news">Has News Articles</option>
+          </select>
+
+          {/* Technical Stage Filter */}
+          <select
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value)}
+            className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+          >
+            <option value="all">📈 All Stages</option>
+            <option value="stage_2">Stage 2: Markup</option>
+            <option value="stage_4">Stage 4: Capitulation / Downtrend</option>
+            <option value="above_200">Above 200-DMA Support</option>
+            <option value="below_200">Below 200-DMA Breakdown</option>
+          </select>
+
+          {/* Reset Filters button if any active */}
+          {(patternFilter !== 'all' || roceFilter !== 'all' || newsFilter !== 'all' || stageFilter !== 'all' || barrierFilter !== 'all' || searchQuery) && (
             <button
               type="button"
-              onClick={handleStartScan}
-              disabled={scanning}
-              className="btn btn-primary text-xs px-2.5 py-1.5"
-              title="Re-run Ground Swarm Telemetry"
+              onClick={() => {
+                setPatternFilter('all')
+                setRoceFilter('all')
+                setNewsFilter('all')
+                setStageFilter('all')
+                setBarrierFilter('all')
+                setSearchQuery('')
+              }}
+              className="text-[11px] text-wv-accent hover:underline font-medium px-2 py-0.5"
             >
-              <RefreshCw size={14} strokeWidth={1.75} className={scanning ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">{scanning ? 'Scouting…' : 'Scout'}</span>
+              Reset Filters
             </button>
-          </div>
+          )}
+
+          <span className="text-[11px] text-wv-text-3 ml-auto">
+            Showing <strong className="text-wv-text font-mono">{displayedList.length}</strong> of {data?.dossiers?.length || 65} holdings
+          </span>
         </div>
       </div>
 

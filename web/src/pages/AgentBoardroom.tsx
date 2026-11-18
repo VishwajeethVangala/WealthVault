@@ -250,12 +250,18 @@ export const AgentBoardroom: React.FC = () => {
   const [reviewerCategory, setReviewerCategory] = useState<ReviewerAuditCategory>('ALL')
   const [reviewerSearch, setReviewerSearch] = useState('')
   const [reviewerBroker, setReviewerBroker] = useState<string>('all')
+  const [reviewerRoceFilter, setReviewerRoceFilter] = useState<string>('all')
+  const [reviewerNewsFilter, setReviewerNewsFilter] = useState<string>('all')
+  const [reviewerTechFilter, setReviewerTechFilter] = useState<string>('all')
 
   // Filters for The Boss Tab (Tab 3)
   const [bossSubTab, setBossSubTab] = useState<'reclamation' | 'redeployment' | 'archived'>('reclamation')
   const [bossUrgency, setBossUrgency] = useState<string>('all')
   const [bossBroker, setBossBroker] = useState<string>('all')
   const [bossSearch, setBossSearch] = useState('')
+  const [bossActionFilter, setBossActionFilter] = useState<string>('all')
+  const [bossRoceFilter, setBossRoceFilter] = useState<string>('all')
+  const [bossAiFilter, setBossAiFilter] = useState<string>('all')
 
   const loadBoardroom = useCallback(async () => {
     try {
@@ -581,7 +587,7 @@ export const AgentBoardroom: React.FC = () => {
 
   // Filtered Directives for The Reviewer Tab (Tab 2)
   const filteredReviewerDirectives = useMemo(() => {
-    return classifiedReviewerList.filter(({ cleanTicker, companyName, directive, verdict }) => {
+    return classifiedReviewerList.filter(({ cleanTicker, companyName, directive, verdict, groundDossier }) => {
       const q = reviewerSearch.toLowerCase().trim()
       const matchesSearch =
         !q ||
@@ -600,9 +606,36 @@ export const AgentBoardroom: React.FC = () => {
         if (broker !== reviewerBroker) return false
       }
 
+      // Reviewer ROCE Solvency Filter
+      if (reviewerRoceFilter !== 'all') {
+        const roce = groundDossier?.funda_report?.roce_pct ?? directive.investigation_dossier?.fundamental_vitals?.roce_pct
+        if (reviewerRoceFilter === 'healthy' && (roce == null || roce < 12)) return false
+        if (reviewerRoceFilter === 'subpar' && (roce == null || roce >= 12 || roce < 0)) return false
+        if (reviewerRoceFilter === 'negative' && (roce == null || roce >= 0)) return false
+      }
+
+      // Reviewer News Threat Filter
+      if (reviewerNewsFilter !== 'all') {
+        const hasThreat = Boolean(groundDossier?.news_report?.material_threat)
+        if (reviewerNewsFilter === 'threat' && !hasThreat) return false
+        if (reviewerNewsFilter === 'clean' && hasThreat) return false
+      }
+
+      // Reviewer Technical Support Filter
+      if (reviewerTechFilter !== 'all') {
+        const sma200 = groundDossier?.tech_report?.sma_200
+        const curPrice = groundDossier?.tech_report?.current_price ?? directive.actions[0]?.estimated_price ?? 0
+        const isHolding200 = Boolean(sma200 && curPrice >= sma200 * 0.95)
+        const trend = (groundDossier?.tech_report?.stage_verdict ?? directive.investigation_dossier?.technical_trend ?? '').toLowerCase()
+
+        if (reviewerTechFilter === 'holding_200' && !isHolding200) return false
+        if (reviewerTechFilter === 'stage_4' && !trend.includes('stage 4')) return false
+        if (reviewerTechFilter === 'uptrend' && !trend.includes('stage 2') && !trend.includes('uptrend')) return false
+      }
+
       return true
     })
-  }, [classifiedReviewerList, reviewerCategory, reviewerSearch, reviewerBroker])
+  }, [classifiedReviewerList, reviewerCategory, reviewerSearch, reviewerBroker, reviewerRoceFilter, reviewerNewsFilter, reviewerTechFilter])
 
   // Filtered Directives for The Boss Tab (Tab 3)
   const filteredBossDirectives = useMemo(() => {
@@ -631,9 +664,30 @@ export const AgentBoardroom: React.FC = () => {
         return false
       }
 
+      // Boss Action Filter
+      if (bossActionFilter !== 'all') {
+        if (bossActionFilter === 'cut_loss' && !isExitAction(firstAction?.action)) return false
+        if (bossActionFilter === 'trim' && !isTrimAction(firstAction?.action)) return false
+        if (bossActionFilter === 'hold_defense' && firstAction?.action !== 'HOLD_DEFENSE') return false
+      }
+
+      // Boss ROCE Quality Filter
+      if (bossRoceFilter !== 'all') {
+        const groundDossier = dossierMap[cleanTick] || dossierMap[firstAction?.symbol || '']
+        const roce = groundDossier?.funda_report?.roce_pct ?? d.investigation_dossier?.fundamental_vitals?.roce_pct
+        if (bossRoceFilter === 'high' && (roce == null || roce < 15)) return false
+        if (bossRoceFilter === 'low' && (roce == null || roce >= 10)) return false
+      }
+
+      // Boss AI Status Filter
+      if (bossAiFilter !== 'all') {
+        if (bossAiFilter === 'deliberated' && !d.ai_deliberated) return false
+        if (bossAiFilter === 'held' && (d.ai_deliberated && !d.ai_deliberation_status?.startsWith('HELD'))) return false
+      }
+
       return true
     })
-  }, [activeDirectives, historicalDirectives, bossSubTab, bossUrgency, bossBroker, bossSearch])
+  }, [activeDirectives, historicalDirectives, bossSubTab, bossUrgency, bossBroker, bossSearch, bossActionFilter, bossRoceFilter, bossAiFilter, dossierMap])
 
   // Copy Trade Manifest utility for The Boss
   const handleCopyManifest = () => {
@@ -848,23 +902,10 @@ export const AgentBoardroom: React.FC = () => {
             <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
               <button
                 type="button"
-                onClick={handleRunFiduciaryAudit}
-                disabled={runningPhase !== 'none'}
-                className="btn btn-primary text-xs px-3.5 py-1.5 w-full sm:w-auto flex items-center justify-center gap-1.5"
-              >
-                {runningPhase === 'audit' ? (
-                  <RefreshCw size={13} className="animate-spin" />
-                ) : (
-                  <ShieldCheck size={13} />
-                )}
-                <span>{runningPhase === 'audit' ? 'Auditing Policies…' : 'Run Fiduciary Audit'}</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => setActiveTab('boss')}
                 className="btn btn-outline text-xs px-3 py-1.5 flex items-center justify-center gap-1 w-full sm:w-auto"
               >
-                <span>Proceed to Phase 3</span>
+                <span>Proceed to Phase 3 Directives</span>
                 <ArrowUpRight size={13} />
               </button>
             </div>
@@ -968,64 +1009,130 @@ export const AgentBoardroom: React.FC = () => {
           </div>
 
           {/* Triage & Filter Toolbar for The Reviewer */}
-          <div className="card p-2.5 sm:p-3 flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3">
-            <div className="flex items-center gap-2 overflow-x-auto -mx-2.5 px-2.5 sm:mx-0 sm:px-0 sm:overflow-visible sm:flex-wrap">
-              <div className="seg shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setReviewerCategory('ALL')}
-                  className={reviewerCategory === 'ALL' ? 'on' : ''}
-                >
-                  All Audited ({reviewerStats.total})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReviewerCategory('SHIELD')}
-                  className={reviewerCategory === 'SHIELD' ? 'on' : ''}
-                >
-                  🛡️ Shields ({reviewerStats.shields})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReviewerCategory('ROT')}
-                  className={reviewerCategory === 'ROT' ? 'on' : ''}
-                >
-                  🔴 Capital Rot ({reviewerStats.rot})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReviewerCategory('TRIM')}
-                  className={reviewerCategory === 'TRIM' ? 'on' : ''}
-                >
-                  🟡 Trims ({reviewerStats.trims})
-                </button>
+          <div className="card p-2.5 sm:p-3 space-y-2.5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3">
+              <div className="flex items-center gap-2 overflow-x-auto -mx-2.5 px-2.5 sm:mx-0 sm:px-0 sm:overflow-visible sm:flex-wrap">
+                <div className="seg shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setReviewerCategory('ALL')}
+                    className={reviewerCategory === 'ALL' ? 'on' : ''}
+                  >
+                    All Audited ({reviewerStats.total})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReviewerCategory('SHIELD')}
+                    className={reviewerCategory === 'SHIELD' ? 'on' : ''}
+                  >
+                    🛡️ Shields ({reviewerStats.shields})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReviewerCategory('ROT')}
+                    className={reviewerCategory === 'ROT' ? 'on' : ''}
+                  >
+                    🔴 Capital Rot ({reviewerStats.rot})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReviewerCategory('TRIM')}
+                    className={reviewerCategory === 'TRIM' ? 'on' : ''}
+                  >
+                    🟡 Trims ({reviewerStats.trims})
+                  </button>
+                </div>
+
+                {brokers.length > 1 && (
+                  <select
+                    value={reviewerBroker}
+                    onChange={(e) => setReviewerBroker(e.target.value)}
+                    className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent uppercase"
+                  >
+                    <option value="all">All Brokers</option>
+                    {brokers.map((b) => (
+                      <option key={b} value={b}>
+                        {b.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
-              {brokers.length > 1 && (
-                <select
-                  value={reviewerBroker}
-                  onChange={(e) => setReviewerBroker(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent uppercase"
-                >
-                  <option value="all">All Brokers</option>
-                  {brokers.map((b) => (
-                    <option key={b} value={b}>
-                      {b.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <div className="relative w-full md:w-auto">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
+                <input
+                  type="text"
+                  placeholder="Search ticker or company..."
+                  value={reviewerSearch}
+                  onChange={(e) => setReviewerSearch(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full md:w-60"
+                />
+              </div>
             </div>
 
-            <div className="relative w-full md:w-auto">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
-              <input
-                type="text"
-                placeholder="Search ticker or company..."
-                value={reviewerSearch}
-                onChange={(e) => setReviewerSearch(e.target.value)}
-                className="pl-8 pr-3 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full md:w-60"
-              />
+            {/* Row 2: Fiduciary Intelligence Filters (ROCE, News Threat, Technical Support) */}
+            <div className="pt-2.5 border-t border-wv-border/70 flex items-center gap-2 flex-wrap text-xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3">
+                Filters:
+              </span>
+
+              {/* ROCE Solvency Filter */}
+              <select
+                value={reviewerRoceFilter}
+                onChange={(e) => setReviewerRoceFilter(e.target.value)}
+                className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+              >
+                <option value="all">⚖️ All ROCE</option>
+                <option value="healthy">ROCE ≥ 12% (Cleared)</option>
+                <option value="subpar">Subpar ROCE (&lt; 12%)</option>
+                <option value="negative">Negative ROCE (&lt; 0%)</option>
+              </select>
+
+              {/* News Threat Filter */}
+              <select
+                value={reviewerNewsFilter}
+                onChange={(e) => setReviewerNewsFilter(e.target.value)}
+                className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+              >
+                <option value="all">📰 All News</option>
+                <option value="threat">🚨 Material Threat Flagged</option>
+                <option value="clean">🟢 Clean Wire (No Threats)</option>
+              </select>
+
+              {/* Technical Support / Stage Filter */}
+              <select
+                value={reviewerTechFilter}
+                onChange={(e) => setReviewerTechFilter(e.target.value)}
+                className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+              >
+                <option value="all">📈 All Technicals</option>
+                <option value="holding_200">🛡️ Holding 200-DMA Support</option>
+                <option value="stage_4">📉 Stage 4 / Downtrend</option>
+                <option value="uptrend">🚀 Stage 2 / Uptrend</option>
+              </select>
+
+              {/* Reset Filters button if any active */}
+              {(reviewerRoceFilter !== 'all' || reviewerNewsFilter !== 'all' || reviewerTechFilter !== 'all' || reviewerBroker !== 'all' || reviewerSearch || reviewerCategory !== 'ALL') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReviewerCategory('ALL')
+                    setReviewerBroker('all')
+                    setReviewerSearch('')
+                    setReviewerRoceFilter('all')
+                    setReviewerNewsFilter('all')
+                    setReviewerTechFilter('all')
+                  }}
+                  className="text-[11px] text-wv-accent hover:underline font-medium px-2 py-0.5"
+                >
+                  Reset Filters
+                </button>
+              )}
+
+              <span className="text-[11px] text-wv-text-3 ml-auto">
+                Showing <strong className="text-wv-text font-mono">{filteredReviewerDirectives.length}</strong> of {classifiedReviewerList.length} audited dossiers
+              </span>
             </div>
           </div>
 
@@ -1232,19 +1339,6 @@ export const AgentBoardroom: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-              <button
-                type="button"
-                onClick={handleRunBossDeliberation}
-                disabled={runningPhase !== 'none'}
-                className="btn btn-primary text-xs px-3.5 py-1.5 w-full sm:w-auto flex items-center justify-center gap-1.5"
-              >
-                {runningPhase === 'boss' ? (
-                  <RefreshCw size={13} className="animate-spin" />
-                ) : (
-                  <Crown size={13} />
-                )}
-                <span>{runningPhase === 'boss' ? 'Deliberating Directives…' : 'Deliberate CIO Directives'}</span>
-              </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('reviewer')}
@@ -1628,6 +1722,71 @@ export const AgentBoardroom: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Row 2: CIO Directive Filters (Action Type, ROCE Quality, AI Deliberation) */}
+            {bossSubTab !== 'redeployment' && (
+              <div className="pt-2.5 border-t border-wv-border/70 flex items-center gap-2 flex-wrap text-xs">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3">
+                  Filters:
+                </span>
+
+                {/* Action Type Filter */}
+                <select
+                  value={bossActionFilter}
+                  onChange={(e) => setBossActionFilter(e.target.value)}
+                  className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+                >
+                  <option value="all">🎯 All Actions</option>
+                  <option value="cut_loss">🔴 Full Exit Directives</option>
+                  <option value="trim">🟡 Trim Risk</option>
+                  <option value="hold_defense">🛡️ Hold Defense</option>
+                </select>
+
+                {/* ROCE Quality Filter */}
+                <select
+                  value={bossRoceFilter}
+                  onChange={(e) => setBossRoceFilter(e.target.value)}
+                  className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+                >
+                  <option value="all">⚖️ All ROCE</option>
+                  <option value="high">High ROCE (≥ 15%)</option>
+                  <option value="low">Low ROCE (&lt; 10%)</option>
+                </select>
+
+                {/* AI Deliberation Status Filter */}
+                <select
+                  value={bossAiFilter}
+                  onChange={(e) => setBossAiFilter(e.target.value)}
+                  className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+                >
+                  <option value="all">✨ All Statuses</option>
+                  <option value="deliberated">Gemini AI Deliberated</option>
+                  <option value="held">AI Deliberation Held</option>
+                </select>
+
+                {/* Reset Filters button if any active */}
+                {(bossActionFilter !== 'all' || bossRoceFilter !== 'all' || bossAiFilter !== 'all' || bossUrgency !== 'all' || bossBroker !== 'all' || bossSearch) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBossUrgency('all')
+                      setBossBroker('all')
+                      setBossSearch('')
+                      setBossActionFilter('all')
+                      setBossRoceFilter('all')
+                      setBossAiFilter('all')
+                    }}
+                    className="text-[11px] text-wv-accent hover:underline font-medium px-2 py-0.5"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+
+                <span className="text-[11px] text-wv-text-3 ml-auto">
+                  Showing <strong className="text-wv-text font-mono">{filteredBossDirectives.length}</strong> of {bossSubTab === 'reclamation' ? activeDirectives.length : historicalDirectives.length} directives
+                </span>
+              </div>
+            )}
 
             {/* SubTab 1: Capital Reclamation (Sell Orders) */}
             {bossSubTab === 'reclamation' && (
