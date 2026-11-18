@@ -12,7 +12,6 @@ import {
   Newspaper,
   Briefcase,
   X,
-  Clock,
   AlertTriangle,
   Zap,
   Table,
@@ -62,7 +61,6 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [barrierFilter, setBarrierFilter] = useState<'all' | 'ready' | 'in_progress'>('all')
-  const [pacingDelay, setPacingDelay] = useState<number>(3.0)
   const [inspectedDossier, setInspectedDossier] = useState<GroundStockDossier | null>(null)
   const [triageFilter, setTriageFilter] = useState<'all' | 'danger' | 'opportunity' | 'baseline'>('all')
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table')
@@ -274,7 +272,7 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
               <span className="font-semibold">{data?.status?.current_scout || 'Risk Scout'}</span>
             </span>
           </div>
-          <span>Pacing: {pacingDelay}s delay</span>
+          <span>Autonomous rate-limited crawl</span>
         </div>
       )}
 
@@ -286,72 +284,64 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
       )}
 
       {/* 2. Unified Triage & Filter Toolbar */}
-      <div className="card p-3 space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Triage Buckets Segmented Control */}
-          <div className="seg">
-            <button
-              type="button"
-              onClick={() => setTriageFilter('all')}
-              className={triageFilter === 'all' ? 'on' : ''}
-            >
-              <span>All Holdings</span>
-              <span className="cnt">{filteredDossiers.length}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTriageFilter('danger')}
-              className={triageFilter === 'danger' ? 'on text-wv-loss' : ''}
-            >
-              <ShieldAlert size={14} className="text-wv-loss" />
-              <span>1. Immediate Action</span>
-              <span className="cnt">{buckets.danger.length}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTriageFilter('opportunity')}
-              className={triageFilter === 'opportunity' ? 'on text-wv-gain' : ''}
-            >
-              <Zap size={14} className="text-wv-gain" />
-              <span>2. Breakouts</span>
-              <span className="cnt">{buckets.opportunity.length}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTriageFilter('baseline')}
-              className={triageFilter === 'baseline' ? 'on' : ''}
-            >
-              <span>3. Quiet Baseline</span>
-              <span className="cnt">{buckets.baseline.length}</span>
-            </button>
+      <div className="card p-3 sm:p-4 space-y-3">
+        {/* Tier 1: Triage Categories (Left) + Search & View Mode (Right) */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          {/* Scrollable, non-clipping Triage Tabs */}
+          <div className="overflow-x-auto no-scrollbar pb-1 xl:pb-0 -mx-1 px-1">
+            <div className="seg inline-flex shrink-0 whitespace-nowrap">
+              <button
+                type="button"
+                onClick={() => setTriageFilter('all')}
+                className={triageFilter === 'all' ? 'on' : ''}
+              >
+                <span>All Holdings</span>
+                <span className="cnt">{filteredDossiers.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTriageFilter('danger')}
+                className={triageFilter === 'danger' ? 'on text-wv-loss' : ''}
+              >
+                <ShieldAlert size={14} className="text-wv-loss" />
+                <span>1. Immediate Action</span>
+                <span className="cnt">{buckets.danger.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTriageFilter('opportunity')}
+                className={triageFilter === 'opportunity' ? 'on text-wv-gain' : ''}
+              >
+                <Zap size={14} className="text-wv-gain" />
+                <span>2. Breakouts</span>
+                <span className="cnt">{buckets.opportunity.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTriageFilter('baseline')}
+                className={triageFilter === 'baseline' ? 'on' : ''}
+              >
+                <span>3. Quiet Baseline</span>
+                <span className="cnt">{buckets.baseline.length}</span>
+              </button>
+            </div>
           </div>
 
-          {/* Right Toolbar: Search, View Mode, Pacing */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
+          {/* Right Controls: Search + Table/Cards View Mode */}
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap justify-between xl:justify-end">
+            <div className="relative flex-1 sm:w-64 min-w-[200px]">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
               <input
                 type="text"
                 placeholder="Search stock ticker or company..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 pr-3 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full sm:w-56"
+                className="pl-8 pr-3 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full"
               />
             </div>
 
-            {/* Barrier Filter */}
-            <select
-              value={barrierFilter}
-              onChange={(e) => setBarrierFilter(e.target.value as any)}
-              className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
-            >
-              <option value="all">All Barriers</option>
-              <option value="ready">Ready for Review (6/6)</option>
-              <option value="in_progress">In Progress</option>
-            </select>
-
             {/* View Mode Toggle */}
-            <div className="seg">
+            <div className="seg shrink-0">
               <button
                 type="button"
                 onClick={() => setViewMode('table')}
@@ -371,28 +361,12 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
                 <span className="hidden sm:inline">Cards</span>
               </button>
             </div>
-
-            {/* Pacing Delay */}
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-wv-surface-2 border border-wv-border text-xs text-wv-text-2">
-              <Clock className="w-3.5 h-3.5 text-wv-text-3" />
-              <select
-                aria-label="Pacing delay between stocks"
-                value={pacingDelay}
-                onChange={(e) => setPacingDelay(parseFloat(e.target.value))}
-                disabled={scanning}
-                className="bg-transparent font-medium text-wv-text focus:outline-none cursor-pointer"
-              >
-                <option value={3.0}>3.0s Deliberate</option>
-                <option value={5.0}>5.0s Slow / Safe</option>
-                <option value={1.0}>1.0s Rapid</option>
-              </select>
-            </div>
           </div>
         </div>
 
-        {/* Row 2: Intelligence Filters (Patterns, ROCE, News Sentiment, Technical Stage) */}
+        {/* Tier 2: Unified Filter Matrix (Patterns, ROCE, News, Stage, Barrier) */}
         <div className="pt-2.5 border-t border-wv-border/70 flex items-center gap-2 flex-wrap text-xs">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3 shrink-0">
             Filters:
           </span>
 
@@ -400,7 +374,7 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
           <select
             value={patternFilter}
             onChange={(e) => setPatternFilter(e.target.value)}
-            className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+            className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
           >
             <option value="all">📐 All Patterns</option>
             <option value="has_pattern">Any Pattern Detected</option>
@@ -415,7 +389,7 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
           <select
             value={roceFilter}
             onChange={(e) => setRoceFilter(e.target.value)}
-            className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+            className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
           >
             <option value="all">⚖️ All ROCE</option>
             <option value="elite">Elite ROCE (≥ 20%)</option>
@@ -428,7 +402,7 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
           <select
             value={newsFilter}
             onChange={(e) => setNewsFilter(e.target.value)}
-            className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+            className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
           >
             <option value="all">📰 All News</option>
             <option value="threat">🚨 Material Threat Flagged</option>
@@ -441,13 +415,24 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
           <select
             value={stageFilter}
             onChange={(e) => setStageFilter(e.target.value)}
-            className="px-2.5 py-1 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+            className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
           >
             <option value="all">📈 All Stages</option>
             <option value="stage_2">Stage 2: Markup</option>
             <option value="stage_4">Stage 4: Capitulation / Downtrend</option>
             <option value="above_200">Above 200-DMA Support</option>
             <option value="below_200">Below 200-DMA Breakdown</option>
+          </select>
+
+          {/* Barrier Status Filter */}
+          <select
+            value={barrierFilter}
+            onChange={(e) => setBarrierFilter(e.target.value as any)}
+            className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+          >
+            <option value="all">🛡️ All Barriers</option>
+            <option value="ready">Ready for Review (6/6)</option>
+            <option value="in_progress">In Progress</option>
           </select>
 
           {/* Reset Filters button if any active */}
@@ -462,14 +447,14 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
                 setBarrierFilter('all')
                 setSearchQuery('')
               }}
-              className="text-[11px] text-wv-accent hover:underline font-medium px-2 py-0.5"
+              className="text-[11px] text-wv-accent hover:underline font-semibold px-2 py-1 rounded bg-wv-accent/10 border border-wv-accent/20"
             >
               Reset Filters
             </button>
           )}
 
-          <span className="text-[11px] text-wv-text-3 ml-auto">
-            Showing <strong className="text-wv-text font-mono">{displayedList.length}</strong> of {data?.dossiers?.length || 65} holdings
+          <span className="text-[11px] text-wv-text-3 ml-auto shrink-0 font-medium">
+            Showing <strong className="text-wv-text font-mono font-bold">{displayedList.length}</strong> of {data?.dossiers?.length || 65} holdings
           </span>
         </div>
       </div>
