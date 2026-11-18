@@ -26,6 +26,9 @@ import {
 import {
   fetchBoardroom,
   runBoardroomReview,
+  runFiduciaryAudit,
+  runBossDeliberation,
+  triggerGroundSwarmScan,
   updateDirectiveStatus,
   fetchGroundSwarmOverview,
 } from '../utils/api'
@@ -236,7 +239,6 @@ export const AgentBoardroom: React.FC = () => {
   const [data, setData] = useState<BoardroomOverview | null>(null)
   const [groundData, setGroundData] = useState<GroundSwarmOverview | null>(null)
   const [loading, setLoading] = useState(true)
-  const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedDirective, setSelectedDirective] = useState<DirectiveCard | null>(null)
   const [copiedManifest, setCopiedManifest] = useState(false)
@@ -276,9 +278,54 @@ export const AgentBoardroom: React.FC = () => {
     void loadBoardroom()
   }, [loadBoardroom])
 
-  const handleRunReview = async () => {
+  const [runningPhase, setRunningPhase] = useState<'none' | 'ground' | 'audit' | 'boss' | 'all'>('none')
+
+  const handleRunGroundScan = async () => {
     try {
-      setRunning(true)
+      setRunningPhase('ground')
+      setError(null)
+      await triggerGroundSwarmScan(3.0)
+      const groundRes = await fetchGroundSwarmOverview()
+      if (groundRes) setGroundData(groundRes)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ground scan failed'
+      setError(msg)
+    } finally {
+      setRunningPhase('none')
+    }
+  }
+
+  const handleRunFiduciaryAudit = async () => {
+    try {
+      setRunningPhase('audit')
+      setError(null)
+      await runFiduciaryAudit()
+      await loadBoardroom()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Fiduciary audit failed'
+      setError(msg)
+    } finally {
+      setRunningPhase('none')
+    }
+  }
+
+  const handleRunBossDeliberation = async () => {
+    try {
+      setRunningPhase('boss')
+      setError(null)
+      await runBossDeliberation()
+      await loadBoardroom()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Boss deliberation failed'
+      setError(msg)
+    } finally {
+      setRunningPhase('none')
+    }
+  }
+
+  const handleRunAllPhases = async () => {
+    try {
+      setRunningPhase('all')
       setError(null)
       await runBoardroomReview()
       await loadBoardroom()
@@ -286,7 +333,7 @@ export const AgentBoardroom: React.FC = () => {
       const msg = err instanceof Error ? err.message : 'Review deliberation failed'
       setError(msg)
     } finally {
-      setRunning(false)
+      setRunningPhase('none')
     }
   }
 
@@ -695,16 +742,65 @@ export const AgentBoardroom: React.FC = () => {
           </span>
         </div>
 
-        {/* Right: Primary Run Review Trigger */}
-        <div className="flex items-center gap-3 shrink-0 w-full lg:w-auto">
+        {/* Right: Phased Action Triggers matching Active Tab */}
+        <div className="flex items-center gap-2.5 shrink-0 w-full lg:w-auto">
+          {activeTab === 'ground' && (
+            <button
+              type="button"
+              onClick={handleRunGroundScan}
+              disabled={runningPhase !== 'none'}
+              className="btn btn-primary w-full sm:w-auto"
+            >
+              {runningPhase === 'ground' ? (
+                <RefreshCw size={15} strokeWidth={1.75} className="animate-spin" />
+              ) : (
+                <Compass size={15} strokeWidth={1.75} />
+              )}
+              <span>{runningPhase === 'ground' ? 'Scanning 6 Scouts…' : '1. Run Ground Scan'}</span>
+            </button>
+          )}
+
+          {activeTab === 'reviewer' && (
+            <button
+              type="button"
+              onClick={handleRunFiduciaryAudit}
+              disabled={runningPhase !== 'none'}
+              className="btn btn-primary w-full sm:w-auto"
+            >
+              {runningPhase === 'audit' ? (
+                <RefreshCw size={15} strokeWidth={1.75} className="animate-spin" />
+              ) : (
+                <ShieldCheck size={15} strokeWidth={1.75} />
+              )}
+              <span>{runningPhase === 'audit' ? 'Auditing Policies…' : '2. Run Fiduciary Audit'}</span>
+            </button>
+          )}
+
+          {activeTab === 'boss' && (
+            <button
+              type="button"
+              onClick={handleRunBossDeliberation}
+              disabled={runningPhase !== 'none'}
+              className="btn btn-primary w-full sm:w-auto"
+            >
+              {runningPhase === 'boss' ? (
+                <RefreshCw size={15} strokeWidth={1.75} className="animate-spin" />
+              ) : (
+                <Crown size={15} strokeWidth={1.75} />
+              )}
+              <span>{runningPhase === 'boss' ? 'Deliberating Directives…' : '3. Deliberate CIO Directives'}</span>
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={handleRunReview}
-            disabled={running}
-            className="btn btn-primary w-full sm:w-auto"
+            onClick={handleRunAllPhases}
+            disabled={runningPhase !== 'none'}
+            className="btn btn-outline text-xs px-2.5 py-1.5 w-full sm:w-auto shrink-0"
+            title="Execute Phase 2 (Audit) and Phase 3 (Boss Deliberation) consecutively"
           >
-            {running ? <RefreshCw size={15} strokeWidth={1.75} className="animate-spin" /> : <Play size={15} strokeWidth={1.75} className="fill-current" />}
-            <span>{running ? 'Deliberating Cycle…' : 'Run Fiduciary Review'}</span>
+            {runningPhase === 'all' ? <RefreshCw size={13} className="animate-spin" /> : <Play size={13} className="fill-current" />}
+            <span>Run All</span>
           </button>
         </div>
       </div>
@@ -734,6 +830,46 @@ export const AgentBoardroom: React.FC = () => {
       {/* ========================================================================= */}
       {activeTab === 'reviewer' && (
         <div className="space-y-5">
+          {/* Phase 2 Header Action Ribbon */}
+          <div className="card p-3.5 sm:p-4 bg-gradient-to-r from-wv-surface to-wv-surface-2 border border-wv-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-wv-accent-weak text-wv-accent border border-wv-accent/20">
+                  Phase 2 Gatekeeper
+                </span>
+                <h3 className="text-xs sm:text-sm font-bold text-wv-text">
+                  Fiduciary Reviewer Forensic Cross-Examination
+                </h3>
+              </div>
+              <p className="text-[11px] text-wv-text-3">
+                Scrutinizes stop-loss breaches against Ground Scout telemetry. Shields high-ROCE assets at 200-DMA support and euthanasia for confirmed capital rot.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+              <button
+                type="button"
+                onClick={handleRunFiduciaryAudit}
+                disabled={runningPhase !== 'none'}
+                className="btn btn-primary text-xs px-3.5 py-1.5 w-full sm:w-auto flex items-center justify-center gap-1.5"
+              >
+                {runningPhase === 'audit' ? (
+                  <RefreshCw size={13} className="animate-spin" />
+                ) : (
+                  <ShieldCheck size={13} />
+                )}
+                <span>{runningPhase === 'audit' ? 'Auditing Policies…' : 'Run Fiduciary Audit'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('boss')}
+                className="btn btn-outline text-xs px-3 py-1.5 flex items-center justify-center gap-1 w-full sm:w-auto"
+              >
+                <span>Proceed to Phase 3</span>
+                <ArrowUpRight size={13} />
+              </button>
+            </div>
+          </div>
+
           {/* Reviewer 4-Metric Audit Banner */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="card p-4 space-y-1">
@@ -1080,6 +1216,45 @@ export const AgentBoardroom: React.FC = () => {
       {/* ========================================================================= */}
       {activeTab === 'boss' && (
         <div className="space-y-5">
+          {/* Phase 3 Header Action Ribbon */}
+          <div className="card p-3.5 sm:p-4 bg-gradient-to-r from-wv-surface to-wv-surface-2 border border-wv-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                  Phase 3 Executive
+                </span>
+                <h3 className="text-xs sm:text-sm font-bold text-wv-text">
+                  Chief Investment Officer Autonomous Capital Reallocation
+                </h3>
+              </div>
+              <p className="text-[11px] text-wv-text-3">
+                Synthesizes audited dossiers with Gemini AI into executive trade directives, enforces 3-pointer theses, and reallocates liquidated capital into Stage 2 leaders.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+              <button
+                type="button"
+                onClick={handleRunBossDeliberation}
+                disabled={runningPhase !== 'none'}
+                className="btn btn-primary text-xs px-3.5 py-1.5 w-full sm:w-auto flex items-center justify-center gap-1.5"
+              >
+                {runningPhase === 'boss' ? (
+                  <RefreshCw size={13} className="animate-spin" />
+                ) : (
+                  <Crown size={13} />
+                )}
+                <span>{runningPhase === 'boss' ? 'Deliberating Directives…' : 'Deliberate CIO Directives'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('reviewer')}
+                className="btn btn-outline text-xs px-3 py-1.5 flex items-center justify-center gap-1 w-full sm:w-auto"
+              >
+                <span>Back to Reviewer</span>
+              </button>
+            </div>
+          </div>
+
           {/* AI Deliberation Status Banner */}
           {data?.ai_deliberation_status === 'HELD_API_KEY_REQUIRED' && (
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 space-y-1">

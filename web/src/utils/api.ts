@@ -386,6 +386,14 @@ export async function runBoardroomReview(): Promise<BoardroomOverview> {
   return fetchApi<BoardroomOverview>('/api/v1/agents/run', { method: 'POST' })
 }
 
+export async function runFiduciaryAudit(): Promise<BoardroomOverview> {
+  return fetchApi<BoardroomOverview>('/api/v1/agents/audit', { method: 'POST' })
+}
+
+export async function runBossDeliberation(): Promise<BoardroomOverview> {
+  return fetchApi<BoardroomOverview>('/api/v1/agents/deliberate', { method: 'POST' })
+}
+
 export async function updateDirectiveStatus(
   directiveId: string,
   status: string,

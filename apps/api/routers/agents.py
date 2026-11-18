@@ -89,23 +89,14 @@ async def get_boardroom_overview(
     )
 
 
-@router.post(
-    "/run",
-    response_model=BoardroomOverviewResponse,
-    summary="Trigger Boardroom Deliberation Cycle",
-    description="Executes a full deliberation across Risk Officer, Reviewer, and Financial Planning Boss."
-)
-async def run_boardroom_review(
-    current_user_id: str = Depends(get_current_user)
-) -> BoardroomOverviewResponse:
+async def _extract_pure_equity_holdings(current_user_id: str):
+    """Fetch user portfolio holdings sanitized for pure Indian equities."""
     holdings_repo = HoldingsRepository()
     persisted_holdings = await holdings_repo.get_holdings(owner_id=current_user_id)
 
-    # Convert Holding models to dicts for the agent engine
     raw_holdings = []
     total_val = 0.0
     for h in persisted_holdings:
-        # Resolve symbol defensively across models and dicts
         symbol = (
             getattr(h, "instrument_symbol", None)
             or getattr(h, "symbol", None)
@@ -139,7 +130,6 @@ async def run_boardroom_review(
         )
         total_val += cur_val
 
-        # Infer broker provider from connection_id or field
         conn_id = str(getattr(h, "connection_id", "") or (h.get("connection_id", "") if isinstance(h, dict) else "")).lower()
         if "zerodha" in conn_id or "kite" in conn_id:
             broker_name = "zerodha"
@@ -161,23 +151,19 @@ async def run_boardroom_review(
             "current_value": cur_val
         })
 
-    orchestrator = get_orchestrator()
-    await orchestrator.run_review_cycle(
-        holdings=raw_holdings,
-        total_portfolio_value=total_val,
-        benchmark_nifty_move_pct=0.0,
-        trigger_source=f"USER_REQUEST ({current_user_id})",
-        owner_id=current_user_id
-    )
+    return raw_holdings, total_val
 
+
+def _build_overview_response() -> BoardroomOverviewResponse:
     storage = get_boardroom_storage()
+    orchestrator = get_orchestrator()
+
     all_active = storage.list_directives(status=DirectiveStatus.PENDING_REVIEW)
     all_historical = [
         d for d in storage.list_directives()
         if d.user_status != DirectiveStatus.PENDING_REVIEW
     ]
 
-    # Strictly filter for pure Indian equities (no ETFs, US stocks, or unlisted shares)
     active = [
         d for d in all_active
         if not d.actions or is_pure_equity_stock(d.actions[0].symbol)
@@ -197,6 +183,68 @@ async def run_boardroom_review(
         ai_deliberation_status=ai_info["status"],
         ai_status_message=ai_info["message"],
     )
+
+
+@router.post(
+    "/run",
+    response_model=BoardroomOverviewResponse,
+    summary="Trigger Full Boardroom Deliberation Cycle",
+    description="Executes a full deliberation across Risk Officer, Reviewer, and Financial Planning Boss."
+)
+async def run_boardroom_review(
+    current_user_id: str = Depends(get_current_user)
+) -> BoardroomOverviewResponse:
+    raw_holdings, total_val = await _extract_pure_equity_holdings(current_user_id)
+    orchestrator = get_orchestrator()
+    await orchestrator.run_review_cycle(
+        holdings=raw_holdings,
+        total_portfolio_value=total_val,
+        benchmark_nifty_move_pct=0.0,
+        trigger_source=f"USER_REQUEST ({current_user_id})",
+        owner_id=current_user_id
+    )
+    return _build_overview_response()
+
+
+@router.post(
+    "/audit",
+    response_model=BoardroomOverviewResponse,
+    summary="Trigger Phase 2: Fiduciary Audit Gatekeeper",
+    description="Audits Risk Officer proposals against Ground Scout radar dossiers, applying 4 fiduciary policies."
+)
+async def run_fiduciary_audit(
+    current_user_id: str = Depends(get_current_user)
+) -> BoardroomOverviewResponse:
+    raw_holdings, total_val = await _extract_pure_equity_holdings(current_user_id)
+    orchestrator = get_orchestrator()
+    await orchestrator.run_fiduciary_audit(
+        holdings=raw_holdings,
+        total_portfolio_value=total_val,
+        benchmark_nifty_move_pct=0.0,
+        trigger_source=f"PHASE_2_USER ({current_user_id})",
+        owner_id=current_user_id
+    )
+    return _build_overview_response()
+
+
+@router.post(
+    "/deliberate",
+    response_model=BoardroomOverviewResponse,
+    summary="Trigger Phase 3: CIO Gemini AI Deliberation",
+    description="Synthesizes audited proposals into high-conviction directives and capital redeployment targets."
+)
+async def run_boss_deliberation(
+    current_user_id: str = Depends(get_current_user)
+) -> BoardroomOverviewResponse:
+    raw_holdings, total_val = await _extract_pure_equity_holdings(current_user_id)
+    orchestrator = get_orchestrator()
+    await orchestrator.run_boss_deliberation(
+        holdings=raw_holdings,
+        total_portfolio_value=total_val,
+        trigger_source=f"PHASE_3_USER ({current_user_id})",
+        owner_id=current_user_id
+    )
+    return _build_overview_response()
 
 
 @router.post(

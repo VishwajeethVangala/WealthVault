@@ -13,11 +13,13 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from core.agents.boss import FinancialPlanningBossAgent
+from core.agents.forensic_crawler import clean_display_name, clean_symbol
 from core.agents.models import (
     AgentProfile,
     DirectiveCard,
     DirectiveStatus,
     ProposalActionType,
+    ReviewEvaluation,
     TimelineEvent,
     WorkProposal,
 )
@@ -45,7 +47,7 @@ class BoardroomOrchestrator:
             self.risk_officer.profile,
         ]
 
-    async def run_review_cycle(
+    async def run_fiduciary_audit(
         self,
         holdings: List[Dict[str, Any]],
         total_portfolio_value: float,
@@ -53,17 +55,14 @@ class BoardroomOrchestrator:
         trigger_source: str = "MANUAL",
         owner_id: Optional[str] = None
     ) -> List[DirectiveCard]:
-        """Execute a full deliberation cycle across the 3-tier hierarchy."""
-        timestamp = datetime.now(timezone.utc).isoformat()
-        
-        # Log trigger
+        """Execute Phase 2: Risk Officer Scan & Fiduciary Reviewer Forensic Audit."""
         self.storage.add_timeline_event(
             TimelineEvent(
                 event_id=f"evt_trigger_{int(datetime.now(timezone.utc).timestamp())}",
                 agent_id="system",
                 agent_name="Boardroom Clock",
                 event_type="TRIGGER",
-                message=f"Boardroom evaluation cycle initiated via {trigger_source}. Auditing {len(holdings)} holdings.",
+                message=f"Phase 2: Fiduciary Audit initiated via {trigger_source}. Auditing {len(holdings)} holdings against 4 core policies.",
                 metadata={"holdings_count": len(holdings), "total_value": total_portfolio_value}
             )
         )
@@ -82,11 +81,10 @@ class BoardroomOrchestrator:
             )
             return []
 
-        new_directives: List[DirectiveCard] = []
+        audited_directives: List[DirectiveCard] = []
 
-        # Process each proposal through Tier 2 and Tier 3
+        # Process each proposal through Tier 2 (Fiduciary Reviewer)
         for prop in proposals:
-            # 1. Log Proposal
             self.storage.add_timeline_event(
                 TimelineEvent(
                     event_id=f"evt_prop_{prop.proposal_id}",
@@ -99,10 +97,9 @@ class BoardroomOrchestrator:
                 )
             )
 
-            # 2. Tier 2: Fiduciary Reviewer Forensic Audit (Crawls News, Financials & Genuine Technical Momentum)
+            # Tier 2: Fiduciary Reviewer Forensic Audit
             evaluation = await self.reviewer.audit_proposal(prop, benchmark_nifty_move_pct, owner_id=owner_id)
 
-            # Log Reviewer Audit
             self.storage.add_timeline_event(
                 TimelineEvent(
                     event_id=f"evt_eval_{evaluation.evaluation_id}",
@@ -119,15 +116,13 @@ class BoardroomOrchestrator:
                 )
             )
 
-            # 3. Bi-Directional Revision Loop
+            # Bi-Directional Revision Loop (False Breakdown Protection)
             if evaluation.verdict == "REVISION_REQUIRED":
-                # Risk officer adapts proposal
                 prop.revision_round += 1
                 feedback = evaluation.critique_and_feedback or ""
                 rev_msg = f"Adapted Proposal (Round {prop.revision_round}): Addressed Reviewer feedback."
 
                 if "HOLD_DEFENSE" in feedback or "False Breakdown" in feedback:
-                    # Reviewer overruled the market dump: adapt to HOLD_DEFENSE
                     if prop.proposed_actions:
                         for act in prop.proposed_actions:
                             act.action = ProposalActionType.HOLD_DEFENSE
@@ -163,26 +158,132 @@ class BoardroomOrchestrator:
                     )
                 )
 
-            # 4. Tier 3: Financial Planning Boss Synthesis
+            # Store audited directive card
             if evaluation.verdict == "APPROVED":
-                directive = self.boss.synthesize_directive(prop, evaluation)
-                if directive:
-                    self.storage.save_directive(directive)
-                    new_directives.append(directive)
+                first_action = prop.proposed_actions[0] if prop.proposed_actions else None
+                symbol = first_action.symbol if first_action else "Portfolio"
+                clean_sym = clean_symbol(symbol).upper()
+                broker_key = (first_action.broker if first_action else "broker").lower()
+                action_key = (first_action.action.value if first_action else "rebalance").lower()
+                directive_id = f"dir_{clean_sym}_{broker_key}_{action_key}"
 
-                    # Log Boss Directive
-                    self.storage.add_timeline_event(
-                        TimelineEvent(
-                            event_id=f"evt_dir_{directive.directive_id}",
-                            agent_id=self.boss.profile.agent_id,
-                            agent_name=self.boss.profile.name,
-                            event_type="DIRECTIVE_ISSUED",
-                            message=f"Issued Action Directive: {directive.title}. Awaiting investor closure.",
-                            directive_id=directive.directive_id
-                        )
+                display_name = clean_display_name(symbol)
+                action_name = first_action.action.value.replace("_", " ").title() if first_action else "Rebalance"
+                broker_name = (first_action.broker if first_action else "Broker").capitalize()
+
+                existing = self.storage.get_directive(directive_id)
+                ai_delib = existing.ai_deliberated if existing else False
+                ai_status = existing.ai_deliberation_status if existing else "PENDING_BOSS_DELIBERATION"
+                thesis = existing.summary_thesis if (existing and existing.ai_deliberated) else (
+                    f"• Fiduciary Audit Completed: Vetted under 4 institutional policies. Verdict: {evaluation.verdict}.\n"
+                    f"• Reviewer Finding: {evaluation.critique_and_feedback or 'Cleared all safety checks.'}\n"
+                    f"• Awaiting Phase 3: Click 'Deliberate CIO Directives' to synthesize final Gemini executive order."
+                )
+
+                directive = DirectiveCard(
+                    directive_id=directive_id,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    title=f"{action_name}: {display_name} ({broker_name})",
+                    display_name=display_name,
+                    trend_verdict=first_action.trend_verdict if first_action else "Neutral",
+                    holding_quantity=first_action.holding_quantity if first_action else None,
+                    holding_avg_price=first_action.holding_avg_price if first_action else None,
+                    pnl_pct=first_action.pnl_pct if first_action else None,
+                    summary_thesis=thesis,
+                    priority=prop.urgency,
+                    originating_subagents=[prop.source_agent_id],
+                    actions=prop.proposed_actions,
+                    review_verdict=evaluation.verdict,
+                    review_summary=evaluation.critique_and_feedback or "Approved by Fiduciary Reviewer",
+                    investigation_dossier=evaluation.investigation_dossier,
+                    user_status=existing.user_status if existing else DirectiveStatus.PENDING_REVIEW,
+                    ai_deliberated=ai_delib,
+                    ai_deliberation_status=ai_status,
+                )
+                self.storage.save_directive(directive)
+                audited_directives.append(directive)
+
+        return audited_directives
+
+    async def run_boss_deliberation(
+        self,
+        holdings: List[Dict[str, Any]],
+        total_portfolio_value: float,
+        trigger_source: str = "MANUAL",
+        owner_id: Optional[str] = None
+    ) -> List[DirectiveCard]:
+        """Execute Phase 3: Chief Investment Officer Gemini AI Deliberation & Capital Redeployment."""
+        self.storage.add_timeline_event(
+            TimelineEvent(
+                event_id=f"evt_boss_start_{int(datetime.now(timezone.utc).timestamp())}",
+                agent_id=self.boss.profile.agent_id,
+                agent_name=self.boss.profile.name,
+                event_type="TRIGGER",
+                message=f"Phase 3: CIO Autonomous AI Deliberation initiated via {trigger_source}. Synthesizing directives across 6-scout radar.",
+            )
+        )
+
+        # Ensure active directives exist; if none, run audit first
+        active_dirs = self.storage.list_directives(status=DirectiveStatus.PENDING_REVIEW)
+        if not active_dirs and holdings:
+            active_dirs = await self.run_fiduciary_audit(holdings, total_portfolio_value, owner_id=owner_id)
+
+        deliberated_directives: List[DirectiveCard] = []
+        for d in active_dirs:
+            first_action = d.actions[0] if d.actions else None
+            if not first_action:
+                continue
+
+            prop = WorkProposal(
+                proposal_id=f"prop_{d.directive_id}",
+                source_agent_id="risk_officer",
+                source_agent_name="Risk Officer",
+                urgency=d.priority,
+                thesis=d.title,
+                underlying_metrics={"pnl_pct": d.pnl_pct or 0.0},
+                proposed_actions=d.actions
+            )
+            eval_obj = ReviewEvaluation(
+                evaluation_id=f"eval_{d.directive_id}",
+                proposal_id=prop.proposal_id,
+                verdict=d.review_verdict,
+                critique_and_feedback=d.review_summary,
+                investigation_dossier=d.investigation_dossier
+            )
+
+            synth_dir = self.boss.synthesize_directive(prop, eval_obj)
+            if synth_dir:
+                if d.user_status != DirectiveStatus.PENDING_REVIEW:
+                    synth_dir.user_status = d.user_status
+                    synth_dir.user_comment = d.user_comment
+                    synth_dir.resolved_at = d.resolved_at
+                self.storage.save_directive(synth_dir)
+                deliberated_directives.append(synth_dir)
+
+                self.storage.add_timeline_event(
+                    TimelineEvent(
+                        event_id=f"evt_dir_{synth_dir.directive_id}",
+                        agent_id=self.boss.profile.agent_id,
+                        agent_name=self.boss.profile.name,
+                        event_type="DIRECTIVE_ISSUED",
+                        message=f"Issued CIO Action Directive: {synth_dir.title}. Capital redeployment queued.",
+                        directive_id=synth_dir.directive_id
                     )
+                )
 
-        return new_directives
+        return deliberated_directives
+
+    async def run_review_cycle(
+        self,
+        holdings: List[Dict[str, Any]],
+        total_portfolio_value: float,
+        benchmark_nifty_move_pct: float = 0.0,
+        trigger_source: str = "MANUAL",
+        owner_id: Optional[str] = None
+    ) -> List[DirectiveCard]:
+        """Execute full 3-phase cycle (Audit + Boss Deliberation)."""
+        await self.run_fiduciary_audit(holdings, total_portfolio_value, benchmark_nifty_move_pct, trigger_source, owner_id)
+        return await self.run_boss_deliberation(holdings, total_portfolio_value, trigger_source, owner_id)
 
 
 # Global singleton
