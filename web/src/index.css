@@ -465,6 +465,14 @@
   font-weight: 600;
   color: var(--text-2);
   cursor: pointer;
+  white-space: nowrap;
+}
+@media (max-width: 639px) {
+  .seg button {
+    padding: 0 8px;
+    font-size: 11px;
+    min-height: 26px;
+  }
 }
 .seg button.on {
   background: var(--surface);

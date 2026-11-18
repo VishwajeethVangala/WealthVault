@@ -654,10 +654,10 @@ export const AgentBoardroom: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5 font-sans">
       {/* 1. Header Toolbar with Tab Navigation and Action Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-wv-border">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-wv-border">
         {/* Left: Native Segmented Controls */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="seg seg-lg">
+        <div className="flex items-center gap-3 flex-wrap overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 sm:overflow-visible">
+          <div className="seg seg-lg shrink-0">
             {/* Tab 1: Ground Scouts */}
             <button
               type="button"
@@ -699,12 +699,12 @@ export const AgentBoardroom: React.FC = () => {
         </div>
 
         {/* Right: Primary Run Review Trigger */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3 shrink-0 w-full lg:w-auto">
           <button
             type="button"
             onClick={handleRunReview}
             disabled={running}
-            className="btn btn-primary"
+            className="btn btn-primary w-full sm:w-auto"
           >
             {running ? <RefreshCw size={15} strokeWidth={1.75} className="animate-spin" /> : <Play size={15} strokeWidth={1.75} className="fill-current" />}
             <span>{running ? 'Deliberating Cycle…' : 'Run Fiduciary Review'}</span>
@@ -787,20 +787,20 @@ export const AgentBoardroom: React.FC = () => {
           </div>
 
           {/* Fiduciary 4 Guardrails Guide Bar */}
-          <div className="card p-4 space-y-3">
-            <div className="flex items-center justify-between">
+          <div className="card p-3 sm:p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-wv-accent" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-wv-text">
+                <ShieldCheck className="w-4 h-4 text-wv-accent shrink-0" />
+                <h4 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-wv-text">
                   The Reviewer&apos;s 4 Institutional Fiduciary Principles
                 </h4>
               </div>
-              <span className="text-[11px] font-medium text-wv-gain flex items-center gap-1">
+              <span className="text-[11px] font-medium text-wv-gain flex items-center gap-1 shrink-0">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>100% Policy Vetting Enforcement</span>
               </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               <div className="p-3 rounded-lg bg-wv-surface-2 border border-wv-border space-y-1">
                 <b className="text-wv-text block text-xs">1. Beta Causality Separation</b>
                 <p className="text-[11px] text-wv-text-3 leading-snug">
@@ -829,9 +829,9 @@ export const AgentBoardroom: React.FC = () => {
           </div>
 
           {/* Triage & Filter Toolbar for The Reviewer */}
-          <div className="card p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="seg">
+          <div className="card p-2.5 sm:p-3 flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3">
+            <div className="flex items-center gap-2 overflow-x-auto -mx-2.5 px-2.5 sm:mx-0 sm:px-0 sm:overflow-visible sm:flex-wrap">
+              <div className="seg shrink-0">
                 <button
                   type="button"
                   onClick={() => setReviewerCategory('ALL')}
@@ -878,7 +878,7 @@ export const AgentBoardroom: React.FC = () => {
               )}
             </div>
 
-            <div className="relative">
+            <div className="relative w-full md:w-auto">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
               <input
                 type="text"
@@ -892,7 +892,7 @@ export const AgentBoardroom: React.FC = () => {
 
           {/* Reviewer Cards: The Scout Claim vs. Reviewer Challenge Debate */}
           {filteredReviewerDirectives.length === 0 ? (
-            <div className="card p-12 text-center space-y-2">
+            <div className="card p-6 sm:p-12 text-center space-y-2">
               <ShieldCheck className="w-8 h-8 text-wv-gain mx-auto" />
               <h3 className="text-sm font-bold text-wv-text">No Audited Dossiers Match Filter</h3>
               <p className="text-xs text-wv-text-3 max-w-md mx-auto">
@@ -913,41 +913,44 @@ export const AgentBoardroom: React.FC = () => {
                 return (
                   <div
                     key={`rev_${d.directive_id}`}
-                    className="card p-5 space-y-4 hover:border-wv-border-strong transition-all"
+                    className="card p-3 sm:p-5 space-y-3 sm:space-y-4 hover:border-wv-border-strong transition-all"
                   >
                     {/* Header Row */}
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-wv-border">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-wv-surface-2 border border-wv-border flex items-center justify-center shrink-0">
+                    <div className="flex flex-col gap-3 pb-3 border-b border-wv-border">
+                      <div className="flex items-start gap-2 sm:gap-3">
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-wv-surface-2 border border-wv-border flex items-center justify-center shrink-0">
                           <Building2 className="w-4 h-4 text-wv-text-2" />
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                             <span className="text-sm font-bold text-wv-text font-mono tracking-wide">{cleanTicker}</span>
-                            <span className="text-xs text-wv-text-2">{companyName}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${getBrokerBadgeClass(firstAction?.broker)}`}>
+                            <span className="text-xs text-wv-text-2 truncate">{companyName}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            <span className={`text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded border uppercase ${getBrokerBadgeClass(firstAction?.broker)}`}>
                               {broker}
                             </span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded border ${verdict.badgeClass}`}>
+                            <span className={`text-[10px] px-1.5 sm:px-2 py-0.5 rounded border ${verdict.badgeClass}`}>
                               {verdict.badgeLabel}
                             </span>
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-wv-surface-2 border border-wv-border text-wv-text-2 flex items-center gap-1">
+                            <span className="text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded bg-wv-surface-2 border border-wv-border text-wv-text-2 inline-flex items-center gap-1">
                               {trendVerdict.toLowerCase().includes('downtrend') || trendVerdict.toLowerCase().includes('bear') ? (
                                 <TrendingDown className="w-3 h-3 text-wv-loss" />
                               ) : (
                                 <TrendingUp className="w-3 h-3 text-wv-gain" />
                               )}
-                              <span>{trendVerdict}</span>
+                              <span className="hidden sm:inline">{trendVerdict}</span>
+                              <span className="sm:hidden">{trendVerdict.split(':')[0]}</span>
                             </span>
                           </div>
-                          <p className="text-[11px] text-wv-text-3 mt-0.5">
-                            Position P&amp;L: <strong className={`font-mono ${pnl >= 0 ? 'text-wv-gain' : 'text-wv-loss'}`}>{pnl >= 0 ? `+${pnl.toFixed(1)}%` : `${pnl.toFixed(1)}%`}</strong> ·
-                            Original Proposal: <span className="font-semibold text-wv-text">{firstAction?.action?.replace('_', ' ')}</span>
+                          <p className="text-[11px] text-wv-text-3 mt-1">
+                            P&amp;L: <strong className={`font-mono ${pnl >= 0 ? 'text-wv-gain' : 'text-wv-loss'}`}>{pnl >= 0 ? `+${pnl.toFixed(1)}%` : `${pnl.toFixed(1)}%`}</strong> ·
+                            Proposal: <span className="font-semibold text-wv-text">{firstAction?.action?.replace('_', ' ')}</span>
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 sm:self-end">
                         <span className="badge ok text-[11px]">
                           <i />
                           100% Policy Vetted
@@ -995,9 +998,9 @@ export const AgentBoardroom: React.FC = () => {
                     </div>
 
                     {/* 6-Scout Multidimensional Evidence Matrix Strip */}
-                    <div className="p-3 rounded-lg bg-wv-surface border border-wv-border/80 flex items-center justify-between gap-3 flex-wrap text-xs">
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3">
+                    <div className="p-2.5 sm:p-3 rounded-lg bg-wv-surface border border-wv-border/80 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:justify-between sm:gap-3 text-xs">
+                      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3 w-full sm:w-auto">
                           6-Scout Evidence:
                         </span>
 
@@ -1036,7 +1039,7 @@ export const AgentBoardroom: React.FC = () => {
                           setBossSearch(cleanTicker)
                           setActiveTab('boss')
                         }}
-                        className="btn btn-outline text-xs px-3 py-1 shrink-0 flex items-center gap-1"
+                        className="btn btn-outline text-xs px-3 py-1.5 w-full sm:w-auto shrink-0 flex items-center justify-center gap-1"
                       >
                         <span>View Boss Directive</span>
                         <ArrowUpRight className="w-3.5 h-3.5" />
@@ -1045,18 +1048,20 @@ export const AgentBoardroom: React.FC = () => {
 
                     {/* Google News Catalyst Link if available */}
                     {newsArticles.length > 0 && (
-                      <div className="flex items-center gap-2 text-xs text-wv-text-3 pt-1 border-t border-wv-border/50">
-                        <span className="text-[10px] uppercase font-bold text-wv-text-3">Verified News:</span>
-                        <ExternalLink className="w-3 h-3 text-wv-accent shrink-0" />
-                        <a
-                          href={newsArticles[0].link || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:underline text-[11px] text-wv-accent truncate max-w-xl"
-                          title={newsArticles[0].headline}
-                        >
-                          {newsArticles[0].headline}
-                        </a>
+                      <div className="flex items-start sm:items-center gap-2 text-xs text-wv-text-3 pt-2 sm:pt-1 border-t border-wv-border/50 flex-wrap sm:flex-nowrap">
+                        <span className="text-[10px] uppercase font-bold text-wv-text-3 shrink-0">Verified News:</span>
+                        <div className="flex items-center gap-1 min-w-0">
+                          <ExternalLink className="w-3 h-3 text-wv-accent shrink-0" />
+                          <a
+                            href={newsArticles[0].link || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:underline text-[11px] text-wv-accent truncate"
+                            title={newsArticles[0].headline}
+                          >
+                            {newsArticles[0].headline}
+                          </a>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1432,7 +1437,7 @@ export const AgentBoardroom: React.FC = () => {
                 )}
 
                 {bossSubTab !== 'redeployment' && (
-                  <div className="relative">
+                  <div className="relative w-full md:w-auto">
                     <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
                     <input
                       type="text"
@@ -1750,19 +1755,19 @@ export const AgentBoardroom: React.FC = () => {
       {/* Slide-over Inspection Drawer for Full Deliberation Audit */}
       {selectedDirective && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-black/50 backdrop-blur-xs flex justify-end">
-          <div className="w-full max-w-2xl bg-wv-surface h-full shadow-2xl flex flex-col border-l border-wv-border">
+          <div className="w-full sm:max-w-2xl bg-wv-surface h-full shadow-2xl flex flex-col border-l border-wv-border">
             {/* Drawer Header */}
-            <div className="p-5 border-b border-wv-border flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-base text-wv-text">
+            <div className="p-3.5 sm:p-5 border-b border-wv-border flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono font-bold text-sm sm:text-base text-wv-text">
                     {formatTicker(selectedDirective.actions[0]?.symbol, selectedDirective.investigation_dossier?.symbol)}
                   </span>
-                  <span className="text-xs text-wv-text-3">
+                  <span className="text-xs text-wv-text-3 truncate">
                     {formatCompanyName(selectedDirective.actions[0]?.symbol, selectedDirective.display_name)}
                   </span>
                 </div>
-                <p className="text-xs text-wv-text-3 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-wv-text-3 mt-0.5">
                   Full 3-Tier Deliberation Audit Trail &amp; Solvency Breakdown
                 </p>
               </div>
