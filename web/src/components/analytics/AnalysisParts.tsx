@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { AlertCircle, ExternalLink, RotateCcw, Search } from 'lucide-react'
+import { AlertCircle, ExternalLink, RotateCcw, RotateCw, Search, Sparkles } from 'lucide-react'
 import { usePortfolio } from '../../context/PortfolioContext'
 import { classifyAssetClass } from '../../utils/portfolioFilters'
 import { searchStocks, type StockSuggestion } from '../../utils/api'
@@ -18,8 +18,23 @@ export const SymbolPicker: React.FC<{
   activeInstrument?: string
   submitLabel: string
   watchlist?: WatchlistItem[]
+  recommendations?: Array<{ symbol: string; name?: string; close?: number; per_chg?: number }>
+  onRefreshRecommendations?: () => void
+  recommendationsLoading?: boolean
   children?: React.ReactNode
-}> = ({ value, onChange, onSubmit, loading, activeInstrument, submitLabel, watchlist, children }) => {
+}> = ({
+  value,
+  onChange,
+  onSubmit,
+  loading,
+  activeInstrument,
+  submitLabel,
+  watchlist,
+  recommendations,
+  onRefreshRecommendations,
+  recommendationsLoading,
+  children,
+}) => {
   const { holdings } = usePortfolio()
   const page = screenName(useLocation().pathname)
 
@@ -224,6 +239,61 @@ export const SymbolPicker: React.FC<{
               </button>
             )
           })}
+        </div>
+      )}
+
+      {recommendations && recommendations.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            Recommendations
+          </span>
+          {recommendations.map((item) => {
+            const sym = item.symbol.replace(/^[A-Z]+:/i, '')
+            const isActive = activeInstrument === item.symbol || activeInstrument?.endsWith(`:${sym}`)
+            return (
+              <button
+                key={item.symbol}
+                type="button"
+                onClick={() => onSubmit(item.symbol)}
+                disabled={loading}
+                title={item.name ? `${item.name}${item.close ? ` • ₹${item.close}` : ''}` : undefined}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold border transition-colors flex items-center gap-1.5 ${
+                  isActive
+                    ? 'bg-emerald-500 text-white border-emerald-500'
+                    : 'bg-wv-surface text-wv-text-2 border-wv-border hover:border-emerald-500/50 hover:text-emerald-500'
+                }`}
+              >
+                <span>{sym}</span>
+                {item.per_chg != null && (
+                  <span
+                    className={`text-[9px] font-sans px-1 rounded ${
+                      isActive
+                        ? 'bg-black/20 text-white'
+                        : item.per_chg >= 0
+                        ? 'bg-emerald-500/10 text-emerald-500'
+                        : 'bg-rose-500/10 text-rose-500'
+                    }`}
+                  >
+                    {item.per_chg >= 0 ? '+' : ''}
+                    {item.per_chg.toFixed(1)}%
+                  </span>
+                )}
+              </button>
+            )
+          })}
+          {onRefreshRecommendations && (
+            <button
+              type="button"
+              onClick={onRefreshRecommendations}
+              disabled={recommendationsLoading}
+              title="Refresh Chartink screener stocks"
+              className="px-2 py-1 rounded-lg text-[11px] font-medium text-wv-text-3 hover:text-wv-text hover:bg-wv-surface-2 border border-wv-border transition-colors flex items-center gap-1"
+            >
+              <RotateCw className={`w-3 h-3 ${recommendationsLoading ? 'animate-spin' : ''}`} />
+              <span className="text-[10px]">Refresh</span>
+            </button>
+          )}
         </div>
       )}
     </>

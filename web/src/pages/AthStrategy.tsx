@@ -4,8 +4,8 @@ import { CandlestickChart, Sparkles, TrendingUp } from 'lucide-react'
 import { SymbolPicker } from '../components/analytics/AnalysisParts'
 import { AthBreakoutPanel } from '../components/strategies/AthBreakoutPanel'
 import { SupertrendPanel } from '../components/strategies/SupertrendPanel'
-import { fetchWatchlist } from '../utils/api'
-import type { WatchlistItem } from '../types'
+import { fetchSupertrendRecommendations, fetchWatchlist } from '../utils/api'
+import type { ScreenerRecommendation, WatchlistItem } from '../types'
 
 export type StrategyTab = 'ath' | 'supertrend'
 
@@ -19,11 +19,30 @@ export const AthStrategy: React.FC = () => {
   const [panelStatus, setPanelStatus] = useState<{ loading: boolean; instrument?: string }>({ loading: false })
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
 
+  const [recommendations, setRecommendations] = useState<ScreenerRecommendation[]>([])
+  const [recsLoading, setRecsLoading] = useState(false)
+
+  const loadRecommendations = useCallback(async () => {
+    setRecsLoading(true)
+    try {
+      const res = await fetchSupertrendRecommendations('vishwa-supertrend')
+      setRecommendations(res.items || [])
+    } catch (err) {
+      console.error('Failed to load supertrend recommendations:', err)
+    } finally {
+      setRecsLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchWatchlist()
       .then((res) => setWatchlist(res.items || []))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    loadRecommendations()
+  }, [loadRecommendations])
 
   const updateParams = (changes: Record<string, string>) =>
     setSearchParams(
@@ -109,6 +128,9 @@ export const AthStrategy: React.FC = () => {
           activeInstrument={panelStatus.instrument}
           submitLabel="Run Strategy"
           watchlist={watchlist}
+          recommendations={tab === 'supertrend' ? recommendations : undefined}
+          onRefreshRecommendations={tab === 'supertrend' ? loadRecommendations : undefined}
+          recommendationsLoading={recsLoading}
         />
       </div>
 

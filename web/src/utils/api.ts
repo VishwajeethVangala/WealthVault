@@ -2,7 +2,7 @@ import { cleanSearchTerm, track } from './analytics'
 import { saveSessionForWorker } from './pushSession'
 import { webPushSignOut } from './webPush'
 import type { LiveSignalsResponse } from '../components/signals/useLiveSignals'
-import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult, SupertrendOptions, SupertrendResult, WatchlistItem, WatchlistResponse, BoardroomOverview, DirectiveCard, InvestigationDossier, GroundSwarmOverview } from '../types'
+import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult, SupertrendOptions, SupertrendResult, ScreenerRecommendationsResponse, WatchlistItem, WatchlistResponse, BoardroomOverview, DirectiveCard, InvestigationDossier, GroundSwarmOverview } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -233,6 +233,10 @@ export async function fetchSupertrendStrategy(symbol: string, options: Supertren
   const res = await fetchApi<SupertrendResult>(`/api/v1/analytics/strategy/supertrend?${params.toString()}`)
   track('strategy_run', { strategy: 'supertrend', symbol: cleanSearchTerm(symbol) })
   return res
+}
+
+export async function fetchSupertrendRecommendations(slug: string = 'vishwa-supertrend'): Promise<ScreenerRecommendationsResponse> {
+  return fetchApi<ScreenerRecommendationsResponse>(`/api/v1/analytics/strategy/supertrend/recommendations?slug=${encodeURIComponent(slug)}`)
 }
 
 // Target allocation (stored per user in Azure Table Storage)
