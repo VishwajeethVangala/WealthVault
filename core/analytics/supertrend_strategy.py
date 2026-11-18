@@ -346,6 +346,9 @@ def run_supertrend_strategy(
     # Bars since flip
     bars_since_last_flip = (last - flip_idx) if (last_dir < 0 and flip_idx is not None) else None
 
+    adx_display = f"{last_adx:.1f}" if last_adx is not None else "N/A"
+    vol_display = f"{vol_ratio:.1f}x" if vol_ratio is not None else "N/A"
+
     common_status = dict(
         close=round(closes[last], 2),
         supertrend=round(last_st, 2),
@@ -363,7 +366,7 @@ def run_supertrend_strategy(
             headline = "BUY Signal Confirmed at Latest Close"
             detail = (
                 f"Close ₹{closes[last]:,.2f} passed Supertrend support (₹{last_st:,.2f}), "
-                f"ADX={last_adx:.1f if last_adx else 0} (>={p.adx_threshold}), and Volume={vol_ratio:.1f if vol_ratio else 1}x average."
+                f"ADX={adx_display} (>={p.adx_threshold}), and Volume={vol_display} average."
             )
         else:
             headline = "In Position (Bullish Trend)"
@@ -397,8 +400,8 @@ def run_supertrend_strategy(
                 headline = "Bullish Cloud (Awaiting Filter Confirmation)"
                 detail = (
                     f"Supertrend is green at ₹{last_st:,.2f} ({bars_since_last_flip} days into flip). "
-                    f"Awaiting ADX >= {p.adx_threshold} (currently {last_adx:.1f if last_adx else 'N/A'}) "
-                    f"and Volume > 20 SMA (currently {vol_ratio:.1f if vol_ratio else 'N/A'}x)."
+                    f"Awaiting ADX >= {p.adx_threshold} (currently {adx_display}) "
+                    f"and Volume > 20 SMA (currently {vol_display})."
                 )
                 last_sig = None
         else:
