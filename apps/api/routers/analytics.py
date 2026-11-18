@@ -383,3 +383,38 @@ async def get_supertrend_strategy(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
 
+
+@router.get(
+    "/strategy/supertrend/recommendations",
+    summary="Chartink Supertrend Recommendations",
+    description="Fetches live matching stocks from the Chartink 'vishwa-supertrend' screener.",
+)
+async def get_supertrend_recommendations(
+    slug: str = Query(default="vishwa-supertrend", description="Chartink screener slug"),
+    current_user_id: str = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Return live stock recommendations directly from the Chartink screener."""
+    from core.screeners.chartink import ScreenerError, fetch_screener
+
+    try:
+        res = await fetch_screener(slug)
+        return {
+            "slug": res.slug,
+            "title": res.title,
+            "fetched_at": res.fetched_at,
+            "items": [
+                {
+                    "symbol": f"NSE:{r['nsecode']}",
+                    "name": r.get("name") or r["nsecode"],
+                    "close": r.get("close"),
+                    "volume": r.get("volume"),
+                    "per_chg": r.get("per_chg"),
+                }
+                for r in res.rows
+            ],
+            "count": len(res.rows),
+        }
+    except ScreenerError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+
