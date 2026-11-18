@@ -32,11 +32,13 @@ az webapp config appsettings set -g $RG -n $APP --settings \
   JWT_SECRET="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" \
   CREDENTIAL_ENCRYPTION_KEY="<your existing key>" \
   INDMONEY_CLIENT_ID="<id>" INDMONEY_CLIENT_SECRET="<secret>" \
+  GEMINI_API_KEY="<your-gemini-api-key>" \
   ALLOWED_ORIGINS='["https://'$APP'.azurewebsites.net"]'
 ```
 
 Notes
 - Keep exactly **one instance** (do not scale out or enable autoscale): refresh jobs, broker sessions and the INDmoney login state are held in memory.
+- `GEMINI_API_KEY` must be set in Application Settings so the Chief Investment Officer (Tier 3 Boss) can autonomously synthesize directives across all 6 ground scout dimensions (Risk, Tech, Pattern, Funda, News, Insider). Generate one from [Google AI Studio](https://aistudio.google.com/).
 - `CREDENTIAL_ENCRYPTION_KEY` must be the **same key** you use locally, or the stored Groww and Angel One credentials cannot be decrypted. Keep a backup.
 - The app refuses to start in production with the default `JWT_SECRET`, a missing encryption key or Google client id, or `ALLOWED_ORIGINS` of `*`.
 - Use a custom domain? Put it in both `PUBLIC_BASE_URL` and `ALLOWED_ORIGINS`.

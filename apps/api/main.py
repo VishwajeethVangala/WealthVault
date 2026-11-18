@@ -121,6 +121,11 @@ async def lifespan(app: FastAPI):
         problems = production_problems(settings)
         if problems:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
+        if not settings.GEMINI_API_KEY:
+            logger.warning(
+                "GEMINI_API_KEY is not configured in production settings. "
+                "Boardroom Tier 3 CIO AI multi-scout synthesis will remain HELD until configured in Azure App Settings."
+            )
 
     from apps.api.auto_refresh import start_auto_refresh, stop_auto_refresh
     from apps.api.push_jobs import start_push_jobs, stop_push_jobs

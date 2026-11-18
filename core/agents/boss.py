@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 from dotenv import load_dotenv
 
+from core.config import get_settings
 from core.agents.forensic_crawler import clean_display_name, clean_symbol
 from core.agents.models import (
     AgentExecutionSummary,
@@ -53,12 +54,12 @@ _MIN_CALL_INTERVAL_SEC: float = 4.1
 def get_boss_ai_status() -> Dict[str, Any]:
     """Check whether Gemini AI is available or held."""
     load_dotenv(".env")
-    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    key = os.environ.get("GEMINI_API_KEY", "").strip() or get_settings().GEMINI_API_KEY.strip()
     if not key:
         return {
             "status": "HELD_API_KEY_REQUIRED",
             "model": "Gemini 3.5 Flash Lite (500 RPD)",
-            "message": "GEMINI_API_KEY is not configured in .env. Boss executive orders are held pending AI multi-scout synthesis.",
+            "message": "GEMINI_API_KEY is not configured in app settings or .env. Boss executive orders are held pending AI multi-scout synthesis.",
         }
     return {
         "status": "DELIBERATED_BY_GEMINI",
@@ -82,7 +83,7 @@ def _call_gemini_for_boss(
     global _LAST_CALL_TIMESTAMP
 
     load_dotenv(".env")
-    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip() or get_settings().GEMINI_API_KEY.strip()
     if not api_key:
         return None, "HELD_API_KEY_REQUIRED"
 
@@ -437,7 +438,7 @@ class FinancialPlanningBossAgent:
             directive_thesis = (
                 "⚠️ AI DELIBERATION HELD: Awaiting GEMINI_API_KEY. The Chief Investment Officer requires autonomous "
                 "multi-scout AI synthesis across the 6 ground reports (Risk, Tech, Pattern, Funda, News, Insider) "
-                "before issuing execution orders. Add GEMINI_API_KEY to .env to unlock."
+                "before issuing execution orders. Configure GEMINI_API_KEY in application settings or .env to unlock."
             )
             ai_deliberated = False
             ai_deliberation_status = "HELD_API_KEY_REQUIRED"
