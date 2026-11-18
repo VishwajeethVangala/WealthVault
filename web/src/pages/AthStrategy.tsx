@@ -1,15 +1,20 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CandlestickChart } from 'lucide-react'
+import { CandlestickChart, Sparkles, TrendingUp } from 'lucide-react'
 import { SymbolPicker } from '../components/analytics/AnalysisParts'
 import { AthBreakoutPanel } from '../components/strategies/AthBreakoutPanel'
+import { SupertrendPanel } from '../components/strategies/SupertrendPanel'
 import { fetchWatchlist } from '../utils/api'
 import type { WatchlistItem } from '../types'
+
+export type StrategyTab = 'ath' | 'supertrend'
 
 export const AthStrategy: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const [input, setInput] = useState(searchParams.get('symbol') || '')
   const [symbol, setSymbol] = useState<string | null>(searchParams.get('symbol')?.toUpperCase() || null)
+  const initialTab = (searchParams.get('tab') as StrategyTab) || 'ath'
+  const [tab, setTab] = useState<StrategyTab>(initialTab === 'supertrend' ? 'supertrend' : 'ath')
   const [runSeq, setRunSeq] = useState(0)
   const [panelStatus, setPanelStatus] = useState<{ loading: boolean; instrument?: string }>({ loading: false })
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
@@ -30,6 +35,11 @@ export const AthStrategy: React.FC = () => {
       { replace: true }
     )
 
+  const handleTabChange = (newTab: StrategyTab) => {
+    setTab(newTab)
+    updateParams({ tab: newTab })
+  }
+
   const analyze = (value: string) => {
     const clean = value.trim().toUpperCase()
     if (!clean) return
@@ -42,18 +52,52 @@ export const AthStrategy: React.FC = () => {
   const handleStatus = useCallback((status: { loading: boolean; instrument?: string }) => setPanelStatus(status), [])
 
   return (
-    <div className="page-in">
+    <div className="page-in flex flex-col gap-6">
       {/* Header, strategy tabs & symbol */}
       <div className="bg-wv-surface border border-wv-border rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col gap-4">
-        <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-wv-text flex items-center justify-center text-wv-gain shrink-0 shadow-sm">
-            <CandlestickChart className="w-5 h-5" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-wv-text flex items-center justify-center text-wv-gain shrink-0 shadow-sm">
+              <CandlestickChart className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="font-serif text-xl sm:text-2xl text-wv-text font-semibold tracking-tight">Strategies</h1>
+              <p className="text-xs text-wv-text-3 mt-1">
+                Systematic breakout & trend-following models. Run backtests, check entry/exit rules, and inspect full trade logs on any NSE/BSE stock using live Kite data.
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-serif text-xl sm:text-2xl text-wv-text font-semibold tracking-tight">ATH Strategy</h1>
-            <p className="text-xs text-wv-text-3 mt-1">
-              Buy when a stock breaks its all-time high soon after closing below its 200-DMA, sell on a close below the 200-DMA. Run it on any NSE/BSE stock: today's signal, the chart with entries and exits, and a backtest of every past trade. Prices come from Zerodha Kite.
-            </p>
+
+          {/* Strategy Tabs Switcher */}
+          <div className="inline-flex rounded-xl border border-wv-border p-1 bg-wv-surface-2 self-start sm:self-center" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'ath'}
+              onClick={() => handleTabChange('ath')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                tab === 'ath'
+                  ? 'bg-wv-surface text-wv-text shadow-sm'
+                  : 'text-wv-text-3 hover:text-wv-text'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
+              <span>200-DMA → ATH Breakout</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'supertrend'}
+              onClick={() => handleTabChange('supertrend')}
+              className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                tab === 'supertrend'
+                  ? 'bg-wv-surface text-wv-text shadow-sm'
+                  : 'text-wv-text-3 hover:text-wv-text'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+              <span>SuperTrend Magic Trend</span>
+            </button>
           </div>
         </div>
 
@@ -68,7 +112,13 @@ export const AthStrategy: React.FC = () => {
         />
       </div>
 
-      <AthBreakoutPanel symbol={symbol} runSeq={runSeq} active onStatus={handleStatus} />
+      {/* Render active panel */}
+      {tab === 'ath' && (
+        <AthBreakoutPanel symbol={symbol} runSeq={runSeq} active={tab === 'ath'} onStatus={handleStatus} />
+      )}
+      {tab === 'supertrend' && (
+        <SupertrendPanel symbol={symbol} runSeq={runSeq} active={tab === 'supertrend'} onStatus={handleStatus} />
+      )}
     </div>
   )
 }

@@ -94,7 +94,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     if (path === '/brokers') return { title: 'Brokers', sub: 'Connect, sync and manage your broker accounts' }
     if (path === '/signals') return { title: 'Signals', sub: 'Momentum and 200-DMA ATH breakout for the stocks you hold and your Chartink Stage 2 list' }
     if (path === '/momentum') return { title: 'Momentum', sub: 'Trend, returns and relative strength for one stock' }
-    if (path === '/strategy') return { title: 'ATH Strategy', sub: 'The 200-DMA to all-time-high breakout: signal and backtest on daily candles' }
+    if (path === '/strategy') return { title: 'Strategies', sub: 'Systematic breakout & trend-following strategies: signals, charts, and backtests on daily candles' }
     if (path === '/account') return { title: 'Account', sub: 'Your sign-in, privacy and data' }
     if (path === '/boardroom' || path === '/agents') return { title: 'Review', sub: 'Autonomous Fiduciary Review · Directives & Forensic Due Diligence' }
     return { title: 'Overview', sub: syncLine }

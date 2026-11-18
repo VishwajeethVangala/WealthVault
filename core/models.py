@@ -539,3 +539,80 @@ class AthBreakoutResult(BaseModel):
     stats: StrategyStats
     trades: List[StrategyTrade] = Field(default_factory=list)
     series: List[AthBreakoutBar] = Field(default_factory=list)
+
+
+class SupertrendParams(BaseModel):
+    """Inputs for the SuperAI Magic Trend strategy."""
+
+    atr_period: int = Field(default=10, ge=1, le=100, description="ATR Period for Supertrend")
+    factor: float = Field(default=3.0, ge=0.5, le=10.0, description="ATR Multiplier for Supertrend")
+    use_adx_filter: bool = Field(default=True, description="Filter buys by ADX threshold")
+    adx_threshold: float = Field(default=20.0, ge=0.0, le=100.0, description="Minimum ADX required to buy")
+    use_vol_filter: bool = Field(default=True, description="Filter buys by Volume SMA")
+    vol_length: int = Field(default=20, ge=1, le=200, description="Volume SMA length")
+    max_bars_after_flip: int = Field(default=5, ge=1, le=20, description="Max bars after bullish flip allowed to buy")
+    capital_per_trade: float = Field(default=50000.0, ge=1000, description="Capital deployed per trade in INR")
+    initial_capital: float = Field(default=50000.0, gt=0, description="Starting capital in INR")
+    start_date: str = Field(default="2015-01-01", description="No entries before this date (YYYY-MM-DD)")
+    commission_pct: float = Field(default=0.0, ge=0, description="Commission per side (% of trade value)")
+
+
+class SupertrendStatus(BaseModel):
+    """Latest bar status of the Supertrend strategy."""
+
+    state: str = Field(..., description="'IN_POSITION' or 'FLAT'")
+    headline: str
+    detail: str
+    last_signal: Optional[str] = Field(default=None, description="'BUY' or 'SELL' executed at the latest close")
+    close: float
+    supertrend: float
+    direction: int = Field(..., description="-1 for bullish (support), 1 for bearish (resistance)")
+    adx: Optional[float] = None
+    volume: float
+    vol_sma: Optional[float] = None
+    volume_ratio: Optional[float] = None
+    bars_since_flip: Optional[int] = None
+    entry_date: Optional[str] = None
+    entry_price: Optional[float] = None
+    unrealized_pct: Optional[float] = None
+    bars_held: Optional[int] = None
+
+
+class SupertrendBar(BaseModel):
+    """Per-bar values and signals for charting."""
+
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    supertrend: float
+    direction: int
+    adx: Optional[float] = None
+    vol_sma: Optional[float] = None
+    buy: bool = False
+    sell: bool = False
+    equity: float
+    buy_hold: float
+
+
+class SupertrendResult(BaseModel):
+    """Full Supertrend Magic Trend report for one instrument."""
+
+    instrument: str
+    name: Optional[str] = None
+    as_of: str
+    params: SupertrendParams
+    history_start: str
+    test_start: str
+    test_end: str
+    bars_tested: int
+    partial_bar_excluded: bool = False
+    live_bar: bool = False
+    live_price: Optional[float] = None
+    status: SupertrendStatus
+    stats: StrategyStats
+    trades: List[StrategyTrade] = Field(default_factory=list)
+    series: List[SupertrendBar] = Field(default_factory=list)
+

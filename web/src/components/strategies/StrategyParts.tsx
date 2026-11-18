@@ -269,8 +269,9 @@ export const EquityCurveCard: React.FC<{ series: EquityPoint[]; initialCapital: 
   )
 }
 
-const EXIT_STYLES: Record<StrategyTrade['exit_reason'], { label: string; cls: string }> = {
+const EXIT_STYLES: Record<string, { label: string; cls: string }> = {
   '200DMA BREAK': { label: 'Below 200-DMA', cls: 'bg-wv-surface-2 text-wv-text-2' },
+  'Supertrend Bearish Flip': { label: 'Supertrend Break', cls: 'bg-wv-loss-weak text-wv-loss' },
   OPEN: { label: 'Open', cls: 'bg-wv-accent-weak text-wv-accent' },
 }
 
@@ -298,9 +299,9 @@ export const TradesCard: React.FC<{ trades: StrategyTrade[]; subtitle: string }>
             </thead>
             <tbody>
               {newestFirst.map((t) => {
-                const style = EXIT_STYLES[t.exit_reason]
+                const style = EXIT_STYLES[t.exit_reason] || { label: t.exit_reason, cls: 'bg-wv-surface-2 text-wv-text-2' }
                 return (
-                  <tr key={`${t.entry_date}-${t.exit_date}`} className="border-t border-wv-border">
+                  <tr key={`${t.entry_date}-${t.exit_date ?? 'open'}`} className="border-t border-wv-border">
                     <td className="py-2 pr-3 font-mono text-wv-text-2">{t.entry_date}</td>
                     <td className="py-2 pr-3 font-mono text-right text-wv-text">{formatINR(t.entry_price)}</td>
                     <td className="py-2 pr-3 font-mono text-wv-text-2">{t.exit_date ?? '—'}</td>

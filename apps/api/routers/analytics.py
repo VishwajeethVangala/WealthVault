@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from apps.api.routers.accounts import get_current_user
 from core.analytics import analyze_momentum
 from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
+from core.analytics.supertrend_strategy import run_supertrend_strategy
 from core.market_data.groww_market import (
     fetch_groww_daily_candles,
     get_user_groww_client,
@@ -42,6 +43,8 @@ from core.models import (
     AthBreakoutResult,
     BrokerStatus,
     MomentumAnalysis,
+    SupertrendParams,
+    SupertrendResult,
 )
 from core.market_data.stock_search import MIN_CHARS as MIN_SEARCH_CHARS, search_stocks
 from storage.tables.repositories import BrokerConnectionRepository
@@ -322,3 +325,61 @@ async def get_ath_breakout_strategy(
         return result
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+
+@router.get(
+    "/strategy/supertrend",
+    response_model=SupertrendResult,
+    status_code=status.HTTP_200_OK,
+    summary="SuperAI Magic Trend Strategy",
+    description=(
+        "Runs the Supertrend (10, 3.0) + ADX(14) + Volume SMA(20) strategy on the stock's full "
+        "daily history: buy when Supertrend is bullish, within max_bars_after_flip of the flip, "
+        "and confirmed by ADX & Volume; exit instantly when Supertrend breaks red."
+    ),
+)
+async def get_supertrend_strategy(
+    symbol: str = Query(..., min_length=1, max_length=40, description="Symbol, e.g. 'INFY' or 'NSE:INFY'"),
+    start_date: str = Query(default="2015-01-01", pattern=r"^\d{4}-\d{2}-\d{2}$", description="No entries before this date"),
+    atr_period: int = Query(default=10, ge=1, le=100, description="ATR period"),
+    factor: float = Query(default=3.0, ge=0.5, le=10.0, description="ATR multiplier"),
+    use_adx_filter: bool = Query(default=True, description="Filter buys by ADX"),
+    adx_threshold: float = Query(default=20.0, ge=0.0, le=100.0, description="ADX threshold"),
+    use_vol_filter: bool = Query(default=True, description="Filter buys by Volume SMA"),
+    vol_length: int = Query(default=20, ge=1, le=200, description="Volume SMA length"),
+    max_bars_after_flip: int = Query(default=5, ge=1, le=20, description="Max bars after bullish flip to buy"),
+    capital_per_trade: float = Query(default=50000.0, ge=1000, le=100000000, description="Capital per trade in INR"),
+    current_user_id: str = Depends(get_current_user),
+) -> SupertrendResult:
+    """Compute status, signals, and backtest for the SuperAI Magic Trend strategy."""
+    params = SupertrendParams(
+        atr_period=atr_period,
+        factor=factor,
+        use_adx_filter=use_adx_filter,
+        adx_threshold=adx_threshold,
+        use_vol_filter=use_vol_filter,
+        vol_length=vol_length,
+        max_bars_after_flip=max_bars_after_flip,
+        capital_per_trade=capital_per_trade,
+        initial_capital=capital_per_trade,
+        start_date=start_date,
+    )
+    instrument, candles, _ = await _load_candles(current_user_id, symbol, lookback_days=0, full_history=True)
+    candles, _bench, live_price = await _apply_live(current_user_id, instrument, candles)
+    partial_dropped = False
+    if live_price is None:
+        candles, partial_dropped = drop_incomplete_today(candles)
+
+    try:
+        result = run_supertrend_strategy(
+            instrument=_qualified_symbol(instrument),
+            candles=candles,
+            params=params,
+            name=instrument.get("name"),
+            partial_bar_excluded=partial_dropped,
+        )
+        result.live_bar, result.live_price = live_price is not None, live_price
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+

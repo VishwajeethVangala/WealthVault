@@ -2,7 +2,7 @@ import { cleanSearchTerm, track } from './analytics'
 import { saveSessionForWorker } from './pushSession'
 import { webPushSignOut } from './webPush'
 import type { LiveSignalsResponse } from '../components/signals/useLiveSignals'
-import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult, WatchlistItem, WatchlistResponse, BoardroomOverview, DirectiveCard, InvestigationDossier, GroundSwarmOverview } from '../types'
+import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult, SupertrendOptions, SupertrendResult, WatchlistItem, WatchlistResponse, BoardroomOverview, DirectiveCard, InvestigationDossier, GroundSwarmOverview } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -222,6 +222,16 @@ export async function fetchAthBreakoutStrategy(symbol: string, options: AthBreak
   })
   const res = await fetchApi<AthBreakoutResult>(`/api/v1/analytics/strategy/ath-breakout?${params.toString()}`)
   track('strategy_run', { strategy: 'ath', symbol: cleanSearchTerm(symbol) })
+  return res
+}
+
+export async function fetchSupertrendStrategy(symbol: string, options: SupertrendOptions = {}): Promise<SupertrendResult> {
+  const params = new URLSearchParams({ symbol })
+  Object.entries(options).forEach(([key, value]) => {
+    if (value !== undefined) params.set(key, String(value))
+  })
+  const res = await fetchApi<SupertrendResult>(`/api/v1/analytics/strategy/supertrend?${params.toString()}`)
+  track('strategy_run', { strategy: 'supertrend', symbol: cleanSearchTerm(symbol) })
   return res
 }
 

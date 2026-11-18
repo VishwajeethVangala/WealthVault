@@ -19,7 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'boardroom', label: 'Review', short: 'Review', path: '/boardroom', icon: Crown, group: 'Analysis', badge: 'Beta' },
   { id: 'signals', label: 'Signals', short: 'Signals', path: '/signals', icon: Radar, group: 'Analysis' },
   { id: 'momentum', label: 'Momentum', short: 'Momentum', path: '/momentum', icon: Activity, group: 'Analysis' },
-  { id: 'strategy', label: 'ATH Strategy', short: 'Strategy', path: '/strategy', icon: CandlestickChart, group: 'Analysis' },
+  { id: 'strategy', label: 'Strategies', short: 'Strategies', path: '/strategy', icon: CandlestickChart, group: 'Analysis' },
 ]
 
 export const isNavActive = (pathname: string, path: string) => (path === '/' ? pathname === '/' : pathname.startsWith(path))

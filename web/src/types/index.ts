@@ -336,6 +336,86 @@ export interface AthBreakoutOptions {
   capital_per_trade?: number
 }
 
+export interface SupertrendParams {
+  atr_period: number
+  factor: number
+  use_adx_filter: boolean
+  adx_threshold: number
+  use_vol_filter: boolean
+  vol_length: number
+  max_bars_after_flip: number
+  capital_per_trade: number
+  initial_capital: number
+  start_date: string
+  commission_pct: number
+}
+
+export interface SupertrendStatus {
+  state: 'IN_POSITION' | 'FLAT'
+  headline: string
+  detail: string
+  last_signal: 'BUY' | 'SELL' | null
+  close: number
+  supertrend: number
+  direction: number
+  adx: number | null
+  volume: number
+  vol_sma: number | null
+  volume_ratio: number | null
+  bars_since_flip: number | null
+  entry_date: string | null
+  entry_price: number | null
+  unrealized_pct: number | null
+  bars_held: number | null
+}
+
+export interface SupertrendBar {
+  date: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+  supertrend: number
+  direction: number
+  adx: number | null
+  vol_sma: number | null
+  buy: boolean
+  sell: boolean
+  equity: number
+  buy_hold: number
+}
+
+export interface SupertrendResult {
+  instrument: string
+  name: string | null
+  as_of: string
+  params: SupertrendParams
+  history_start: string
+  test_start: string
+  test_end: string
+  bars_tested: number
+  partial_bar_excluded: boolean
+  live_bar?: boolean
+  live_price?: number | null
+  status: SupertrendStatus
+  stats: StrategyStats
+  trades: StrategyTrade[]
+  series: SupertrendBar[]
+}
+
+export interface SupertrendOptions {
+  start_date?: string
+  atr_period?: number
+  factor?: number
+  use_adx_filter?: boolean
+  adx_threshold?: number
+  use_vol_filter?: boolean
+  vol_length?: number
+  max_bars_after_flip?: number
+  capital_per_trade?: number
+}
+
 export interface TargetAllocation {
   owner_id: string
   targets: Record<string, number>
