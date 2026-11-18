@@ -128,7 +128,7 @@ const Check: React.FC<{ passed: boolean; label: string; detail: string }> = ({ p
 )
 
 export const SupertrendPanel: React.FC<StrategyPanelProps> = (props) => {
-  const { run, loading, error, authUrl, result } = useAnalysisRequest<SupertrendResult>()
+  const { run, loading, error, authUrl, data: result } = useAnalysisRequest<SupertrendResult>()
   const [range, setRange] = useState<number>(0)
   const [startDate, setStartDate] = useState('2015-01-01')
   const [atrPeriod, setAtrPeriod] = useState(10)
@@ -171,7 +171,14 @@ export const SupertrendPanel: React.FC<StrategyPanelProps> = (props) => {
         symbol: targetSymbol,
         name: result.name || targetSymbol,
         notes: result.status?.headline ? `Supertrend: ${result.status.headline}` : 'Supertrend Strategy',
-        created_at: new Date().toISOString(),
+        target_price: null,
+        price_when_added: result.status?.entry_price || null,
+        added_at: new Date().toISOString(),
+        last_price: result.live_price || null,
+        pct_since_added: 0,
+        trend_verdict: null,
+        trend_score: null,
+        signal_state: result.status?.state || null,
       }
       setWatchlist((prev) => [optimisticItem, ...prev])
       showToast(`Added ${targetSymbol} to Watchlist`)
@@ -214,7 +221,7 @@ export const SupertrendPanel: React.FC<StrategyPanelProps> = (props) => {
 
   const chartData: ChartBar[] = useMemo(() => {
     if (!result) return []
-    return sliceRange(result.series, range).map((b) => ({
+    return sliceRange(result.series as any, range).map((b: any) => ({
       ...b,
       buyMark: b.buy ? b.close * 0.96 : null,
       sellMark: b.sell ? b.high * 1.04 : null,
@@ -250,16 +257,15 @@ export const SupertrendPanel: React.FC<StrategyPanelProps> = (props) => {
               className="px-2 py-1.5 rounded-lg border border-wv-border font-mono"
             />
           </label>
-          <NumberInput label="ATR Period" value={atrPeriod} onChange={setAtrPeriod} min={1} max={50} />
-          <NumberInput label="ATR Multiplier" value={factor} onChange={setFactor} min={0.5} max={10} step={0.1} />
-          <NumberInput label="Min ADX" value={adxThreshold} onChange={setAdxThreshold} min={0} max={60} />
+          <NumberInput label="ATR Period" value={atrPeriod} onChange={setAtrPeriod} min={1} />
+          <NumberInput label="ATR Multiplier" value={factor} onChange={setFactor} min={0.5} step={0.1} />
+          <NumberInput label="Min ADX" value={adxThreshold} onChange={setAdxThreshold} min={0} />
           <NumberInput
             label="Max Bars After Flip"
             value={maxBarsAfterFlip}
             onChange={setMaxBarsAfterFlip}
             min={1}
-            max={20}
-            sub="1 = exact day only; 5 = swing window"
+            width="w-24"
           />
           <NumberInput label="Capital / trade ₹" value={capital} onChange={setCapital} step={1000} min={1000} width="w-28" />
         </InputsPanel>
@@ -412,7 +418,14 @@ export const SupertrendPanel: React.FC<StrategyPanelProps> = (props) => {
           </div>
 
           {/* Strategy KPIs */}
-          <BacktestStats stats={result.stats} />
+          <BacktestStats
+            stats={result.stats}
+            testStart={result.test_start}
+            testEnd={result.test_end}
+            barsTested={result.bars_tested}
+            note={`₹${p.capital_per_trade.toLocaleString('en-IN')} per trade · no commission`}
+            exitsSub={`${result.stats.signal_exits} on Supertrend flip`}
+          />
 
           {/* Supertrend Chart */}
           <div className="bg-wv-surface border border-wv-border rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col gap-4">
@@ -431,7 +444,7 @@ export const SupertrendPanel: React.FC<StrategyPanelProps> = (props) => {
             <div className="flex items-center gap-4 flex-wrap text-xs text-wv-text-3 border-y border-wv-border py-2">
               <LegendLine color="var(--text)" label="Close" />
               <LegendLine color="#10b981" label={`Supertrend Support (${p.factor}, ${p.atr_period})`} />
-              <LegendSignals buyColor={BUY_COLOR} sellColor={SELL_COLOR} />
+              <LegendSignals setupLabel="Supertrend Support" />
             </div>
 
             <div className="h-[360px] sm:h-[420px] w-full">
@@ -463,6 +476,7 @@ export const SupertrendPanel: React.FC<StrategyPanelProps> = (props) => {
                     strokeWidth={1.5}
                     dot={false}
                     isAnimationActive={false}
+                    label={endLabel('close', 'Close', lastIndex)}
                   />
                   <Line
                     type="stepAfter"
@@ -471,20 +485,23 @@ export const SupertrendPanel: React.FC<StrategyPanelProps> = (props) => {
                     strokeWidth={1.75}
                     dot={false}
                     isAnimationActive={false}
+                    label={endLabel('supertrend', 'Supertrend', lastIndex)}
                   />
                   <Line
-                    type="monotone"
                     dataKey="buyMark"
-                    stroke="transparent"
-                    dot={triangleMarker(BUY_COLOR, 'up')}
+                    stroke="none"
+                    dot={triangleMarker('up', BUY_COLOR)}
+                    activeDot={false}
                     isAnimationActive={false}
+                    legendType="none"
                   />
                   <Line
-                    type="monotone"
                     dataKey="sellMark"
-                    stroke="transparent"
-                    dot={triangleMarker(SELL_COLOR, 'down')}
+                    stroke="none"
+                    dot={triangleMarker('down', SELL_COLOR)}
+                    activeDot={false}
                     isAnimationActive={false}
+                    legendType="none"
                   />
                 </ComposedChart>
               </ResponsiveContainer>
@@ -499,11 +516,11 @@ export const SupertrendPanel: React.FC<StrategyPanelProps> = (props) => {
                 Starting capital of ₹{p.initial_capital.toLocaleString('en-IN')}, buying ₹{p.capital_per_trade.toLocaleString('en-IN')} per trade.
               </p>
             </div>
-            <EquityCurveCard series={result.series as any} initialCapital={p.initial_capital} />
+            <EquityCurveCard series={result.series} initialCapital={p.initial_capital} />
           </div>
 
           {/* Trades Table */}
-          <TradesCard trades={result.trades} initialCapital={p.initial_capital} />
+          <TradesCard trades={result.trades} subtitle="Newest first. Entries and exits fill at the signal day's close; no commission." />
         </>
       )}
     </div>
