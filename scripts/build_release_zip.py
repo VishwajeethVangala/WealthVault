@@ -1,6 +1,6 @@
 """Build the zip you upload to Azure by hand.
 
-    python scripts/build_release_zip.py                  tests, web build, then D:\\Gravity\\wealthvault-release.zip
+    python scripts/build_release_zip.py                  tests, web build, then D:\\Gravity\\Wealth Vault\\wealthvault-release.zip
     python scripts/build_release_zip.py --skip-tests     skip the Python tests
     python scripts/build_release_zip.py --skip-web       reuse the existing dist/ (no npm build)
     python scripts/build_release_zip.py --out some.zip   write somewhere else
@@ -21,7 +21,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_OUT = Path("D:/Gravity/wealthvault-release.zip") if sys.platform == "win32" else ROOT.parent / "wealthvault-release.zip"
+DEFAULT_OUT = ROOT / "wealthvault-release.zip"
 
 # Tracked files that the server does not need.
 EXCLUDE = [

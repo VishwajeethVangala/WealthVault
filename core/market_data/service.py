@@ -160,7 +160,7 @@ class MCPMarketDataService:
         except Exception as exc:
             logger.debug("Failed updating symbol map: %s", exc)
 
-    async def _try_alternate_quotes(self, client: Any, inst: str) -> Dict[str, Any]:
+    async def _try_alternate_quotes(self, client: Any, inst: str, state: Optional[List[Any]] = None) -> Dict[str, Any]:
         """Attempt recovery for instruments where exchange series shifted (EQ <-> BE) or listing moved to BSE."""
         if ":" in inst:
             exch, sym = inst.split(":", 1)
@@ -179,6 +179,10 @@ class MCPMarketDataService:
             candidates.append(f"{alt_exch}:{sym}-BE")
 
         for cand in candidates:
+            if state is not None:
+                if state[0] <= 0:
+                    break
+                state[0] -= 1
             try:
                 res = await client.get_quotes([cand])
                 if res and cand in res:
@@ -201,26 +205,19 @@ class MCPMarketDataService:
             return await client.get_quotes(batch)
         except KiteToolError as exc:
             state[1] = True
+            if state[0] <= 0:
+                logger.warning("Kite quote retry budget exhausted for %s: %s", ", ".join(batch[:3]), exc)
+                return {}
             if len(batch) == 1:
                 inst = batch[0]
-                alt = await self._try_alternate_quotes(client, inst)
+                alt = await self._try_alternate_quotes(client, inst, state)
                 if alt:
                     return alt
                 logger.warning("Kite refused quotes for %s: %s", inst, exc)
                 return {}
             if state[0] < 2:
-                results = {}
-                for inst in batch:
-                    try:
-                        res = await client.get_quotes([inst])
-                        results.update(res)
-                    except KiteToolError:
-                        alt = await self._try_alternate_quotes(client, inst)
-                        if alt:
-                            results.update(alt)
-                        else:
-                            logger.warning("Kite refused quotes for %s: %s", inst, exc)
-                return results
+                logger.warning("Kite refused quotes for %s: %s", ", ".join(batch[:3]), exc)
+                return {}
 
             state[0] -= 2
             middle = len(batch) // 2

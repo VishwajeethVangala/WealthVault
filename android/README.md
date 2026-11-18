@@ -57,7 +57,7 @@ Nothing changes on the server: the app asks Google for an ID token for the web c
 
 ## Release build and Play Store
 
-Run `powershell -ExecutionPolicy Bypass -File scriptsuild_all.ps1` from the repo root. It builds the web zip for
+Run `powershell -ExecutionPolicy Bypass -File scripts/build_all.ps1` from the repo root. It builds the web zip for
 Azure and the signed Android app, checks the app carries the key Google Play expects, and leaves three files in
 `D:\Gravity`: `wealthvault-release.zip`, `WealthVault-<version>-release.aab` (Play) and `...-release.apk`.
 Use `-SkipWeb`, `-SkipAndroid` or `-SkipTests` to do part of it.

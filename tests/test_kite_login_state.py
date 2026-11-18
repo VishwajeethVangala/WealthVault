@@ -154,7 +154,14 @@ class QuoteClient:
     owner_id = None
 
     def __init__(self, bad):
-        self.bad = bad
+        self.bad = set(bad)
+        for b in list(bad):
+            root = b.split(":")[-1].replace("-BE", "")
+            self.bad.add(root)
+            self.bad.add(f"NSE:{root}")
+            self.bad.add(f"NSE:{root}-BE")
+            self.bad.add(f"BSE:{root}")
+            self.bad.add(f"BSE:{root}-BE")
         self.calls = 0
 
     async def get_quotes(self, batch):

@@ -89,6 +89,14 @@ class IndmoneyMCPClient:
         self._last_call_time: float = 0.0
         self._rate_limit_lock: Optional[asyncio.Lock] = None
 
+        self.registration_endpoint = "https://mcp.indmoney.com/register"
+        self._load_client_info()
+        base = public_base_url()
+        if base:  # a deployed host always wins over a saved localhost redirect
+            self.redirect_uri = f"{base}/api/v1/portfolio/oauth/indmoney/callback"
+        self._apply_registered_client()
+        self._load_tokens()
+
     @property
     def rate_limit_lock(self) -> asyncio.Lock:
         if self._rate_limit_lock is None:
@@ -109,14 +117,6 @@ class IndmoneyMCPClient:
             return max(0.0, self._blocked_until.get(tool_name, 0.0) - now)
         waits = [max(0.0, t - now) for t in self._blocked_until.values()]
         return max(waits) if waits else 0.0
-
-        self.registration_endpoint = "https://mcp.indmoney.com/register"
-        self._load_client_info()
-        base = public_base_url()
-        if base:  # a deployed host always wins over a saved localhost redirect
-            self.redirect_uri = f"{base}/api/v1/portfolio/oauth/indmoney/callback"
-        self._apply_registered_client()
-        self._load_tokens()
 
     @classmethod
     def get_instance(cls, connection_id: str = "conn_indmoney_live", owner_id: Optional[str] = None) -> "IndmoneyMCPClient":

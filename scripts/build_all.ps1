@@ -3,7 +3,7 @@
 
     powershell -ExecutionPolicy Bypass -File scripts\build_all.ps1
 
-  Makes, in D:\Gravity:
+  Makes, in D:\Gravity\Wealth Vault:
     wealthvault-release.zip          the web app + server, for Azure (manual upload)
     WealthVault-<version>-release.aab   the Android app bundle, for Google Play
     WealthVault-<version>-release.apk   the same app as an APK, to install directly on a phone
@@ -12,7 +12,7 @@
     -SkipWeb       only the Android app
     -SkipAndroid   only the web zip
     -SkipTests     do not run the Python tests before zipping the web app
-    -OutDir <dir>  put the files somewhere else (default D:\Gravity)
+    -OutDir <dir>  put the files somewhere else (default D:\Gravity\Wealth Vault)
 
   Needs (already set up on this PC): Python, Node, the Android tools in D:\Gravity\android-tools, and the Play
   upload key listed in android\keystore.properties. The script checks the app is signed with the key Google Play
@@ -22,11 +22,12 @@ param(
     [switch]$SkipWeb,
     [switch]$SkipAndroid,
     [switch]$SkipTests,
-    [string]$OutDir = "D:\Gravity"
+    [string]$OutDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 $Repo = Split-Path -Parent $PSScriptRoot
+if (-not $OutDir) { $OutDir = $Repo }
 $Tools = "D:\Gravity\android-tools"
 $PlayKeySha1 = "22:CE:1D:79:AB:74:38:66:07:27:B9:4B:36:F5:A9:66:7A:E4:4B:EF"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
