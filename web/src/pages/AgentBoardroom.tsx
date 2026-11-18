@@ -1080,7 +1080,7 @@ export const AgentBoardroom: React.FC = () => {
                 <span>Chief Investment Officer AI Deliberation Held (API Key Required)</span>
               </div>
               <p className="text-xs leading-relaxed opacity-90">
-                Boss executive orders are currently held. Multi-scout AI synthesis across the 6 ground reports requires a Gemini API key. Add <code>GEMINI_API_KEY</code> to your <code>.env</code> file to unlock autonomous deliberation.
+                Boss executive orders are currently held. Multi-scout AI synthesis across the 6 ground reports requires a Gemini API key. Add <code>GEMINI_API_KEY</code> to your App Service application settings or <code>.env</code> file to unlock autonomous deliberation.
               </p>
             </div>
           )}
