@@ -84,19 +84,23 @@ def main() -> int:
     names = sorted(set(files) | set(dist))
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    if args.out.exists():
-        args.out.unlink()
-    with zipfile.ZipFile(args.out, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+    temp_zip = args.out.with_name(f"{args.out.stem}.tmp.zip")
+    if temp_zip.exists():
+        temp_zip.unlink(missing_ok=True)
+
+    with zipfile.ZipFile(temp_zip, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         for rel in names:
             z.write(ROOT / rel, rel)  # forward slashes, as Linux expects
 
     # A last look for anything that must never leave this machine.
-    with zipfile.ZipFile(args.out) as z:
+    with zipfile.ZipFile(temp_zip) as z:
         bad = [n for n in z.namelist() if n == ".env" or n.startswith("client_secret") or n.endswith((".jks", ".keystore"))]
     if bad:
-        args.out.unlink()
+        temp_zip.unlink(missing_ok=True)
         print("Refusing: secrets found in the zip:", bad)
         return 1
+
+    temp_zip.replace(args.out)
 
     mb = args.out.stat().st_size / 1024 / 1024
     print(f"\nDone: {args.out}  ({len(names)} files, {mb:.1f} MB)")
