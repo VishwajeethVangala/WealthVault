@@ -50,6 +50,8 @@ class BoardroomStorage:
                 data = json.load(f)
             raw_directives = data.get("directives", {})
             canonical_map: Dict[str, DirectiveCard] = {}
+            holding_index: Dict[tuple, str] = {}  # (sym, brk) -> canonical_id
+
             for k, v in raw_directives.items():
                 try:
                     card = DirectiveCard(**v)
@@ -59,18 +61,38 @@ class BoardroomStorage:
                         brk = (act.broker or "broker").lower()
                         act_type = (act.action.value if hasattr(act.action, "value") else str(act.action)).lower()
                         canonical_id = f"dir_{sym}_{brk}_{act_type}"
+                        holding_key = (sym, brk)
                     else:
                         canonical_id = k
+                        holding_key = (k.lower(), "none")
 
                     card.directive_id = canonical_id
-                    if canonical_id in canonical_map:
-                        existing = canonical_map[canonical_id]
+
+                    # 1:1 holding deduplication
+                    if holding_key in holding_index:
+                        existing_id = holding_index[holding_key]
+                        existing = canonical_map[existing_id]
+                        existing_act = existing.actions[0].action if existing.actions else None
+                        curr_act = act.action if act else None
+
+                        # If user resolved existing, preserve it
                         if existing.user_status != DirectiveStatus.PENDING_REVIEW and card.user_status == DirectiveStatus.PENDING_REVIEW:
                             continue
-                        if card.timestamp >= existing.timestamp:
+
+                        # Prioritize HOLD_DEFENSE over CUT_LOSS, or newer timestamp
+                        if curr_act == "HOLD_DEFENSE" and existing_act == "CUT_LOSS":
+                            canonical_map.pop(existing_id, None)
                             canonical_map[canonical_id] = card
+                            holding_index[holding_key] = canonical_id
+                        elif existing_act == "HOLD_DEFENSE" and curr_act == "CUT_LOSS":
+                            continue
+                        elif card.timestamp >= existing.timestamp:
+                            canonical_map.pop(existing_id, None)
+                            canonical_map[canonical_id] = card
+                            holding_index[holding_key] = canonical_id
                     else:
                         canonical_map[canonical_id] = card
+                        holding_index[holding_key] = canonical_id
                 except Exception as exc:
                     logger.debug("Skipping malformed directive card %s: %s", k, exc)
 
@@ -107,6 +129,26 @@ class BoardroomStorage:
 
     def save_directive(self, directive: DirectiveCard):
         """Save or update an action directive without creating duplicates."""
+        # 1:1 holding enforcement: remove any other active directive for the same (symbol, broker)
+        act = directive.actions[0] if directive.actions else None
+        if act:
+            sym = clean_symbol(act.symbol).upper()
+            brk = (act.broker or "broker").lower()
+            to_remove = []
+            for k, existing in self._directives.items():
+                if k != directive.directive_id and existing.actions:
+                    e_act = existing.actions[0]
+                    e_sym = clean_symbol(e_act.symbol).upper()
+                    e_brk = (e_act.broker or "broker").lower()
+                    if e_sym == sym and e_brk == brk:
+                        to_remove.append(k)
+            for k in to_remove:
+                old_card = self._directives.pop(k, None)
+                if old_card and old_card.user_status != DirectiveStatus.PENDING_REVIEW:
+                    directive.user_status = old_card.user_status
+                    directive.user_comment = old_card.user_comment
+                    directive.resolved_at = old_card.resolved_at
+
         existing = self._directives.get(directive.directive_id)
         if existing and existing.user_status != DirectiveStatus.PENDING_REVIEW:
             # Preserve user's closure status (e.g. ORDER_PLACED_AT_BROKER, IGNORED)

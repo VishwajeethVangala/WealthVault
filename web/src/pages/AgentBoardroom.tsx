@@ -82,64 +82,46 @@ function classifyAuditVerdict(
   directive: DirectiveCard,
   dossier: GroundStockDossier | null,
   pnl: number,
-  cleanTicker: string
+  _cleanTicker: string
 ): ClassifiedVerdict {
   const action = directive.actions[0]?.action
   const roce = dossier?.funda_report?.roce_pct ?? directive.investigation_dossier?.fundamental_vitals?.roce_pct
-  const stage = dossier?.tech_report?.stage_verdict ?? directive.investigation_dossier?.technical_trend ?? ''
-  const sma200 = dossier?.tech_report?.sma_200
-  const currentPrice = directive.actions[0]?.estimated_price ?? dossier?.tech_report?.current_price ?? 0
-  const isHolding200 = Boolean(sma200 && currentPrice >= sma200 * 0.95)
-  const summaryLower = (directive.review_summary || '').toLowerCase()
 
-  // 1. False Breakdown Shield: High ROCE or 200-DMA support or HOLD_DEFENSE
-  if (
-    action === 'HOLD_DEFENSE' ||
-    summaryLower.includes('false breakdown') ||
-    summaryLower.includes('protect') ||
-    (roce != null && roce >= 15 && isHolding200) ||
-    cleanTicker === 'SHANTIGOLD'
-  ) {
+  // 1. False Breakdown Shield: HOLD_DEFENSE (overruled & protected at 200-DMA)
+  if (action === 'HOLD_DEFENSE') {
     return {
       category: 'SHIELD',
       badgeLabel: '🛡️ FALSE BREAKDOWN SHIELD',
       badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold',
       scoutAlarm: `Risk Scout flagged stop-loss breach (${pnl.toFixed(1)}% drawdown). Recommended market dump.`,
-      reviewerChallenge: `Overruled & Protected: Outstanding ROCE (${roce != null ? roce.toFixed(1) + '%' : '33.9%'}), testing rising 200-DMA support. Dip driven by systemic market beta, not company insolvency.`,
+      reviewerChallenge: `Overruled & Protected: Outstanding ROCE (${roce != null ? roce.toFixed(1) + '%' : 'sound'}), testing rising 200-DMA support. Dip driven by systemic market beta, not company insolvency.`,
       fiduciaryFinding: 'Structural base intact. Retail stop-loss shakeout rejected. Preserve holding with stop at 200-DMA.',
       recommendation: 'HOLD DEFENSE: Stop strictly pegged to 200-DMA to avoid whipsaw loss.',
     }
   }
 
-  // 2. Confirmed Capital Rot: Stage 4 decline or negative/subpar ROCE or major loss exit
-  if (
-    isExitAction(action) ||
-    pnl <= -18 ||
-    stage.includes('Stage 4') ||
-    (roce != null && roce < 5) ||
-    cleanTicker === 'PASHUPATI' ||
-    cleanTicker === 'OLAELEC'
-  ) {
+  // 2. Tactical Risk Trim: Partial de-risking (TRAILING_TRIM, REBALANCE)
+  if (isTrimAction(action)) {
     return {
-      category: 'ROT',
-      badgeLabel: '🔴 CONFIRMED CAPITAL ROT',
-      badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 font-semibold',
-      scoutAlarm: `Risk Scout: Drawdown of ${pnl.toFixed(1)}%. Tech Scout: Confirmed breakdown below key moving averages.`,
-      reviewerChallenge: `Euthanasia Mandated: Cross-examination confirms deep structural decay${roce != null ? ` (ROCE ${roce.toFixed(1)}%)` : ''}. Zero recovery catalyst. Munger Inversion rule #1 applies: Stop compounding errors.`,
-      fiduciaryFinding: 'Severe thesis invalidation across Technical + Fundamental + News dimensions. Full euthanasia mandated.',
-      recommendation: 'FULL 100% EXIT: Halt ongoing capital destruction and recycle cash into Stage 2 leaders.',
+      category: 'TRIM',
+      badgeLabel: '🟡 TACTICAL RISK TRIM',
+      badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-semibold',
+      scoutAlarm: 'Risk Scout flagged high volatility or profit protection threshold reached.',
+      reviewerChallenge: 'Tactical De-risking: Harvest 50% risk off the table while allowing remainder to run with trailing stop-loss.',
+      fiduciaryFinding: 'Position overextended relative to market volatility. De-risk partial sizing to protect core gains.',
+      recommendation: 'TRIM 50%: Lock in downside protection and rebalance liberated liquidity into safe cash reserve.',
     }
   }
 
-  // 3. Tactical Risk Trim: Partial de-risking
+  // 3. Confirmed Capital Rot: CUT_LOSS / EXIT_ALL (euthanasia mandated)
   return {
-    category: 'TRIM',
-    badgeLabel: '🟡 TACTICAL RISK TRIM',
-    badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-semibold',
-    scoutAlarm: 'Risk Scout flagged high volatility or overconcentration within the portfolio tier.',
-    reviewerChallenge: 'Tactical De-risking: Harvest 50% risk off the table while allowing remainder to run with trailing stop-loss.',
-    fiduciaryFinding: 'Position overextended relative to market volatility. De-risk partial sizing to protect core gains.',
-    recommendation: 'TRIM 50%: Lock in downside protection and rebalance liberated liquidity into safe cash reserve.',
+    category: 'ROT',
+    badgeLabel: '🔴 CONFIRMED CAPITAL ROT',
+    badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 font-semibold',
+    scoutAlarm: `Risk Scout: Drawdown of ${pnl.toFixed(1)}%. Tech Scout: Confirmed breakdown below key moving averages.`,
+    reviewerChallenge: `Euthanasia Mandated: Cross-examination confirms deep structural decay${roce != null ? ` (ROCE ${roce.toFixed(1)}%)` : ''}. Zero recovery catalyst. Munger Inversion rule #1 applies: Stop compounding errors.`,
+    fiduciaryFinding: 'Severe thesis invalidation across Technical + Fundamental + News dimensions. Full euthanasia mandated.',
+    recommendation: 'FULL 100% EXIT: Halt ongoing capital destruction and recycle cash into Stage 2 leaders.',
   }
 }
 
@@ -391,8 +373,8 @@ export const AgentBoardroom: React.FC = () => {
     return {
       activeCount: activeDirectives.length,
       urgentCount,
-      totalFreedCash: totalFreedCash || 361384,
-      totalUnrealizedLoss: totalUnrealizedLoss || 99501,
+      totalFreedCash,
+      totalUnrealizedLoss,
     }
   }, [activeDirectives])
 
@@ -544,9 +526,9 @@ export const AgentBoardroom: React.FC = () => {
 
     return {
       total: classifiedReviewerList.length,
-      shields: shields || 1,
-      rot: rot || 28,
-      trims: trims || 3,
+      shields,
+      rot,
+      trims,
     }
   }, [classifiedReviewerList])
 
@@ -615,21 +597,36 @@ export const AgentBoardroom: React.FC = () => {
       `Total Capital to Free: ₹${Math.round(capitalMetrics.totalFreedCash).toLocaleString('en-IN')}`,
       `Total Downside Loss Neutralized: -₹${Math.round(capitalMetrics.totalUnrealizedLoss).toLocaleString('en-IN')}`,
       '==========================================================\n',
-      '--- 1. CAPITAL RECLAMATION (SELL ORDERS) ---',
+      '--- 1. CAPITAL RECLAMATION (SELL & TRIM ORDERS) ---',
     ]
 
-    activeDirectives.forEach((d, idx) => {
+    const sellDirectives = activeDirectives.filter((d) => d.actions[0]?.action !== 'HOLD_DEFENSE')
+    sellDirectives.forEach((d, idx) => {
       const a = d.actions[0]
       const sym = formatTicker(a?.symbol, d.investigation_dossier?.symbol)
       const qty = d.holding_quantity ?? a?.holding_quantity ?? a?.quantity ?? 0
       const ltp = a?.estimated_price ?? d.holding_avg_price ?? 0
       const broker = (a?.broker || 'BROKER').toUpperCase()
-      const actionName = a?.action === 'TRAILING_TRIM' ? 'TRIM 50%' : 'FULL EXIT'
-      const recovered = qty * ltp
-      lines.push(`${idx + 1}. [${broker}] ${actionName}: ${sym} | Qty: ${qty} sh @ ~₹${ltp.toFixed(1)} -> Free ₹${Math.round(recovered).toLocaleString('en-IN')}`)
+      const isTrim = a?.action === 'TRAILING_TRIM' || a?.action === 'REBALANCE'
+      const actionName = isTrim ? 'TRIM 50%' : 'FULL EXIT'
+      const recovered = isTrim ? qty * 0.5 * ltp : qty * ltp
+      const executedQty = isTrim ? Math.floor(qty * 0.5) : qty
+      lines.push(`${idx + 1}. [${broker}] ${actionName}: ${sym} | Qty: ${executedQty} sh @ ~₹${ltp.toFixed(1)} -> Free ₹${Math.round(recovered).toLocaleString('en-IN')}`)
     })
 
-    lines.push('\n--- 2. CAPITAL REDEPLOYMENT (BUY ORDERS) ---')
+    const holdDefenses = activeDirectives.filter((d) => d.actions[0]?.action === 'HOLD_DEFENSE')
+    if (holdDefenses.length > 0) {
+      lines.push('\n--- 2. DEFENSIVE SHIELDS (PROTECTED AT 200-DMA — DO NOT SELL) ---')
+      holdDefenses.forEach((d, idx) => {
+        const a = d.actions[0]
+        const sym = formatTicker(a?.symbol, d.investigation_dossier?.symbol)
+        const broker = (a?.broker || 'BROKER').toUpperCase()
+        const sma200 = dossierMap[sym]?.tech_report?.sma_200?.toFixed(1) || 'Support'
+        lines.push(`${idx + 1}. [${broker}] HOLD DEFENSE: ${sym} | Retained ₹0 liquidated | Stop Pegged to 200-DMA (₹${sma200})`)
+      })
+    }
+
+    lines.push('\n--- 3. CAPITAL REDEPLOYMENT (BUY ORDERS) ---')
     redeploymentTargets.forEach((t, idx) => {
       lines.push(`${idx + 1}. BUY ${t.symbol} | Target: ${t.targetShares} sh @ ~₹${t.targetPrice} (Deploy ₹${t.allocatedRupees.toLocaleString('en-IN')} • ${t.allocationPct}%)`)
     })
@@ -666,7 +663,7 @@ export const AgentBoardroom: React.FC = () => {
             >
               <Compass size={16} strokeWidth={1.75} />
               <span>1. Ground Scouts</span>
-              <span className="cnt">65</span>
+              <span className="cnt">{groundData?.dossiers?.length || 65}</span>
             </button>
 
             {/* Tab 2: The Reviewer */}
@@ -694,7 +691,7 @@ export const AgentBoardroom: React.FC = () => {
 
           <span className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-wv-gain bg-wv-gain-weak border border-wv-gain/20">
             <span className="w-1.5 h-1.5 rounded-full bg-wv-gain" />
-            65 Pure Indian Equities Audited
+            {groundData?.dossiers?.length || 65} Pure Indian Equities Audited
           </span>
         </div>
 
@@ -723,7 +720,13 @@ export const AgentBoardroom: React.FC = () => {
       {/* TAB 1: GROUND SCOUTS (DATA GATHERING & HOLDINGS INTEL)                     */}
       {/* ========================================================================= */}
       {activeTab === 'ground' && (
-        <GroundSwarmView />
+        <GroundSwarmView
+          onSelectStockForReview={(symbol) => {
+            const clean = formatTicker(symbol)
+            setReviewerSearch(clean)
+            setActiveTab('reviewer')
+          }}
+        />
       )}
 
       {/* ========================================================================= */}

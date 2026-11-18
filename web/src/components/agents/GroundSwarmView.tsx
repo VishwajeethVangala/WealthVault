@@ -55,7 +55,7 @@ export const isHighConvictionBreakout = (d: GroundStockDossier): { isBreakout: b
   return { isBreakout: false, tag: '' }
 }
 
-export const GroundSwarmView: React.FC<GroundSwarmViewProps> = () => {
+export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockForReview }) => {
   const [data, setData] = useState<GroundSwarmOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
@@ -647,30 +647,45 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = () => {
       {/* Slide-over Inspection Drawer for Ground Scout Radar Telemetry */}
       {inspectedDossier && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-black/50 backdrop-blur-xs flex justify-end">
-          <div className="w-full max-w-2xl bg-wv-surface h-full shadow-2xl flex flex-col border-l border-wv-border">
+          <div className="w-full sm:max-w-2xl bg-wv-surface h-full shadow-2xl flex flex-col border-l border-wv-border">
             {/* Drawer Header */}
-            <div className="p-5 border-b border-wv-border flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-base text-wv-text">
+            <div className="p-3.5 sm:p-5 border-b border-wv-border flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono font-bold text-sm sm:text-base text-wv-text">
                     {formatTicker(inspectedDossier.symbol)}
                   </span>
-                  <span className="text-xs text-wv-text-3">
+                  <span className="text-xs text-wv-text-3 truncate">
                     {formatCompanyName(inspectedDossier.symbol, inspectedDossier.company_name)}
                   </span>
                 </div>
-                <p className="text-xs text-wv-text-3 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-wv-text-3 mt-0.5">
                   6-Scout Radar Telemetry &amp; Foundational Evidence
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setInspectedDossier(null)}
-                className="btn btn-ghost btn-icon"
-              >
-                <X size={18} strokeWidth={1.75} />
-              </button>
+              <div className="flex items-center gap-2">
+                {onSelectStockForReview && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectStockForReview(inspectedDossier.symbol)
+                      setInspectedDossier(null)
+                    }}
+                    className="btn btn-primary text-xs px-2.5 py-1 flex items-center gap-1"
+                  >
+                    <span>View Reviewer Audit</span>
+                    <ChevronRight size={13} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setInspectedDossier(null)}
+                  className="btn btn-ghost btn-icon"
+                >
+                  <X size={18} strokeWidth={1.75} />
+                </button>
+              </div>
             </div>
 
             {/* Drawer Body: 6 Scout Detailed Breakdown */}
