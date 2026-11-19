@@ -1009,76 +1009,88 @@ export const AgentBoardroom: React.FC = () => {
           </div>
 
           {/* Triage & Filter Toolbar for The Reviewer */}
-          <div className="card p-3 sm:p-4 space-y-3">
-            {/* Tier 1: Sub-Tabs (Left) + Search & Broker (Right) */}
-            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-              <div className="overflow-x-auto no-scrollbar pb-1 xl:pb-0 -mx-1 px-1">
-                <div className="seg inline-flex shrink-0 whitespace-nowrap">
-                  <button
-                    type="button"
-                    onClick={() => setReviewerCategory('ALL')}
-                    className={reviewerCategory === 'ALL' ? 'on' : ''}
-                  >
-                    <span>All Audited</span>
-                    <span className="cnt">{reviewerStats.total}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReviewerCategory('SHIELD')}
-                    className={reviewerCategory === 'SHIELD' ? 'on' : ''}
-                  >
-                    <span>🛡️ Shields</span>
-                    <span className="cnt">{reviewerStats.shields}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReviewerCategory('ROT')}
-                    className={reviewerCategory === 'ROT' ? 'on text-wv-loss' : ''}
-                  >
-                    <span>🔴 Capital Rot</span>
-                    <span className="cnt">{reviewerStats.rot}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReviewerCategory('TRIM')}
-                    className={reviewerCategory === 'TRIM' ? 'on text-wv-warn' : ''}
-                  >
-                    <span>🟡 Trims</span>
-                    <span className="cnt">{reviewerStats.trims}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap justify-between xl:justify-end">
-                {brokers.length > 1 && (
-                  <select
-                    value={reviewerBroker}
-                    onChange={(e) => setReviewerBroker(e.target.value)}
-                    className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent uppercase"
-                  >
-                    <option value="all">All Brokers</option>
-                    {brokers.map((b) => (
-                      <option key={b} value={b}>
-                        {b.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <div className="relative flex-1 sm:w-64 min-w-[200px]">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
-                  <input
-                    type="text"
-                    placeholder="Search ticker or company..."
-                    value={reviewerSearch}
-                    onChange={(e) => setReviewerSearch(e.target.value)}
-                    className="pl-8 pr-3 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full"
-                  />
-                </div>
+          <div className="card p-3.5 sm:p-5 space-y-3.5">
+            {/* Tier 1: Dedicated Horizontal Scroll Category Tabs */}
+            <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+              <div className="seg inline-flex shrink-0 whitespace-nowrap">
+                <button
+                  type="button"
+                  onClick={() => setReviewerCategory('ALL')}
+                  className={reviewerCategory === 'ALL' ? 'on' : ''}
+                >
+                  <span>All Audited</span>
+                  <span className="cnt">{reviewerStats.total}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewerCategory('SHIELD')}
+                  className={reviewerCategory === 'SHIELD' ? 'on text-wv-gain' : ''}
+                >
+                  <ShieldCheck size={14} className="text-wv-gain" />
+                  <span>🛡️ False Breakdown Shields</span>
+                  <span className="cnt">{reviewerStats.shields}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewerCategory('ROT')}
+                  className={reviewerCategory === 'ROT' ? 'on text-wv-loss' : ''}
+                >
+                  <ShieldAlert size={14} className="text-wv-loss" />
+                  <span>🔴 Confirmed Capital Rot</span>
+                  <span className="cnt">{reviewerStats.rot}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReviewerCategory('TRIM')}
+                  className={reviewerCategory === 'TRIM' ? 'on text-wv-warn' : ''}
+                >
+                  <SlidersHorizontal size={14} className="text-amber-500" />
+                  <span>🟡 Tactical Risk Trims</span>
+                  <span className="cnt">{reviewerStats.trims}</span>
+                </button>
               </div>
             </div>
 
-            {/* Row 2: Fiduciary Intelligence Filters (ROCE, News Threat, Technical Support) */}
-            <div className="pt-2.5 border-t border-wv-border/70 flex items-center gap-2 flex-wrap text-xs">
+            {/* Tier 2: Search & Broker Filter */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-wv-border/50">
+              <div className="relative flex-1 sm:max-w-md w-full">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
+                <input
+                  type="text"
+                  placeholder="Search ticker or company..."
+                  value={reviewerSearch}
+                  onChange={(e) => setReviewerSearch(e.target.value)}
+                  className="pl-8 pr-8 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full"
+                />
+                {reviewerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setReviewerSearch('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-wv-text-3 hover:text-wv-text"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {brokers.length > 1 && (
+                <select
+                  value={reviewerBroker}
+                  onChange={(e) => setReviewerBroker(e.target.value)}
+                  className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent uppercase shrink-0"
+                >
+                  <option value="all">All Brokers</option>
+                  {brokers.map((b) => (
+                    <option key={b} value={b}>
+                      {b.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Tier 3: Fiduciary Intelligence Filters (ROCE, News Threat, Technical Support) */}
+            <div className="pt-2 border-t border-wv-border/50 flex items-center gap-2 flex-wrap text-xs">
               <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3 shrink-0">
                 Filters:
               </span>
@@ -1657,41 +1669,61 @@ export const AgentBoardroom: React.FC = () => {
           {/* ========================================================================= */}
           {/* ACTIONABLE ORDER EXECUTION DESK                                           */}
           {/* ========================================================================= */}
-          <div className="card p-3.5 sm:p-5 space-y-4">
-            {/* Sub-tab navigation */}
-            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-3 border-b border-wv-border">
-              <div className="overflow-x-auto no-scrollbar pb-1 xl:pb-0 -mx-1 px-1">
-                <div className="seg inline-flex shrink-0 whitespace-nowrap">
-                  <button
-                    type="button"
-                    onClick={() => setBossSubTab('reclamation')}
-                    className={bossSubTab === 'reclamation' ? 'on' : ''}
-                  >
-                    <span>⚡ Active Directives</span>
-                    <span className="cnt">{activeDirectives.length}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBossSubTab('redeployment')}
-                    className={bossSubTab === 'redeployment' ? 'on' : ''}
-                  >
-                    <span>🚀 Capital Redeployment</span>
-                    <span className="cnt">2 Buys</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBossSubTab('archived')}
-                    className={bossSubTab === 'archived' ? 'on' : ''}
-                  >
-                    <span>📜 Executed / Archived</span>
-                    <span className="cnt">{historicalDirectives.length}</span>
-                  </button>
-                </div>
+          <div className="card p-3.5 sm:p-5 space-y-3.5">
+            {/* Tier 1: Dedicated Horizontal Scroll Sub-Tabs */}
+            <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+              <div className="seg inline-flex shrink-0 whitespace-nowrap">
+                <button
+                  type="button"
+                  onClick={() => setBossSubTab('reclamation')}
+                  className={bossSubTab === 'reclamation' ? 'on' : ''}
+                >
+                  <span>⚡ Active Directives</span>
+                  <span className="cnt">{activeDirectives.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBossSubTab('redeployment')}
+                  className={bossSubTab === 'redeployment' ? 'on' : ''}
+                >
+                  <span>🚀 Capital Redeployment</span>
+                  <span className="cnt">2 Buys</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBossSubTab('archived')}
+                  className={bossSubTab === 'archived' ? 'on' : ''}
+                >
+                  <span>📜 Executed / Archived</span>
+                  <span className="cnt">{historicalDirectives.length}</span>
+                </button>
               </div>
+            </div>
 
-              {/* Search, Urgency & Broker Filter */}
-              {bossSubTab !== 'redeployment' && (
-                <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap justify-between xl:justify-end">
+            {/* Tier 2: Search, Urgency & Broker Filter */}
+            {bossSubTab !== 'redeployment' && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-wv-border/50">
+                <div className="relative flex-1 sm:max-w-md w-full">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
+                  <input
+                    type="text"
+                    placeholder="Search ticker or company..."
+                    value={bossSearch}
+                    onChange={(e) => setBossSearch(e.target.value)}
+                    className="pl-8 pr-8 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full"
+                  />
+                  {bossSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setBossSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-wv-text-3 hover:text-wv-text"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end shrink-0">
                   <select
                     value={bossUrgency}
                     onChange={(e) => setBossUrgency(e.target.value)}
@@ -1717,24 +1749,13 @@ export const AgentBoardroom: React.FC = () => {
                       ))}
                     </select>
                   )}
-
-                  <div className="relative flex-1 sm:w-60 min-w-[180px]">
-                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
-                    <input
-                      type="text"
-                      placeholder="Search ticker or company..."
-                      value={bossSearch}
-                      onChange={(e) => setBossSearch(e.target.value)}
-                      className="pl-8 pr-3 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full"
-                    />
-                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Row 2: CIO Directive Filters (Action Type, ROCE Quality, AI Deliberation) */}
+            {/* Tier 3: CIO Directive Filters (Action Type, ROCE Quality, AI Deliberation) */}
             {bossSubTab !== 'redeployment' && (
-              <div className="pt-1 border-t border-wv-border/70 flex items-center gap-2 flex-wrap text-xs">
+              <div className="pt-2 border-t border-wv-border/50 flex items-center gap-2 flex-wrap text-xs">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3 shrink-0">
                   Filters:
                 </span>

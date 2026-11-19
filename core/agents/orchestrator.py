@@ -55,7 +55,11 @@ class BoardroomOrchestrator:
         trigger_source: str = "MANUAL",
         owner_id: Optional[str] = None
     ) -> List[DirectiveCard]:
-        """Execute Phase 2: Risk Officer Scan & Fiduciary Reviewer Forensic Audit."""
+        """Execute Phase 2: Risk Officer Scan & Fiduciary Reviewer Forensic Audit.
+        
+        Performs in-place replacement: purges previous directives so stale positions
+        from older runs never linger.
+        """
         self.storage.add_timeline_event(
             TimelineEvent(
                 event_id=f"evt_trigger_{int(datetime.now(timezone.utc).timestamp())}",
@@ -64,8 +68,12 @@ class BoardroomOrchestrator:
                 event_type="TRIGGER",
                 message=f"Phase 2: Fiduciary Audit initiated via {trigger_source}. Auditing {len(holdings)} holdings against 4 core policies.",
                 metadata={"holdings_count": len(holdings), "total_value": total_portfolio_value}
-            )
+            ),
+            owner_id=owner_id
         )
+
+        # Clear existing directives for clean in-place replacement (no stale history)
+        self.storage.clear_directives(owner_id=owner_id)
 
         # Tier 1: Risk Officer Analysis
         proposals = self.risk_officer.analyze_holdings(holdings, total_portfolio_value)
@@ -77,7 +85,8 @@ class BoardroomOrchestrator:
                     agent_name=self.risk_officer.profile.name,
                     event_type="EVALUATION",
                     message="Capital & Risk Scan Complete: 0 stop-loss breaches, 0 concentration violations. Portfolio within safe operating parameters."
-                )
+                ),
+                owner_id=owner_id
             )
             return []
 
@@ -200,7 +209,7 @@ class BoardroomOrchestrator:
                     ai_deliberated=ai_delib,
                     ai_deliberation_status=ai_status,
                 )
-                self.storage.save_directive(directive)
+                self.storage.save_directive(directive, owner_id=owner_id)
                 audited_directives.append(directive)
 
         return audited_directives
@@ -212,7 +221,11 @@ class BoardroomOrchestrator:
         trigger_source: str = "MANUAL",
         owner_id: Optional[str] = None
     ) -> List[DirectiveCard]:
-        """Execute Phase 3: Chief Investment Officer Gemini AI Deliberation & Capital Redeployment."""
+        """Execute Phase 3: Chief Investment Officer Gemini AI Deliberation & Capital Redeployment.
+        
+        Strict Mandate: Wipe all existing directives first before synthesizing new ones so zero
+        stale history or duplicate proposals ever accumulate.
+        """
         self.storage.add_timeline_event(
             TimelineEvent(
                 event_id=f"evt_boss_start_{int(datetime.now(timezone.utc).timestamp())}",
@@ -220,16 +233,23 @@ class BoardroomOrchestrator:
                 agent_name=self.boss.profile.name,
                 event_type="TRIGGER",
                 message=f"Phase 3: CIO Autonomous AI Deliberation initiated via {trigger_source}. Synthesizing directives across 6-scout radar.",
-            )
+            ),
+            owner_id=owner_id
         )
 
-        # Ensure active directives exist; if none, run audit first
-        active_dirs = self.storage.list_directives(status=DirectiveStatus.PENDING_REVIEW)
+        # 1. Ensure active directives exist; if none, run audit first
+        active_dirs = self.storage.list_directives(status=DirectiveStatus.PENDING_REVIEW, owner_id=owner_id)
         if not active_dirs and holdings:
             active_dirs = await self.run_fiduciary_audit(holdings, total_portfolio_value, owner_id=owner_id)
 
+        # Snapshot current proposals to deliberate
+        proposals_to_deliberate = list(active_dirs)
+
+        # 2. Strict User Mandate: "for 3rd stage, just remove everything first and then only start with reviews. for now, lets not store any history."
+        self.storage.clear_directives(owner_id=owner_id)
+
         deliberated_directives: List[DirectiveCard] = []
-        for d in active_dirs:
+        for d in proposals_to_deliberate:
             first_action = d.actions[0] if d.actions else None
             if not first_action:
                 continue
@@ -257,7 +277,7 @@ class BoardroomOrchestrator:
                     synth_dir.user_status = d.user_status
                     synth_dir.user_comment = d.user_comment
                     synth_dir.resolved_at = d.resolved_at
-                self.storage.save_directive(synth_dir)
+                self.storage.save_directive(synth_dir, owner_id=owner_id)
                 deliberated_directives.append(synth_dir)
 
                 self.storage.add_timeline_event(
@@ -268,7 +288,8 @@ class BoardroomOrchestrator:
                         event_type="DIRECTIVE_ISSUED",
                         message=f"Issued CIO Action Directive: {synth_dir.title}. Capital redeployment queued.",
                         directive_id=synth_dir.directive_id
-                    )
+                    ),
+                    owner_id=owner_id
                 )
 
         return deliberated_directives

@@ -346,3 +346,41 @@ def test_api_boardroom_endpoints():
         pass
 
     app.dependency_overrides.clear()
+
+
+def test_boardroom_clear_directives():
+    """Verify clear_directives purges all directives for in-place replacement."""
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tf:
+        temp_storage_path = tf.name
+
+    storage = BoardroomStorage(filepath=Path(temp_storage_path))
+    directive = DirectiveCard(
+        directive_id="dir_test_wipe",
+        timestamp="2026-11-19T12:00:00Z",
+        title="Test Wipe Directive",
+        summary_thesis="Thesis",
+        priority=DirectivePriority.CRITICAL,
+        originating_subagents=["risk_officer"],
+        actions=[
+            ProposedAction(
+                action=ProposalActionType.CUT_LOSS,
+                symbol="TEST",
+                broker="zerodha",
+                quantity=10,
+                estimated_price=100.0,
+                order_type="MARKET",
+                trigger_reason="Test"
+            )
+        ]
+    )
+    storage.save_directive(directive)
+    assert len(storage.list_directives()) == 1
+
+    # Purge directives
+    storage.clear_directives()
+    assert len(storage.list_directives()) == 0
+
+    try:
+        Path(temp_storage_path).unlink(missing_ok=True)
+    except Exception:
+        pass

@@ -324,7 +324,8 @@ class GroundSwarmOrchestrator:
         disp_name = str(holding.get("name") or clean_display_name(raw_sym) or clean)
         is_etf = is_etf_instrument(clean)
 
-        dossier = self._dossiers.get(clean) or GroundStockDossier(
+        # Fresh in-place dossier: purges previous intermediate state so clean replacement occurs
+        dossier = GroundStockDossier(
             symbol=clean,
             company_name=disp_name,
             is_etf=is_etf,

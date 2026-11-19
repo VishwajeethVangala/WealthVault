@@ -1268,6 +1268,25 @@ class BoardroomRepository(BaseTableStorage):
         row_key = sanitize_key(f"dir_{directive_id}")
         return await self.delete_entity(user_id=owner_id, entity_id=row_key)
 
+    async def clear_all_directives(self, owner_id: str) -> int:
+        """Purge all directive entities for the specified user partition.
+        
+        Mandated for Phase 3 (The Boss) and fresh audit runs to ensure clean
+        in-place execution with zero stale directives or leftover history.
+        """
+        filter_expr = "entity_type eq 'directive'"
+        entities = await self.query_entities(user_id=owner_id, filter_query=filter_expr)
+        if not entities:
+            return 0
+        tasks = [
+            self.delete_entity(user_id=owner_id, entity_id=e["RowKey"])
+            for e in entities if e.get("RowKey")
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        deleted = sum(1 for r in results if r is True)
+        logger.info("Cleared %d directive entities from Azure Table for user %s", deleted, owner_id)
+        return deleted
+
     async def update_directive_status(
         self,
         owner_id: str,
@@ -1498,4 +1517,11 @@ class GroundDossiersRepository(BaseTableStorage):
                 except Exception as exc:
                     logger.debug("Skipping unparseable dossier %s: %s", e.get("RowKey"), exc)
         return dossiers
+
+    async def delete_dossier(self, owner_id: str, symbol: str) -> bool:
+        """Delete a specific ground dossier entity for in-place replacement."""
+        from core.agents.forensic_crawler import clean_symbol
+        clean = clean_symbol(symbol).upper()
+        row_key = sanitize_key(f"dos_{clean}")
+        return await self.delete_entity(user_id=owner_id, entity_id=row_key)
 

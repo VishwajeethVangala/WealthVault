@@ -247,6 +247,21 @@ class BoardroomStorage:
         items.sort(key=lambda d: d.timestamp, reverse=True)
         return items
 
+    def clear_directives(self, owner_id: Optional[str] = None) -> int:
+        """Purge all directives for an owner in memory and Azure Table Storage.
+        
+        Mandated for Phase 3 (The Boss) and fresh audit runs to ensure clean
+        in-place execution with zero stale directives or leftover history.
+        """
+        resolved_owner = self._resolve_owner(owner_id)
+        # Clear in-memory cache
+        self._directives[resolved_owner] = {}
+        if self.filepath:
+            self._save_file()
+            return 0
+        deleted = _run_sync(self.repo.clear_all_directives(resolved_owner))
+        return deleted or 0
+
     def update_directive_status(
         self,
         directive_id: str,

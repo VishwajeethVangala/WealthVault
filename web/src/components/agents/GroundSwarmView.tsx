@@ -284,61 +284,80 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
       )}
 
       {/* 2. Unified Triage & Filter Toolbar */}
-      <div className="card p-3 sm:p-4 space-y-3">
-        {/* Tier 1: Triage Categories (Left) + Search & View Mode (Right) */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-          {/* Scrollable, non-clipping Triage Tabs */}
-          <div className="overflow-x-auto no-scrollbar pb-1 xl:pb-0 -mx-1 px-1">
-            <div className="seg inline-flex shrink-0 whitespace-nowrap">
+      <div className="card p-3.5 sm:p-4 space-y-3.5">
+        {/* Tier 1: Dedicated Horizontal Scroll Triage Categories */}
+        <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+          <div className="seg inline-flex shrink-0 whitespace-nowrap">
+            <button
+              type="button"
+              onClick={() => setTriageFilter('all')}
+              className={triageFilter === 'all' ? 'on' : ''}
+            >
+              <span>All Holdings</span>
+              <span className="cnt">{filteredDossiers.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTriageFilter('danger')}
+              className={triageFilter === 'danger' ? 'on text-wv-loss' : ''}
+            >
+              <ShieldAlert size={14} className="text-wv-loss" />
+              <span>1. Immediate Action</span>
+              <span className="cnt">{buckets.danger.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTriageFilter('opportunity')}
+              className={triageFilter === 'opportunity' ? 'on text-wv-gain' : ''}
+            >
+              <Zap size={14} className="text-wv-gain" />
+              <span>2. Breakouts</span>
+              <span className="cnt">{buckets.opportunity.length}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setTriageFilter('baseline')}
+              className={triageFilter === 'baseline' ? 'on' : ''}
+            >
+              <span>3. Quiet Baseline</span>
+              <span className="cnt">{buckets.baseline.length}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Tier 2: Search, View Mode, and Quick Barrier Toggle */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-wv-border/50">
+          <div className="relative flex-1 sm:max-w-md w-full">
+            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
+            <input
+              type="text"
+              placeholder="Search stock ticker or company..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 pr-8 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full"
+            />
+            {searchQuery && (
               <button
                 type="button"
-                onClick={() => setTriageFilter('all')}
-                className={triageFilter === 'all' ? 'on' : ''}
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-wv-text-3 hover:text-wv-text"
               >
-                <span>All Holdings</span>
-                <span className="cnt">{filteredDossiers.length}</span>
+                <X size={12} />
               </button>
-              <button
-                type="button"
-                onClick={() => setTriageFilter('danger')}
-                className={triageFilter === 'danger' ? 'on text-wv-loss' : ''}
-              >
-                <ShieldAlert size={14} className="text-wv-loss" />
-                <span>1. Immediate Action</span>
-                <span className="cnt">{buckets.danger.length}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTriageFilter('opportunity')}
-                className={triageFilter === 'opportunity' ? 'on text-wv-gain' : ''}
-              >
-                <Zap size={14} className="text-wv-gain" />
-                <span>2. Breakouts</span>
-                <span className="cnt">{buckets.opportunity.length}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTriageFilter('baseline')}
-                className={triageFilter === 'baseline' ? 'on' : ''}
-              >
-                <span>3. Quiet Baseline</span>
-                <span className="cnt">{buckets.baseline.length}</span>
-              </button>
-            </div>
+            )}
           </div>
 
-          {/* Right Controls: Search + Table/Cards View Mode */}
-          <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap justify-between xl:justify-end">
-            <div className="relative flex-1 sm:w-64 min-w-[200px]">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-wv-text-3" />
-              <input
-                type="text"
-                placeholder="Search stock ticker or company..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 pr-3 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent w-full"
-              />
-            </div>
+          <div className="flex items-center gap-2 justify-between sm:justify-end shrink-0">
+            {/* Barrier Quick Toggle */}
+            <select
+              value={barrierFilter}
+              onChange={(e) => setBarrierFilter(e.target.value as any)}
+              className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
+            >
+              <option value="all">🛡️ All Barriers</option>
+              <option value="ready">Ready (6/6 Scouts)</option>
+              <option value="in_progress">In Flight</option>
+            </select>
 
             {/* View Mode Toggle */}
             <div className="seg shrink-0">
@@ -364,8 +383,8 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
           </div>
         </div>
 
-        {/* Tier 2: Unified Filter Matrix (Patterns, ROCE, News, Stage, Barrier) */}
-        <div className="pt-2.5 border-t border-wv-border/70 flex items-center gap-2 flex-wrap text-xs">
+        {/* Tier 3: Multi-dimensional Filter Bar (Patterns, ROCE, News, Stage, Reset) */}
+        <div className="pt-2 border-t border-wv-border/50 flex items-center gap-2 flex-wrap text-xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-wv-text-3 shrink-0">
             Filters:
           </span>
@@ -424,17 +443,6 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
             <option value="below_200">Below 200-DMA Breakdown</option>
           </select>
 
-          {/* Barrier Status Filter */}
-          <select
-            value={barrierFilter}
-            onChange={(e) => setBarrierFilter(e.target.value as any)}
-            className="px-2.5 py-1.5 rounded-lg bg-wv-surface border border-wv-border text-xs text-wv-text focus:outline-none focus:border-wv-accent"
-          >
-            <option value="all">🛡️ All Barriers</option>
-            <option value="ready">Ready for Review (6/6)</option>
-            <option value="in_progress">In Progress</option>
-          </select>
-
           {/* Reset Filters button if any active */}
           {(patternFilter !== 'all' || roceFilter !== 'all' || newsFilter !== 'all' || stageFilter !== 'all' || barrierFilter !== 'all' || searchQuery) && (
             <button
@@ -477,7 +485,7 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
         /* TABLE VIEW (Default, Institutional High-Density) */
         <div className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs border-collapse min-w-[760px]">
               <thead>
                 <tr className="border-b border-wv-border bg-wv-surface-2 text-wv-text-3 uppercase text-[10px] tracking-wider font-semibold">
                   <th className="py-3 px-4">Asset / Company</th>
