@@ -72,6 +72,7 @@ def verify_google_id_token(credential: str, client_id: Optional[str] = None) -> 
             id_token=credential,
             request=request,
             audience=expected_audience,
+            clock_skew_in_seconds=10,
         )
         return id_info
     except ValueError as exc:

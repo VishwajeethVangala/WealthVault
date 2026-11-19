@@ -5,6 +5,7 @@ across application restarts in Azure Table Storage.
 """
 
 import asyncio
+import concurrent.futures
 from datetime import datetime, timezone
 import json
 import logging
@@ -21,9 +22,38 @@ logger = logging.getLogger("wealthvault.agents.storage")
 DEFAULT_OWNER = "demo_reviewer"
 PRIMARY_OWNER = "google_109909149391234323377"
 
+_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
-def _run_async(coro):
-    """Run an async coroutine safely whether inside or outside an active event loop."""
+
+def _run_sync(coro):
+    """Run an async coroutine to completion and return its value synchronously.
+    
+    Safe whether called outside an event loop or inside an active event loop (e.g. FastAPI/Uvicorn).
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        def worker():
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(coro)
+            finally:
+                new_loop.close()
+        return _thread_pool.submit(worker).result()
+    else:
+        try:
+            return asyncio.run(coro)
+        except Exception as exc:
+            logger.warning("Could not run sync table operation: %s", exc)
+            return None
+
+
+def _run_bg(coro):
+    """Run an async coroutine in the background (fire-and-forget write)."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -32,11 +62,14 @@ def _run_async(coro):
     if loop and loop.is_running():
         return asyncio.create_task(coro)
     else:
-        try:
-            return asyncio.run(coro)
-        except Exception as exc:
-            logger.warning("Could not run async table operation: %s", exc)
-            return None
+        def worker():
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                new_loop.run_until_complete(coro)
+            finally:
+                new_loop.close()
+        _thread_pool.submit(worker)
 
 
 class BoardroomStorage:
@@ -64,10 +97,10 @@ class BoardroomStorage:
     def _initial_table_load(self, owner_id: str) -> None:
         """Warm up in-memory cache from Azure Table Storage."""
         try:
-            directives = _run_async(self.repo.list_directives(owner_id=owner_id))
+            directives = _run_sync(self.repo.list_directives(owner_id=owner_id))
             if directives is not None:
                 self._directives[owner_id] = {d.directive_id: d for d in directives}
-            timeline = _run_async(self.repo.get_timeline(owner_id=owner_id, limit=100))
+            timeline = _run_sync(self.repo.get_timeline(owner_id=owner_id, limit=100))
             if timeline is not None:
                 self._timeline[owner_id] = timeline
             logger.info("Initialized BoardroomStorage from Azure Table for user %s: %d directives, %d events",
@@ -174,7 +207,7 @@ class BoardroomStorage:
                     directive.resolved_at = old_card.resolved_at
                 # Delete duplicate from Azure Table
                 if not self.filepath:
-                    _run_async(self.repo.delete_directive(resolved_owner, k))
+                    _run_bg(self.repo.delete_directive(resolved_owner, k))
 
         existing = user_dirs.get(directive.directive_id)
         if existing and existing.user_status != DirectiveStatus.PENDING_REVIEW:
@@ -188,7 +221,7 @@ class BoardroomStorage:
             self._save_file()
         else:
             # Persist directly to Azure Table Storage
-            _run_async(self.repo.upsert_directive(resolved_owner, directive))
+            _run_bg(self.repo.upsert_directive(resolved_owner, directive))
 
     def get_directive(self, directive_id: str, owner_id: Optional[str] = None) -> Optional[DirectiveCard]:
         """Fetch a directive by its unique ID."""
@@ -249,7 +282,7 @@ class BoardroomStorage:
         if self.filepath:
             self._save_file()
         else:
-            _run_async(self.repo.upsert_directive(resolved_owner, directive))
+            _run_bg(self.repo.upsert_directive(resolved_owner, directive))
 
         return directive
 
@@ -263,7 +296,7 @@ class BoardroomStorage:
         if self.filepath:
             self._save_file()
         else:
-            _run_async(self.repo.add_timeline_event(resolved_owner, event))
+            _run_bg(self.repo.add_timeline_event(resolved_owner, event))
 
     def get_timeline(self, limit: int = 50, owner_id: Optional[str] = None) -> List[TimelineEvent]:
         """Fetch recent timeline events, newest first."""

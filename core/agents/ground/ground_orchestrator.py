@@ -8,6 +8,7 @@ Executes sequential, deliberate ground-level intelligence gathering:
 """
 
 import asyncio
+import concurrent.futures
 from datetime import datetime, timezone
 import json
 import logging
@@ -31,9 +32,38 @@ logger = logging.getLogger("wealthvault.agents.ground.orchestrator")
 DEFAULT_OWNER = "demo_reviewer"
 PRIMARY_OWNER = "google_109909149391234323377"
 
+_thread_pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
-def _run_async(coro):
-    """Run an async coroutine safely whether inside or outside an active event loop."""
+
+def _run_sync(coro):
+    """Run an async coroutine to completion and return its value synchronously.
+    
+    Safe whether called outside an event loop or inside an active event loop (e.g. FastAPI/Uvicorn).
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        def worker():
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                return new_loop.run_until_complete(coro)
+            finally:
+                new_loop.close()
+        return _thread_pool.submit(worker).result()
+    else:
+        try:
+            return asyncio.run(coro)
+        except Exception as exc:
+            logger.warning("Could not run sync table operation: %s", exc)
+            return None
+
+
+def _run_bg(coro):
+    """Run an async coroutine in the background (fire-and-forget write)."""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -42,11 +72,14 @@ def _run_async(coro):
     if loop and loop.is_running():
         return asyncio.create_task(coro)
     else:
-        try:
-            return asyncio.run(coro)
-        except Exception as exc:
-            logger.warning("Could not run async table operation: %s", exc)
-            return None
+        def worker():
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            try:
+                new_loop.run_until_complete(coro)
+            finally:
+                new_loop.close()
+        _thread_pool.submit(worker)
 
 # Known non-Indian / US stocks
 KNOWN_US_TICKERS = {
@@ -197,7 +230,7 @@ class GroundSwarmOrchestrator:
             if not uid:
                 continue
             try:
-                dossiers = _run_async(self.repo.list_dossiers(owner_id=uid))
+                dossiers = _run_sync(self.repo.list_dossiers(owner_id=uid))
                 if dossiers:
                     self._dossiers = {
                         clean_symbol(dos.symbol).upper(): dos
@@ -226,7 +259,7 @@ class GroundSwarmOrchestrator:
         else:
             target_owner = (owner_id or PRIMARY_OWNER).strip()
             if self._dossiers:
-                _run_async(self.repo.batch_upsert_dossiers(target_owner, list(self._dossiers.values())))
+                _run_bg(self.repo.batch_upsert_dossiers(target_owner, list(self._dossiers.values())))
 
     def _save_single_dossier(self, dossier: GroundStockDossier, owner_id: Optional[str] = None) -> None:
         """Persist a single updated dossier to Azure Table Storage immediately."""
@@ -236,7 +269,7 @@ class GroundSwarmOrchestrator:
             self._save_storage()
         else:
             target_owner = (owner_id or PRIMARY_OWNER).strip()
-            _run_async(self.repo.upsert_dossier(target_owner, dossier))
+            _run_bg(self.repo.upsert_dossier(target_owner, dossier))
 
     def get_all_dossiers(self, owner_id: Optional[str] = None) -> List[GroundStockDossier]:
         """Return all current ground dossiers."""
