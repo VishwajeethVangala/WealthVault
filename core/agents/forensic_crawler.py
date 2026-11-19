@@ -233,14 +233,57 @@ def _parse_float(val: Optional[str]) -> Optional[float]:
         return None
 
 
+FINANCIAL_CONTEXT_KEYWORDS = {
+    "share", "shares", "stock", "stocks", "promoter", "promoters", "equity", "market",
+    "quarter", "quarterly", "profit", "loss", "results", "revenue", "ltd", "limited",
+    "dividend", "q1", "q2", "q3", "q4", "bse", "nse", "crore", "crores", "net profit",
+    "sales", "ebitda", "pat", "target", "stake", "acquisition", "order", "board",
+    "filing", "guidance", "fund", "investor", "investors", "earnings", "valuation",
+    "sebi", "rbi", "nifty", "sensex", "turnover", "outperform", "buyback", "rights issue",
+    "bonus", "split", "rally", "plunge", "slump", "surge", "all-time high", "52-week"
+}
+
+
+def parse_article_age(pubdate_str: str, now_dt: Optional[datetime] = None) -> Tuple[int, str]:
+    """Parse pubDate into (age_days, age_label). Returns (999, 'Unknown') on failure."""
+    if not pubdate_str:
+        return 999, "Unknown"
+    import email.utils
+    if now_dt is None:
+        now_dt = datetime.now(timezone.utc)
+    try:
+        dt = email.utils.parsedate_to_datetime(pubdate_str)
+        diff = now_dt - dt
+        days = max(0, diff.days)
+        hours = max(0, int(diff.total_seconds() // 3600))
+        if hours < 1:
+            return 0, "Just now"
+        if hours < 24:
+            return 0, f"{hours}h ago"
+        if days == 1:
+            return 1, "Yesterday"
+        if days < 7:
+            return days, f"{days}d ago"
+        if days < 30:
+            weeks = max(1, days // 7)
+            return days, f"{weeks}w ago"
+        return days, dt.strftime("%b %d, %Y")
+    except Exception:
+        return 999, "Recent"
+
+
 async def fetch_news_catalysts(
     symbol: str,
     company_name: Optional[str] = None,
     max_items: int = 4
 ) -> List[NewsCatalyst]:
-    """Fetch recent targeted company headlines from Google News RSS (100% free, no key needed)."""
+    """Fetch verified recent company headlines from Google News India Financial RSS.
+    
+    Enforces a strict 45-day freshness cutoff. Never surfaces obsolete historical news
+    (e.g., years-old IPO announcements) as current verified news.
+    """
     disp_name = (company_name or clean_display_name(symbol)).strip()
-    clean_sym = clean_symbol(symbol)
+    clean_sym = clean_symbol(symbol).upper()
     cache_key = f"{clean_sym}_{disp_name}"
     now = time.monotonic()
     
@@ -251,173 +294,173 @@ async def fetch_news_catalysts(
 
     async with _CRAWLER_SEMAPHORE:
         def _fetch():
-            import email.utils
-            from datetime import datetime, timezone
-
+            now_dt = datetime.now(timezone.utc)
             # Strip legal corporate suffixes for cleaner exact search
             search_name = re.sub(r"\b(ltd|limited|pvt|private)\b", "", disp_name, flags=re.IGNORECASE).strip()
-            
             catalysts: List[NewsCatalyst] = []
-            now_dt = datetime.now(timezone.utc)
 
-            # 1. First attempt: Bing News RSS for rich journalistic summaries & direct publisher URLs
-            try:
-                bing_q = f'"{search_name}"'
-                bing_url = f"https://www.bing.com/news/search?q={urllib.parse.quote(bing_q)}&format=rss"
-                req_bing = urllib.request.Request(bing_url, headers={"User-Agent": USER_AGENT})
-                with urllib.request.urlopen(req_bing, timeout=5) as resp_bing:
-                    bing_root = ET.fromstring(resp_bing.read())
-                
-                for it in bing_root.findall(".//item"):
-                    if len(catalysts) >= max_items:
-                        break
-                    title = it.find("title").text if it.find("title") is not None else ""
-                    desc = it.find("description").text if it.find("description") is not None else ""
-                    link_raw = it.find("link").text if it.find("link") is not None else ""
-                    m = re.search(r"url=([^&]+)", link_raw)
-                    clean_link = urllib.parse.unquote(m.group(1)) if m else link_raw
-                    pubdate = it.find("pubDate").text if it.find("pubDate") is not None else ""
+            # 1. Primary Source: Google News India Financial RSS (gold standard for live Indian business media)
+            # Targeted queries prioritized by strict recency
+            google_queries = [
+                f'"{search_name}" (share OR stock OR results OR profit OR quarter OR SEBI OR dividend OR order) when:30d',
+                f'({clean_sym} OR "{search_name}") (NSE OR BSE OR share) when:30d',
+                f'"{search_name}" when:45d',
+            ]
 
-                    if not title:
-                        continue
+            stop_words = {"ltd", "limited", "the", "co", "company", "corp", "corporation", "inc", "pvt", "private", "and", "of", "india", "global"}
+            name_tokens = [t.lower() for t in search_name.split() if len(t) > 2 and t.lower() not in stop_words]
 
-                    # Sentiment check
-                    combined_text = f"{title} {desc}".lower()
-                    if any(w in combined_text for w in ["soar", "jump", "beat", "profit up", "growth", "high", "order win", "dividend", "rally", "doubles"]):
-                        sent = "POSITIVE"
-                    elif any(w in combined_text for w in ["drop", "plunge", "slump", "loss", "probe", "raid", "cut", "downgrade", "fall", "sink", "scandal", "penalty"]):
-                        sent = "NEGATIVE"
-                    else:
-                        sent = "NEUTRAL"
-
-                    # Category tag
-                    if any(w in combined_text for w in ["q1", "q2", "q3", "q4", "quarter", "results", "profit", "revenue", "ebitda", "pat"]):
-                        cat = "EARNINGS"
-                    elif any(w in combined_text for w in ["sebi", "rbi", "probe", "notice", "fraud", "court", "jpc", "penalty"]):
-                        cat = "REGULATORY"
-                    elif any(w in combined_text for w in ["contract", "order", "deal", "expansion"]):
-                        cat = "CONTRACT"
-                    else:
-                        cat = "GENERAL"
-
-                    catalysts.append(NewsCatalyst(
-                        headline=title.strip(),
-                        source="Financial Wire",
-                        published_at=pubdate,
-                        sentiment=sent,
-                        category=cat,
-                        link=clean_link,
-                        summary_content=desc.strip() if desc else None,
-                    ))
-            except Exception as exc:
-                logger.debug("Bing News crawl note for %s: %s", search_name, exc)
-
-            # 2. Second attempt: Google News RSS fallback / complement
-            if len(catalysts) < max_items:
-                # Query recent news with when:30d for freshness
-                if len(search_name.split()) >= 2:
-                    query = f'"{search_name}" when:30d'
-                else:
-                    query = f'"{search_name}" share OR stock when:30d'
-
-                url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query)}&hl=en-IN&gl=IN&ceid=IN:en"
+            for gq in google_queries:
+                if len(catalysts) >= max_items:
+                    break
+                url = f"https://news.google.com/rss/search?q={urllib.parse.quote(gq)}&hl=en-IN&gl=IN&ceid=IN:en"
                 req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
                 try:
-                    with urllib.request.urlopen(req, timeout=6) as resp:
+                    with urllib.request.urlopen(req, timeout=5) as resp:
                         xml_bytes = resp.read()
                     root = ET.fromstring(xml_bytes)
-                    items = root.findall(".//item")
-                    
-                    # If no items in past 30 days, fallback to standard query
-                    if not items:
-                        fallback_q = f'"{search_name}"' if len(search_name.split()) >= 2 else f'"{search_name}" share OR stock NSE'
-                        fb_url = f"https://news.google.com/rss/search?q={urllib.parse.quote(fallback_q)}&hl=en-IN&gl=IN&ceid=IN:en"
-                        req_fb = urllib.request.Request(fb_url, headers={"User-Agent": USER_AGENT})
-                        with urllib.request.urlopen(req_fb, timeout=6) as resp_fb:
-                            root = ET.fromstring(resp_fb.read())
-                        items = root.findall(".//item")
-
-                    # Meaningful tokens from company name for relevance filtering (avoid matching generic words like 'India')
-                    stop_words = {"ltd", "limited", "the", "co", "company", "corp", "corporation", "inc", "pvt", "private", "and", "of", "india", "global"}
-                    name_tokens = [t.lower() for t in search_name.split() if len(t) > 2 and t.lower() not in stop_words]
-
-                    for it in items:
+                    for it in root.findall(".//item"):
                         if len(catalysts) >= max_items:
                             break
-
                         title_elem = it.find("title")
                         source_elem = it.find("source")
                         pubdate_elem = it.find("pubDate")
                         link_elem = it.find("link")
                         desc_elem = it.find("description")
 
-                        title = title_elem.text if title_elem is not None else ""
-                        source = source_elem.text if source_elem is not None else "Financial News"
-                        pubdate = pubdate_elem.text if pubdate_elem is not None else ""
-                        link = link_elem.text if link_elem is not None else None
-                        desc_raw = desc_elem.text if desc_elem is not None else ""
+                        title = title_elem.text.strip() if title_elem is not None and title_elem.text else ""
+                        source = source_elem.text.strip() if source_elem is not None and source_elem.text else "Financial News"
+                        pubdate = pubdate_elem.text.strip() if pubdate_elem is not None and pubdate_elem.text else ""
+                        link = link_elem.text.strip() if link_elem is not None and link_elem.text else None
+                        desc_raw = desc_elem.text if desc_elem is not None and desc_elem.text else ""
                         clean_desc = re.sub(r"<[^>]+>", " ", desc_raw).strip() if desc_raw else None
 
-                        # Avoid duplicate headlines
-                        if any(c.headline.lower() == title.lower() for c in catalysts):
+                        if not title or any(c.headline.lower() == title.lower() for c in catalysts):
                             continue
 
-                        # Date freshness filter: avoid articles older than 45 days
-                        if pubdate:
-                            try:
-                                parsed_dt = email.utils.parsedate_to_datetime(pubdate)
-                                if (now_dt - parsed_dt).days > 45 and catalysts:
-                                    continue
-                            except Exception:
-                                pass
+                        # Strict Date Recency Validation: Reject anything older than 45 days
+                        age_days, age_label = parse_article_age(pubdate, now_dt)
+                        if age_days > 45:
+                            continue
 
                         title_lower = title.lower()
+                        desc_lower = (clean_desc or "").lower()
+                        combined_text = f"{title_lower} {desc_lower}"
 
-                        # Exact relevance check: Title must match company name, ticker, or core distinguishing tokens
+                        # Relevance Validation
                         is_relevant = (
                             search_name.lower() in title_lower or
                             clean_sym.lower() in title_lower or
                             (name_tokens and all(tok in title_lower for tok in name_tokens))
                         )
+                        if not is_relevant:
+                            continue
 
-                        # Reject if title is clearly about a distinct rival or unrelated entity
-                        if "shreeji shipping" in title_lower and "shipping corporation of india" not in title_lower:
-                            is_relevant = False
+                        # Financial Context Validation: Reject non-financial false positives (e.g. sports or celebrities)
+                        has_financial_context = any(kw in combined_text for kw in FINANCIAL_CONTEXT_KEYWORDS)
+                        if not has_financial_context:
+                            continue
 
-                        if not is_relevant and items:
-                            if len(catalysts) >= 2:
-                                continue
-
-                        # Basic rule-based sentiment
-                        if any(w in title_lower for w in ["soar", "jump", "beat", "profit up", "growth", "high", "order win", "dividend", "rally"]):
-                            sentiment = "POSITIVE"
-                        elif any(w in title_lower for w in ["drop", "plunge", "slump", "loss", "probe", "raid", "cut", "downgrade", "fall", "sink"]):
-                            sentiment = "NEGATIVE"
+                        # Sentiment classification
+                        if any(w in combined_text for w in ["soar", "jump", "beat", "profit up", "growth", "high", "order win", "dividend", "rally", "doubles"]):
+                            sent = "POSITIVE"
+                        elif any(w in combined_text for w in ["drop", "plunge", "slump", "loss", "probe", "raid", "cut", "downgrade", "fall", "sink", "scandal", "penalty", "fraud"]):
+                            sent = "NEGATIVE"
                         else:
-                            sentiment = "NEUTRAL"
+                            sent = "NEUTRAL"
 
-                        # Category tag
-                        if any(w in title_lower for w in ["q1", "q2", "q3", "q4", "quarter", "results", "profit", "revenue", "ebitda"]):
-                            category = "EARNINGS"
-                        elif any(w in title_lower for w in ["sebi", "rbi", "probe", "notice", "fraud", "court"]):
-                            category = "REGULATORY"
-                        elif any(w in title_lower for w in ["contract", "order", "deal"]):
-                            category = "CONTRACT"
+                        # Category classification
+                        if any(w in combined_text for w in ["q1", "q2", "q3", "q4", "quarter", "results", "profit", "revenue", "ebitda", "pat"]):
+                            cat = "EARNINGS"
+                        elif any(w in combined_text for w in ["sebi", "rbi", "probe", "notice", "fraud", "court", "jpc", "penalty"]):
+                            cat = "REGULATORY"
+                        elif any(w in combined_text for w in ["contract", "order", "deal", "expansion"]):
+                            cat = "CONTRACT"
                         else:
-                            category = "GENERAL"
+                            cat = "GENERAL"
 
                         catalysts.append(NewsCatalyst(
                             headline=title,
                             source=source,
                             published_at=pubdate,
-                            sentiment=sentiment,
-                            category=category,
+                            age_days=age_days,
+                            age_label=age_label,
+                            sentiment=sent,
+                            category=cat,
                             link=link,
                             summary_content=clean_desc,
                         ))
                 except Exception as exc:
-                    logger.warning("Google News crawl note for %s: %s", search_name, exc)
+                    logger.debug("Google News query note for %s (%s): %s", search_name, gq[:30], exc)
 
+            # 2. Secondary Provider / Complement: Bing News RSS (strictly verified for recency <= 45 days)
+            if len(catalysts) < 2:
+                try:
+                    bing_q = f'"{search_name}" (NSE OR BSE OR share OR results)'
+                    bing_url = f"https://www.bing.com/news/search?q={urllib.parse.quote(bing_q)}&format=rss"
+                    req_bing = urllib.request.Request(bing_url, headers={"User-Agent": USER_AGENT})
+                    with urllib.request.urlopen(req_bing, timeout=5) as resp_bing:
+                        bing_root = ET.fromstring(resp_bing.read())
+
+                    for it in bing_root.findall(".//item"):
+                        if len(catalysts) >= max_items:
+                            break
+                        title = it.find("title").text.strip() if it.find("title") is not None and it.find("title").text else ""
+                        desc = it.find("description").text.strip() if it.find("description") is not None and it.find("description").text else ""
+                        link_raw = it.find("link").text if it.find("link") is not None else ""
+                        m = re.search(r"url=([^&]+)", link_raw)
+                        clean_link = urllib.parse.unquote(m.group(1)) if m else link_raw
+                        pubdate = it.find("pubDate").text.strip() if it.find("pubDate") is not None and it.find("pubDate").text else ""
+
+                        if not title or any(c.headline.lower() == title.lower() for c in catalysts):
+                            continue
+
+                        # Strict Date Recency Validation: Reject older than 45 days
+                        age_days, age_label = parse_article_age(pubdate, now_dt)
+                        if age_days > 45:
+                            continue
+
+                        combined_text = f"{title} {desc}".lower()
+                        # Relevance & financial context check
+                        if search_name.lower() not in combined_text and clean_sym.lower() not in combined_text:
+                            continue
+                        if not any(kw in combined_text for kw in FINANCIAL_CONTEXT_KEYWORDS):
+                            continue
+
+                        # Sentiment
+                        if any(w in combined_text for w in ["soar", "jump", "beat", "profit up", "growth", "high", "order win", "dividend", "rally", "doubles"]):
+                            sent = "POSITIVE"
+                        elif any(w in combined_text for w in ["drop", "plunge", "slump", "loss", "probe", "raid", "cut", "downgrade", "fall", "sink", "scandal", "penalty"]):
+                            sent = "NEGATIVE"
+                        else:
+                            sent = "NEUTRAL"
+
+                        # Category
+                        if any(w in combined_text for w in ["q1", "q2", "q3", "q4", "quarter", "results", "profit", "revenue", "ebitda", "pat"]):
+                            cat = "EARNINGS"
+                        elif any(w in combined_text for w in ["sebi", "rbi", "probe", "notice", "fraud", "court", "jpc", "penalty"]):
+                            cat = "REGULATORY"
+                        elif any(w in combined_text for w in ["contract", "order", "deal", "expansion"]):
+                            cat = "CONTRACT"
+                        else:
+                            cat = "GENERAL"
+
+                        catalysts.append(NewsCatalyst(
+                            headline=title,
+                            source="Financial Wire",
+                            published_at=pubdate,
+                            age_days=age_days,
+                            age_label=age_label,
+                            sentiment=sent,
+                            category=cat,
+                            link=clean_link,
+                            summary_content=desc if desc else None,
+                        ))
+                except Exception as exc:
+                    logger.debug("Bing News secondary crawl note for %s: %s", search_name, exc)
+
+            # Sort strictly by date (newest first) so index 0 is always the most recent breaking development
+            catalysts.sort(key=lambda x: (x.age_days if x.age_days is not None else 999))
             return catalysts
 
         loop = asyncio.get_event_loop()

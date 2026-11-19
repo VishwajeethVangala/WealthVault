@@ -682,6 +682,8 @@ export interface NewsCatalyst {
   headline: string
   source: string
   published_at: string
+  age_days?: number | null
+  age_label?: string | null
   sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL'
   category: string
   link?: string | null
@@ -838,6 +840,8 @@ export interface NewsArticleItem {
   headline: string
   source: string
   published_at: string
+  age_days?: number | null
+  age_label?: string | null
   link?: string | null
   sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL'
   confidence: number
@@ -854,6 +858,8 @@ export interface NewsIntelReport {
   sentiment_confidence: number
   material_threat: boolean
   threat_reasons: string[]
+  latest_article_age_days?: number | null
+  is_wire_quiet?: boolean
   articles: NewsArticleItem[]
   status: string
   summary: string

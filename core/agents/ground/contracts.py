@@ -91,6 +91,8 @@ class NewsArticleItem(BaseModel):
     headline: str
     source: str = "News"
     published_at: str = ""
+    age_days: Optional[int] = None
+    age_label: Optional[str] = None  # e.g. "Today", "2d ago", "1w ago"
     link: Optional[str] = None
     sentiment: Literal["POSITIVE", "NEGATIVE", "NEUTRAL"] = "NEUTRAL"
     confidence: float = 0.5
@@ -109,6 +111,8 @@ class NewsIntelReport(BaseModel):
     sentiment_confidence: float = 0.0
     material_threat: bool = False
     threat_reasons: List[str] = Field(default_factory=list)
+    latest_article_age_days: Optional[int] = None
+    is_wire_quiet: bool = False  # True when no articles within 45 days
     articles: List[NewsArticleItem] = Field(default_factory=list)
     status: Literal["COMPLETED", "FAILED"] = "COMPLETED"
     summary: str = ""

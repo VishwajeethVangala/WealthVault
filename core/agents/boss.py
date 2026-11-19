@@ -144,11 +144,13 @@ def _call_gemini_for_boss(
             h = art.headline
             src = getattr(art, "source", "News")
             dt = getattr(art, "published_at", "")
+            age_lbl = getattr(art, "age_label", "")
+            date_display = f"{age_lbl} ({dt})" if age_lbl and dt else (age_lbl or dt or "Recent")
             sent = getattr(art, "sentiment", "NEUTRAL")
             lnk = getattr(art, "link", "")
             content = getattr(art, "summary_content", None) or getattr(art, "content", None) or ""
 
-            art_block = f"   • Article {idx} [{src} | {dt} | Sentiment: {sent}]:\n     Headline: {h}"
+            art_block = f"   • Article {idx} [{src} | Published: {date_display} | Sentiment: {sent}]:\n     Headline: {h}"
             if lnk:
                 art_block += f"\n     Source Link: {lnk}"
             if content:
@@ -161,7 +163,7 @@ def _call_gemini_for_boss(
     elif ground_dossier and ground_dossier.news_report:
         news_info = ground_dossier.news_report.summary
     else:
-        news_info = "No material news threat or recent negative headlines found in financial wire."
+        news_info = "Financial wire quiet: No material headlines or corporate announcements found in verified press over past 45 days."
 
     reviewer_note = evaluation.critique_and_feedback or "Approved under fiduciary guardrails."
     redeploy_note = f"Candidate: {top_cand[0]} ({top_cand[1]}, {top_cand[2]:.1f}x volume surge)" if top_cand else "Preserved in liquid cash reserve for emerging VCP breakouts"
@@ -187,11 +189,14 @@ ORIGINAL PROPOSAL: {action_name}
 2. TECHNICAL SCOUT: {tech_info}
 3. PATTERN SCOUT: {pattern_info}
 4. FUNDAMENTAL SCOUT: {funda_info}
-5. NEWS SCOUT: {news_info}
+5. NEWS SCOUT (Verified Recent Wires): {news_info}
 6. INSIDER SCOUT: {insider_info}
 7. FIDUCIARY REVIEWER AUDIT: {reviewer_note}
 
 QUEUED CAPITAL REDEPLOYMENT: Reclaiming ₹{freed_cash:,.0f} -> {redeploy_note}.
+
+CRITICAL NEWS RECENCY & DATE VALIDATION MANDATE:
+Inspect article publication dates and elapsed times carefully. Disregard any historical events (>45 days old, such as past IPO listings or outdated price ranges) as active operational catalysts. If the financial wire is quiet, explicitly recognize that the corporate wire is calm with zero fresh adverse developments. If fresh catalysts exist (e.g. recent Q2 profit jumps or promoter open-market acquisitions), integrate their verified timeliness into your fiduciary thesis.
 
 TASK:
 Provide your authoritative Chief Investment Officer executive directive structured in exactly 3 justification pointers (each starting with '• '):

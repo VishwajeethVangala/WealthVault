@@ -1310,10 +1310,16 @@ export const AgentBoardroom: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Google News Catalyst Link if available */}
-                    {newsArticles.length > 0 && (
+                    {/* Verified Real-Time Financial News Catalyst */}
+                    {newsArticles.length > 0 ? (
                       <div className="flex items-start sm:items-center gap-2 text-xs text-wv-text-3 pt-2 sm:pt-1 border-t border-wv-border/50 flex-wrap sm:flex-nowrap">
                         <span className="text-[10px] uppercase font-bold text-wv-text-3 shrink-0">Verified News:</span>
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-wv-surface-2 border border-wv-border text-wv-accent shrink-0">
+                          {newsArticles[0].age_label || (newsArticles[0].age_days != null ? `${newsArticles[0].age_days}d ago` : 'Recent')}
+                        </span>
+                        <span className="text-[10px] text-wv-text-3 shrink-0 hidden sm:inline">
+                          [{newsArticles[0].source}]
+                        </span>
                         <div className="flex items-center gap-1 min-w-0">
                           <ExternalLink className="w-3 h-3 text-wv-accent shrink-0" />
                           <a
@@ -1321,11 +1327,18 @@ export const AgentBoardroom: React.FC = () => {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="hover:underline text-[11px] text-wv-accent truncate"
-                            title={newsArticles[0].headline}
+                            title={`${newsArticles[0].headline} (${newsArticles[0].published_at})`}
                           >
                             {newsArticles[0].headline}
                           </a>
                         </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-xs text-wv-text-3 pt-2 sm:pt-1 border-t border-wv-border/50">
+                        <span className="text-[10px] uppercase font-bold text-wv-text-3 shrink-0">News Wire:</span>
+                        <span className="text-[11px] text-wv-text-3 italic">
+                          Wire quiet — no material corporate disclosures in verified press over past 45 days
+                        </span>
                       </div>
                     )}
                   </div>
@@ -2255,7 +2268,14 @@ export const AgentBoardroom: React.FC = () => {
                           className="p-3 rounded-lg bg-wv-surface-2 border border-wv-border hover:border-wv-accent transition-all block space-y-1"
                         >
                           <div className="flex items-center justify-between text-[11px] text-wv-text-3">
-                            <span>{n.source || 'News Source'}</span>
+                            <span className="flex items-center gap-1.5">
+                              <span>{n.source || 'News Source'}</span>
+                              {n.age_label && (
+                                <span className="px-1.5 py-0.2 rounded font-mono text-[9px] bg-wv-surface border border-wv-border text-wv-accent">
+                                  {n.age_label}
+                                </span>
+                              )}
+                            </span>
                             <span>{n.published_at ? new Date(n.published_at).toLocaleDateString('en-IN') : ''}</span>
                           </div>
                           <div className="font-medium text-wv-text flex items-center justify-between gap-2">

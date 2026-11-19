@@ -46,18 +46,22 @@ class NewsScout:
                 else:
                     neu_count += 1
 
-                # Check for severe regulatory threat in headline or full article summary
+                # Check for severe regulatory threat in headline or full article summary (only if fresh <= 45d)
                 text_to_check = f"{cat.headline} {cat.summary_content or ''}".lower()
-                for kw in _SEVERE_THREAT_KEYWORDS:
-                    if kw in text_to_check:
-                        threat_reasons.append(f"Regulatory/Legal notice: '{cat.headline[:60]}...'")
-                        break
+                cat_age = cat.age_days if cat.age_days is not None else 0
+                if cat_age <= 45:
+                    for kw in _SEVERE_THREAT_KEYWORDS:
+                        if kw in text_to_check:
+                            threat_reasons.append(f"Regulatory/Legal notice ({cat.age_label or 'recent'}): '{cat.headline[:60]}...'")
+                            break
 
                 articles.append(
                     NewsArticleItem(
                         headline=cat.headline,
                         source=cat.source or "News",
                         published_at=cat.published_at or "",
+                        age_days=cat.age_days,
+                        age_label=cat.age_label,
                         link=cat.link,
                         sentiment=sentiment,
                         confidence=round(conf, 2),
@@ -71,9 +75,13 @@ class NewsScout:
                 return NewsIntelReport(
                     symbol=clean,
                     dominant_sentiment="NEUTRAL",
-                    summary="No recent material headlines found in public financial wire.",
+                    articles_scanned=0,
+                    is_wire_quiet=True,
+                    summary="Financial wire quiet: 0 material headlines in verified press over past 45 days. No active regulatory or operational developments.",
                     status="COMPLETED",
                 )
+
+            min_age_days = min((a.age_days for a in articles if a.age_days is not None), default=0)
 
             if neg_count > pos_count and neg_count >= 2:
                 dominant = "NEGATIVE"
@@ -86,12 +94,13 @@ class NewsScout:
                 overall_conf = 0.65
 
             material_threat = len(threat_reasons) > 0
+            newest_label = articles[0].age_label or "recent"
             summary = (
-                f"{total} headlines audited: {pos_count} Positive, {neg_count} Negative, {neu_count} Neutral. "
+                f"{total} verified headlines audited (newest: {newest_label}): {pos_count} Positive, {neg_count} Negative, {neu_count} Neutral. "
                 f"Overall bias: {dominant}."
             )
             if material_threat:
-                summary += f" [WARNING: {threat_reasons[0]}]"
+                summary += f" [ACTIVE THREAT: {threat_reasons[0]}]"
 
             return NewsIntelReport(
                 symbol=clean,
@@ -103,6 +112,8 @@ class NewsScout:
                 sentiment_confidence=round(overall_conf, 2),
                 material_threat=material_threat,
                 threat_reasons=threat_reasons,
+                latest_article_age_days=min_age_days,
+                is_wire_quiet=False,
                 articles=articles,
                 status="COMPLETED",
                 summary=summary,

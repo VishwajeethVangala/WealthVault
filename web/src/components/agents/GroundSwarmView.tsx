@@ -902,7 +902,14 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
                         className="p-2 rounded bg-wv-surface border border-wv-border hover:border-wv-accent transition-all block space-y-0.5"
                       >
                         <div className="text-[10px] text-wv-text-3 flex items-center justify-between">
-                          <span>{art.source}</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="font-medium text-wv-text-2">{art.source}</span>
+                            {art.age_label && (
+                              <span className="px-1.5 py-0.2 rounded font-mono text-[9px] bg-wv-surface-2 border border-wv-border text-wv-accent">
+                                {art.age_label}
+                              </span>
+                            )}
+                          </span>
                           <span>{art.published_at ? new Date(art.published_at).toLocaleDateString('en-IN') : ''}</span>
                         </div>
                         <div className="text-xs text-wv-text font-medium flex items-center justify-between gap-1">
@@ -913,7 +920,9 @@ export const GroundSwarmView: React.FC<GroundSwarmViewProps> = ({ onSelectStockF
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-wv-text-3">No material forensic news headlines flagged.</p>
+                  <p className="text-xs text-wv-text-3 italic">
+                    Financial wire quiet — 0 material headlines in verified press over past 45 days.
+                  </p>
                 )}
               </div>
 

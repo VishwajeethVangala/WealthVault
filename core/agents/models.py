@@ -101,6 +101,8 @@ class NewsCatalyst(BaseModel):
     headline: str
     source: str
     published_at: str
+    age_days: Optional[int] = None
+    age_label: Optional[str] = None  # e.g. "Today", "2d ago", "1w ago"
     sentiment: str = "NEUTRAL"  # POSITIVE, NEGATIVE, NEUTRAL
     category: str = "GENERAL"   # EARNINGS, REGULATORY, ORDER_WIN, MANAGEMENT, GENERAL
     link: Optional[str] = None
