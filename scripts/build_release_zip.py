@@ -31,6 +31,7 @@ EXCLUDE = [
     "web/node_modules/*", "Stitch Designs/*",
     "*/__pycache__/*", "*.pyc",
     "storage/blobs/*token*", "storage/blobs/*session*", "storage/blobs/indmoney_client.json",
+    "storage/blobs/boardroom_state.json", "storage/blobs/ground_dossiers.json",
     ".env", ".env.*", "client_secret*.json", "*.zip", "*.keystore", "*.jks",
 ]
 KEEP = [".env.example"]  # an example with no secrets

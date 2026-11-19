@@ -81,8 +81,10 @@ class BaseTableStorage:
 
     async def get_table_client(self) -> TableClient:
         """Return initialized TableClient, creating table if it does not already exist."""
-        if self._table_client is None:
+        loop_key = _loop_key()
+        if self._table_client is None or getattr(self, "_last_loop_key", None) != loop_key:
             self._table_client = self.service_client.get_table_client(self.table_name)
+            self._last_loop_key = loop_key
 
         ready_key = (self._connection_string, self.table_name)
         if ready_key not in _ready_tables:

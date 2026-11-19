@@ -16,6 +16,8 @@ import uuid
 
 from azure.data.tables import UpdateMode
 from core.models import AssetClass, BrokerConnection, BrokerStatus, Holding, PortfolioSnapshot, TargetAllocation, User
+from core.agents.models import DirectiveCard, DirectiveStatus, TimelineEvent
+from core.agents.ground.contracts import GroundStockDossier
 from core.security import sanitize_key
 from storage.tables.base import BaseTableStorage
 
@@ -1092,3 +1094,408 @@ class WatchlistRepository(BaseTableStorage):
         items = [{k: r.get(k) for k in keys} for r in rows]
         items.sort(key=lambda r: r.get("added_at") or "", reverse=True)
         return items
+
+
+class BoardroomRepository(BaseTableStorage):
+    """Azure Table repository managing Agent Boardroom directives and timeline events.
+
+    Multi-tenant boundary:
+    PartitionKey = owner_id (user_id)
+    RowKey = 'dir_' + sanitize_key(directive_id) for directives
+             'evt_' + sanitize_key(event_id) for timeline events
+    """
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="boardroom", connection_string=connection_string)
+
+    async def upsert_directive(self, owner_id: str, directive: DirectiveCard) -> None:
+        """Upsert a single DirectiveCard entity in Azure Table Storage with 100% fidelity.
+        
+        Enforces 1:1 holding deduplication and preserves user resolution status.
+        """
+        from core.agents.forensic_crawler import clean_symbol
+
+        act = directive.actions[0] if directive.actions else None
+        sym = clean_symbol(act.symbol).upper() if act else ""
+        brk = (act.broker or "broker").lower() if act else ""
+        act_type = (act.action.value if hasattr(act.action, "value") else str(act.action)).lower() if act else ""
+
+        # Check existing directives for this holding to enforce 1:1 holding and preserve resolution
+        existing_directives = await self.list_directives(owner_id=owner_id)
+        for existing in existing_directives:
+            e_act = existing.actions[0] if existing.actions else None
+            e_sym = clean_symbol(e_act.symbol).upper() if e_act else ""
+            e_brk = (e_act.broker or "broker").lower() if e_act else ""
+            
+            # Same directive ID or same (symbol, broker) holding
+            is_same_holding = (sym and e_sym == sym and brk and e_brk == brk)
+            is_same_id = (existing.directive_id == directive.directive_id)
+            
+            if is_same_id or is_same_holding:
+                if existing.user_status != DirectiveStatus.PENDING_REVIEW:
+                    directive.user_status = existing.user_status
+                    directive.user_comment = existing.user_comment
+                    directive.resolved_at = existing.resolved_at
+                if is_same_holding and not is_same_id:
+                    # Remove older duplicate card under a different canonical ID
+                    await self.delete_directive(owner_id=owner_id, directive_id=existing.directive_id)
+
+        row_key = sanitize_key(f"dir_{directive.directive_id}")
+        data = {
+            "entity_type": "directive",
+            "directive_id": directive.directive_id,
+            "title": directive.title,
+            "symbol": sym,
+            "broker": brk,
+            "action": act_type,
+            "priority": directive.priority.value if hasattr(directive.priority, "value") else str(directive.priority),
+            "user_status": directive.user_status.value if hasattr(directive.user_status, "value") else str(directive.user_status),
+            "timestamp": directive.timestamp,
+            "resolved_at": directive.resolved_at or "",
+            "user_comment": directive.user_comment or "",
+            "payload": directive.model_dump_json(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await self.upsert_entity(user_id=owner_id, entity_id=row_key, data=data, mode="replace")
+
+    async def batch_upsert_directives(self, owner_id: str, directives: List[DirectiveCard]) -> int:
+        """Batch upsert directives for a user."""
+        if not directives:
+            return 0
+        from core.agents.forensic_crawler import clean_symbol
+        client = await self.get_table_client()
+        sanitized_owner = sanitize_key(owner_id)
+
+        chunk_size = 100
+        total_upserted = 0
+        for i in range(0, len(directives), chunk_size):
+            chunk = directives[i : i + chunk_size]
+            batch_ops = []
+            for d in chunk:
+                act = d.actions[0] if d.actions else None
+                sym = clean_symbol(act.symbol).upper() if act else ""
+                brk = (act.broker or "broker").lower() if act else ""
+                act_type = (act.action.value if hasattr(act.action, "value") else str(act.action)).lower() if act else ""
+                row_key = sanitize_key(f"dir_{d.directive_id}")
+                entity = {
+                    "PartitionKey": sanitized_owner,
+                    "RowKey": row_key,
+                    "entity_type": "directive",
+                    "directive_id": d.directive_id,
+                    "title": d.title,
+                    "symbol": sym,
+                    "broker": brk,
+                    "action": act_type,
+                    "priority": d.priority.value if hasattr(d.priority, "value") else str(d.priority),
+                    "user_status": d.user_status.value if hasattr(d.user_status, "value") else str(d.user_status),
+                    "timestamp": d.timestamp,
+                    "resolved_at": d.resolved_at or "",
+                    "user_comment": d.user_comment or "",
+                    "payload": d.model_dump_json(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                batch_ops.append(("upsert", entity, {"mode": UpdateMode.REPLACE}))
+
+            try:
+                await client.submit_transaction(batch_ops)
+                total_upserted += len(chunk)
+            except Exception as exc:
+                logger.info("Batch directive upsert fallback to concurrent: %s", exc)
+                tasks = [
+                    self.upsert_entity(
+                        user_id=owner_id,
+                        entity_id=sanitize_key(f"dir_{d.directive_id}"),
+                        data={
+                            "entity_type": "directive",
+                            "directive_id": d.directive_id,
+                            "title": d.title,
+                            "symbol": clean_symbol(d.actions[0].symbol).upper() if d.actions else "",
+                            "broker": (d.actions[0].broker or "broker").lower() if d.actions else "",
+                            "action": (d.actions[0].action.value if hasattr(d.actions[0].action, "value") else str(d.actions[0].action)).lower() if d.actions else "",
+                            "priority": d.priority.value if hasattr(d.priority, "value") else str(d.priority),
+                            "user_status": d.user_status.value if hasattr(d.user_status, "value") else str(d.user_status),
+                            "timestamp": d.timestamp,
+                            "resolved_at": d.resolved_at or "",
+                            "user_comment": d.user_comment or "",
+                            "payload": d.model_dump_json(),
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                        mode="replace"
+                    )
+                    for d in chunk
+                ]
+                await asyncio.gather(*tasks)
+                total_upserted += len(chunk)
+
+        return total_upserted
+
+    async def get_directive(self, owner_id: str, directive_id: str) -> Optional[DirectiveCard]:
+        """Fetch a specific directive by directive_id."""
+        row_key = sanitize_key(f"dir_{directive_id}")
+        entity = await self.get_entity(user_id=owner_id, entity_id=row_key)
+        if not entity:
+            entity = await self.get_entity(user_id=owner_id, entity_id=sanitize_key(directive_id))
+        if not entity:
+            return None
+        payload = entity.get("payload")
+        if payload:
+            try:
+                return DirectiveCard.model_validate_json(payload)
+            except Exception as exc:
+                logger.warning("Failed to deserialize DirectiveCard %s: %s", directive_id, exc)
+        return None
+
+    async def list_directives(self, owner_id: str, status: Optional[DirectiveStatus] = None) -> List[DirectiveCard]:
+        """List all directives for an owner, optionally filtered by status, newest first."""
+        filter_expr = "entity_type eq 'directive'"
+        if status:
+            st_val = status.value if hasattr(status, "value") else str(status)
+            filter_expr += f" and user_status eq '{st_val}'"
+        entities = await self.query_entities(user_id=owner_id, filter_query=filter_expr)
+        results: List[DirectiveCard] = []
+        for e in entities:
+            payload = e.get("payload")
+            if payload:
+                try:
+                    results.append(DirectiveCard.model_validate_json(payload))
+                except Exception as exc:
+                    logger.debug("Skipping unparseable directive %s: %s", e.get("RowKey"), exc)
+        results.sort(key=lambda d: d.timestamp, reverse=True)
+        return results
+
+    async def delete_directive(self, owner_id: str, directive_id: str) -> bool:
+        """Delete a directive entity by directive_id."""
+        row_key = sanitize_key(f"dir_{directive_id}")
+        return await self.delete_entity(user_id=owner_id, entity_id=row_key)
+
+    async def update_directive_status(
+        self,
+        owner_id: str,
+        directive_id: str,
+        new_status: DirectiveStatus,
+        user_comment: Optional[str] = None
+    ) -> Optional[DirectiveCard]:
+        """Update a directive's status and add a user action timeline event."""
+        directive = await self.get_directive(owner_id=owner_id, directive_id=directive_id)
+        if not directive:
+            return None
+        directive.user_status = new_status
+        directive.user_comment = user_comment
+        directive.resolved_at = datetime.now(timezone.utc).isoformat()
+        await self.upsert_directive(owner_id=owner_id, directive=directive)
+
+        # Log timeline event
+        event = TimelineEvent(
+            event_id=f"evt_user_{int(datetime.now(timezone.utc).timestamp())}",
+            agent_id="user",
+            agent_name="Investor (You)",
+            event_type="USER_ACTION",
+            message=f"Marked directive '{directive.title}' as {new_status.value}. {user_comment or ''}".strip(),
+            directive_id=directive_id
+        )
+        await self.add_timeline_event(owner_id=owner_id, event=event)
+        return directive
+
+    async def add_timeline_event(self, owner_id: str, event: TimelineEvent) -> None:
+        """Add an event to the public debate timeline."""
+        row_key = sanitize_key(f"evt_{event.event_id}")
+        data = {
+            "entity_type": "timeline",
+            "event_id": event.event_id,
+            "timestamp": event.timestamp,
+            "agent_id": event.agent_id,
+            "agent_name": event.agent_name,
+            "event_type": event.event_type,
+            "message": event.message,
+            "directive_id": event.directive_id or "",
+            "payload": event.model_dump_json(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await self.upsert_entity(user_id=owner_id, entity_id=row_key, data=data, mode="replace")
+
+    async def batch_add_timeline_events(self, owner_id: str, events: List[TimelineEvent]) -> int:
+        """Batch add timeline events."""
+        if not events:
+            return 0
+        client = await self.get_table_client()
+        sanitized_owner = sanitize_key(owner_id)
+
+        chunk_size = 100
+        total_upserted = 0
+        for i in range(0, len(events), chunk_size):
+            chunk = events[i : i + chunk_size]
+            batch_ops = []
+            for ev in chunk:
+                row_key = sanitize_key(f"evt_{ev.event_id}")
+                entity = {
+                    "PartitionKey": sanitized_owner,
+                    "RowKey": row_key,
+                    "entity_type": "timeline",
+                    "event_id": ev.event_id,
+                    "timestamp": ev.timestamp,
+                    "agent_id": ev.agent_id,
+                    "agent_name": ev.agent_name,
+                    "event_type": ev.event_type,
+                    "message": ev.message,
+                    "directive_id": ev.directive_id or "",
+                    "payload": ev.model_dump_json(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                batch_ops.append(("upsert", entity, {"mode": UpdateMode.REPLACE}))
+
+            try:
+                await client.submit_transaction(batch_ops)
+                total_upserted += len(chunk)
+            except Exception as exc:
+                logger.info("Batch timeline event upsert fallback to concurrent: %s", exc)
+                tasks = [self.add_timeline_event(owner_id, ev) for ev in chunk]
+                await asyncio.gather(*tasks)
+                total_upserted += len(chunk)
+
+        return total_upserted
+
+    async def get_timeline(self, owner_id: str, limit: int = 100) -> List[TimelineEvent]:
+        """Fetch debate timeline events for an owner, newest first."""
+        entities = await self.query_entities(user_id=owner_id, filter_query="entity_type eq 'timeline'")
+        events: List[TimelineEvent] = []
+        for e in entities:
+            payload = e.get("payload")
+            if payload:
+                try:
+                    events.append(TimelineEvent.model_validate_json(payload))
+                except Exception as exc:
+                    logger.debug("Skipping unparseable timeline event %s: %s", e.get("RowKey"), exc)
+        events.sort(key=lambda ev: ev.timestamp, reverse=True)
+        return events[:limit]
+
+
+class GroundDossiersRepository(BaseTableStorage):
+    """Azure Table repository managing Ground-Level Scout Swarm dossiers.
+
+    Multi-tenant boundary:
+    PartitionKey = owner_id (user_id)
+    RowKey = 'dos_' + sanitize_key(clean_symbol)
+    """
+
+    ALIASES = {
+        "DIACABS": "DIAMONDYD",
+        "DIAMONDYD": "DIACABS",
+        "BBL": "BHARATBIJLEE",
+        "BHARATBIJLEE": "BBL",
+        "IND-SWIFT": "INDSWFTLAB",
+        "INDSWFT": "INDSWFTLAB",
+    }
+
+    def __init__(self, connection_string: Optional[str] = None) -> None:
+        super().__init__(table_name="grounddossiers", connection_string=connection_string)
+
+    async def upsert_dossier(self, owner_id: str, dossier: GroundStockDossier) -> None:
+        """Upsert a GroundStockDossier in Azure Table Storage with 100% fidelity."""
+        from core.agents.forensic_crawler import clean_symbol
+        clean = clean_symbol(dossier.symbol).upper()
+        row_key = sanitize_key(f"dos_{clean}")
+
+        barrier_st = dossier.barrier_status.value if hasattr(dossier.barrier_status, "value") else str(dossier.barrier_status)
+        data = {
+            "symbol": clean,
+            "company_name": dossier.company_name,
+            "barrier_status": barrier_st,
+            "completed_scouts": len(dossier.completed_scouts),
+            "is_etf": dossier.is_etf,
+            "last_updated": dossier.last_updated or "",
+            "payload": dossier.model_dump_json(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await self.upsert_entity(user_id=owner_id, entity_id=row_key, data=data, mode="replace")
+
+    async def batch_upsert_dossiers(self, owner_id: str, dossiers: List[GroundStockDossier]) -> int:
+        """Batch upsert GroundStockDossier entities for a user."""
+        if not dossiers:
+            return 0
+        from core.agents.forensic_crawler import clean_symbol
+        client = await self.get_table_client()
+        sanitized_owner = sanitize_key(owner_id)
+
+        chunk_size = 100
+        total_upserted = 0
+        for i in range(0, len(dossiers), chunk_size):
+            chunk = dossiers[i : i + chunk_size]
+            batch_ops = []
+            for dos in chunk:
+                clean = clean_symbol(dos.symbol).upper()
+                row_key = sanitize_key(f"dos_{clean}")
+                barrier_st = dos.barrier_status.value if hasattr(dos.barrier_status, "value") else str(dos.barrier_status)
+                entity = {
+                    "PartitionKey": sanitized_owner,
+                    "RowKey": row_key,
+                    "symbol": clean,
+                    "company_name": dos.company_name,
+                    "barrier_status": barrier_st,
+                    "completed_scouts": len(dos.completed_scouts),
+                    "is_etf": dos.is_etf,
+                    "last_updated": dos.last_updated or "",
+                    "payload": dos.model_dump_json(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                batch_ops.append(("upsert", entity, {"mode": UpdateMode.REPLACE}))
+
+            try:
+                await client.submit_transaction(batch_ops)
+                total_upserted += len(chunk)
+            except Exception as exc:
+                logger.info("Batch dossiers upsert fallback to concurrent: %s", exc)
+                tasks = [
+                    self.upsert_entity(
+                        user_id=owner_id,
+                        entity_id=sanitize_key(f"dos_{clean_symbol(dos.symbol).upper()}"),
+                        data={
+                            "symbol": clean_symbol(dos.symbol).upper(),
+                            "company_name": dos.company_name,
+                            "barrier_status": dos.barrier_status.value if hasattr(dos.barrier_status, "value") else str(dos.barrier_status),
+                            "completed_scouts": len(dos.completed_scouts),
+                            "is_etf": dos.is_etf,
+                            "last_updated": dos.last_updated or "",
+                            "payload": dos.model_dump_json(),
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        },
+                        mode="replace"
+                    )
+                    for dos in chunk
+                ]
+                await asyncio.gather(*tasks)
+                total_upserted += len(chunk)
+
+        return total_upserted
+
+    async def get_dossier(self, owner_id: str, symbol: str) -> Optional[GroundStockDossier]:
+        """Fetch a specific ground dossier by symbol, supporting dual-listing aliases."""
+        from core.agents.forensic_crawler import clean_symbol
+        clean = clean_symbol(symbol).upper()
+        row_key = sanitize_key(f"dos_{clean}")
+        entity = await self.get_entity(user_id=owner_id, entity_id=row_key)
+        if not entity and clean in self.ALIASES:
+            alt_clean = self.ALIASES[clean]
+            entity = await self.get_entity(user_id=owner_id, entity_id=sanitize_key(f"dos_{alt_clean}"))
+        if not entity:
+            return None
+        payload = entity.get("payload")
+        if payload:
+            try:
+                return GroundStockDossier.model_validate_json(payload)
+            except Exception as exc:
+                logger.warning("Failed to deserialize GroundStockDossier %s: %s", symbol, exc)
+        return None
+
+    async def list_dossiers(self, owner_id: str) -> List[GroundStockDossier]:
+        """List all ground dossiers for an owner."""
+        entities = await self.query_entities(user_id=owner_id)
+        dossiers: List[GroundStockDossier] = []
+        for e in entities:
+            payload = e.get("payload")
+            if payload:
+                try:
+                    dossiers.append(GroundStockDossier.model_validate_json(payload))
+                except Exception as exc:
+                    logger.debug("Skipping unparseable dossier %s: %s", e.get("RowKey"), exc)
+        return dossiers
+

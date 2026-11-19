@@ -24,10 +24,29 @@ from core.agents.ground.scouts.news_scout import NewsScout
 from core.agents.ground.scouts.pattern_scout import PatternScout
 from core.agents.ground.scouts.risk_scout import RiskScout
 from core.agents.ground.scouts.tech_scout import TechScout
+from storage.tables.repositories import GroundDossiersRepository
 
 logger = logging.getLogger("wealthvault.agents.ground.orchestrator")
 
-DOSSIER_STORAGE_FILE = os.path.join("storage", "blobs", "ground_dossiers.json")
+DEFAULT_OWNER = "demo_reviewer"
+PRIMARY_OWNER = "google_109909149391234323377"
+
+
+def _run_async(coro):
+    """Run an async coroutine safely whether inside or outside an active event loop."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        return asyncio.create_task(coro)
+    else:
+        try:
+            return asyncio.run(coro)
+        except Exception as exc:
+            logger.warning("Could not run async table operation: %s", exc)
+            return None
 
 # Known non-Indian / US stocks
 KNOWN_US_TICKERS = {
@@ -137,8 +156,9 @@ def is_pure_equity_stock(
 class GroundSwarmOrchestrator:
     """Coordinates sequential ground scouts with deliberate pacing and barrier checks."""
 
-    def __init__(self, storage_path: str = DOSSIER_STORAGE_FILE):
+    def __init__(self, storage_path: Optional[str] = None):
         self.storage_path = storage_path
+        self.repo: GroundDossiersRepository = GroundDossiersRepository()
         self.risk_scout = RiskScout()
         self.tech_scout = TechScout()
         self.pattern_scout = PatternScout()
@@ -152,9 +172,9 @@ class GroundSwarmOrchestrator:
         self._current_scout: Optional[str] = None
         self._load_storage()
 
-    def _load_storage(self) -> None:
-        """Load stored ground dossiers from disk, strictly purging non-equities."""
-        if os.path.exists(self.storage_path):
+    def _load_storage(self, owner_id: Optional[str] = None) -> None:
+        """Load stored ground dossiers from Azure Table Storage (or disk in explicit test mode)."""
+        if self.storage_path and os.path.exists(self.storage_path):
             try:
                 with open(self.storage_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
@@ -163,35 +183,72 @@ class GroundSwarmOrchestrator:
                         sym: GroundStockDossier.model_validate(dos)
                         for sym, dos in data.items()
                     }
-                    # Keep ONLY pure Indian equities (purge US stocks, ETFs, MFs, unlisted)
                     self._dossiers = {
                         sym: dos for sym, dos in loaded.items()
                         if is_pure_equity_stock(sym, name=dos.company_name)
                     }
             except Exception as exc:
                 logger.warning("Failed to load ground dossiers from disk: %s", exc)
+            return
 
-    def _save_storage(self) -> None:
-        """Persist ground dossiers to disk atomically."""
-        try:
-            os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
-            payload = {sym: dos.model_dump() for sym, dos in self._dossiers.items()}
-            tmp_path = f"{self.storage_path}.tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2)
-            if os.path.exists(self.storage_path):
-                os.remove(self.storage_path)
-            os.rename(tmp_path, self.storage_path)
-        except Exception as exc:
-            logger.warning("Failed to persist ground dossiers: %s", exc)
+        # Production path: Azure Table Storage
+        target_owners = [owner_id] if owner_id else [PRIMARY_OWNER, DEFAULT_OWNER, "global"]
+        for uid in target_owners:
+            if not uid:
+                continue
+            try:
+                dossiers = _run_async(self.repo.list_dossiers(owner_id=uid))
+                if dossiers:
+                    self._dossiers = {
+                        clean_symbol(dos.symbol).upper(): dos
+                        for dos in dossiers
+                        if is_pure_equity_stock(dos.symbol, name=dos.company_name)
+                    }
+                    logger.info("Loaded %d ground dossiers from Azure Table Storage for user %s", len(self._dossiers), uid)
+                    break
+            except Exception as exc:
+                logger.warning("Azure Table load note for %s: %s", uid, exc)
 
-    def get_all_dossiers(self) -> List[GroundStockDossier]:
+    def _save_storage(self, owner_id: Optional[str] = None) -> None:
+        """Persist ground dossiers to Azure Table Storage (or disk in explicit test mode)."""
+        if self.storage_path:
+            try:
+                os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
+                payload = {sym: dos.model_dump() for sym, dos in self._dossiers.items()}
+                tmp_path = f"{self.storage_path}.tmp"
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=2)
+                if os.path.exists(self.storage_path):
+                    os.remove(self.storage_path)
+                os.rename(tmp_path, self.storage_path)
+            except Exception as exc:
+                logger.warning("Failed to persist ground dossiers to disk: %s", exc)
+        else:
+            target_owner = (owner_id or PRIMARY_OWNER).strip()
+            if self._dossiers:
+                _run_async(self.repo.batch_upsert_dossiers(target_owner, list(self._dossiers.values())))
+
+    def _save_single_dossier(self, dossier: GroundStockDossier, owner_id: Optional[str] = None) -> None:
+        """Persist a single updated dossier to Azure Table Storage immediately."""
+        clean = clean_symbol(dossier.symbol).upper()
+        self._dossiers[clean] = dossier
+        if self.storage_path:
+            self._save_storage()
+        else:
+            target_owner = (owner_id or PRIMARY_OWNER).strip()
+            _run_async(self.repo.upsert_dossier(target_owner, dossier))
+
+    def get_all_dossiers(self, owner_id: Optional[str] = None) -> List[GroundStockDossier]:
         """Return all current ground dossiers."""
+        if not self._dossiers:
+            self._load_storage(owner_id)
         return list(self._dossiers.values())
 
-    def get_dossier(self, symbol: str) -> Optional[GroundStockDossier]:
+    def get_dossier(self, symbol: str, owner_id: Optional[str] = None) -> Optional[GroundStockDossier]:
         """Return the dossier for a specific symbol."""
-        clean = clean_symbol(symbol)
+        if not self._dossiers:
+            self._load_storage(owner_id)
+        clean = clean_symbol(symbol).upper()
         d = self._dossiers.get(clean)
         if d:
             return d
@@ -251,42 +308,42 @@ class GroundSwarmOrchestrator:
         dossier.current_scout = "Risk Scout"
         dossier.risk_report = self.risk_scout.evaluate_holding(holding, total_portfolio_value)
         dossier.update_barrier()
-        self._save_storage()
+        self._save_single_dossier(dossier, owner_id=owner_id)
 
         # 2. Technical Scout
         self._current_scout = "tech"
         dossier.current_scout = "Technical Scout"
         dossier.tech_report = self.tech_scout.evaluate(clean, candles, benchmark_candles=bm)
         dossier.update_barrier()
-        self._save_storage()
+        self._save_single_dossier(dossier, owner_id=owner_id)
 
         # 3. Pattern Scout
         self._current_scout = "pattern"
         dossier.current_scout = "Pattern Scout"
         dossier.pattern_report = self.pattern_scout.evaluate(clean, candles)
         dossier.update_barrier()
-        self._save_storage()
+        self._save_single_dossier(dossier, owner_id=owner_id)
 
         # 4. Fundamental Scout (bypasses ETFs)
         self._current_scout = "funda"
         dossier.current_scout = "Fundamental Scout"
         dossier.funda_report = await self.funda_scout.evaluate(clean, company_name=disp_name)
         dossier.update_barrier()
-        self._save_storage()
+        self._save_single_dossier(dossier, owner_id=owner_id)
 
         # 5. Forensic News Scout
         self._current_scout = "news"
         dossier.current_scout = "News Scout"
         dossier.news_report = await self.news_scout.evaluate(clean, company_name=disp_name)
         dossier.update_barrier()
-        self._save_storage()
+        self._save_single_dossier(dossier, owner_id=owner_id)
 
         # 6. Insider & Deals Scout (bypasses ETFs)
         self._current_scout = "insider"
         dossier.current_scout = "Insider Scout"
         dossier.insider_report = self.insider_scout.evaluate(clean)
         dossier.update_barrier()
-        self._save_storage()
+        self._save_single_dossier(dossier, owner_id=owner_id)
 
         dossier.current_scout = None
         self._current_stock = None

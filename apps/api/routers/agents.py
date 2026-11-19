@@ -58,35 +58,7 @@ class BoardroomOverviewResponse(BaseModel):
 async def get_boardroom_overview(
     current_user_id: str = Depends(get_current_user)
 ) -> BoardroomOverviewResponse:
-    storage = get_boardroom_storage()
-    orchestrator = get_orchestrator()
-
-    all_active = storage.list_directives(status=DirectiveStatus.PENDING_REVIEW)
-    all_historical = [
-        d for d in storage.list_directives()
-        if d.user_status != DirectiveStatus.PENDING_REVIEW
-    ]
-
-    # Strictly filter for pure Indian equities (no ETFs, US stocks, or unlisted shares)
-    active = [
-        d for d in all_active
-        if not d.actions or is_pure_equity_stock(d.actions[0].symbol)
-    ]
-    historical = [
-        d for d in all_historical
-        if not d.actions or is_pure_equity_stock(d.actions[0].symbol)
-    ]
-    timeline = storage.get_timeline(limit=100)
-    ai_info = get_boss_ai_status()
-
-    return BoardroomOverviewResponse(
-        agents=orchestrator.get_agent_profiles(),
-        active_directives=active,
-        historical_directives=historical,
-        timeline=timeline,
-        ai_deliberation_status=ai_info["status"],
-        ai_status_message=ai_info["message"],
-    )
+    return _build_overview_response(owner_id=current_user_id)
 
 
 async def _extract_pure_equity_holdings(current_user_id: str):
@@ -154,13 +126,13 @@ async def _extract_pure_equity_holdings(current_user_id: str):
     return raw_holdings, total_val
 
 
-def _build_overview_response() -> BoardroomOverviewResponse:
+def _build_overview_response(owner_id: Optional[str] = None) -> BoardroomOverviewResponse:
     storage = get_boardroom_storage()
     orchestrator = get_orchestrator()
 
-    all_active = storage.list_directives(status=DirectiveStatus.PENDING_REVIEW)
+    all_active = storage.list_directives(status=DirectiveStatus.PENDING_REVIEW, owner_id=owner_id)
     all_historical = [
-        d for d in storage.list_directives()
+        d for d in storage.list_directives(owner_id=owner_id)
         if d.user_status != DirectiveStatus.PENDING_REVIEW
     ]
 
@@ -172,7 +144,7 @@ def _build_overview_response() -> BoardroomOverviewResponse:
         d for d in all_historical
         if not d.actions or is_pure_equity_stock(d.actions[0].symbol)
     ]
-    timeline = storage.get_timeline(limit=100)
+    timeline = storage.get_timeline(limit=100, owner_id=owner_id)
     ai_info = get_boss_ai_status()
 
     return BoardroomOverviewResponse(
@@ -203,7 +175,7 @@ async def run_boardroom_review(
         trigger_source=f"USER_REQUEST ({current_user_id})",
         owner_id=current_user_id
     )
-    return _build_overview_response()
+    return _build_overview_response(owner_id=current_user_id)
 
 
 @router.post(
@@ -224,7 +196,7 @@ async def run_fiduciary_audit(
         trigger_source=f"PHASE_2_USER ({current_user_id})",
         owner_id=current_user_id
     )
-    return _build_overview_response()
+    return _build_overview_response(owner_id=current_user_id)
 
 
 @router.post(
@@ -244,7 +216,7 @@ async def run_boss_deliberation(
         trigger_source=f"PHASE_3_USER ({current_user_id})",
         owner_id=current_user_id
     )
-    return _build_overview_response()
+    return _build_overview_response(owner_id=current_user_id)
 
 
 @router.post(
@@ -262,7 +234,8 @@ async def update_directive_status(
     updated = storage.update_directive_status(
         directive_id=directive_id,
         new_status=req.status,
-        user_comment=req.user_comment
+        user_comment=req.user_comment,
+        owner_id=current_user_id
     )
     if not updated:
         raise HTTPException(
@@ -307,7 +280,7 @@ async def get_ground_dossiers(
     current_user_id: str = Depends(get_current_user)
 ) -> GroundSwarmOverviewResponse:
     swarm = get_ground_swarm_orchestrator()
-    dossiers = swarm.get_all_dossiers()
+    dossiers = swarm.get_all_dossiers(owner_id=current_user_id)
     status_info = swarm.get_status()
     return GroundSwarmOverviewResponse(dossiers=dossiers, status=status_info)
 
@@ -418,7 +391,7 @@ async def get_single_ground_dossier(
     current_user_id: str = Depends(get_current_user)
 ) -> Optional[GroundStockDossier]:
     swarm = get_ground_swarm_orchestrator()
-    dossier = swarm.get_dossier(symbol)
+    dossier = swarm.get_dossier(symbol, owner_id=current_user_id)
     if not dossier:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
