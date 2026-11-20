@@ -267,7 +267,7 @@ export const HoldingsTable: React.FC = () => {
                       {t?.supertrend && (
                         <Link
                           to={`/strategy?tab=supertrend&symbol=${t.supertrend.symbolCode}`}
-                          className={`badge ${t.supertrend.badgeCls}`}
+                          className={`badge trend ${t.supertrend.badgeCls}`}
                           style={{ textDecoration: 'none' }}
                           title={`SuperTrend: ${t.supertrend.label} · Support/Stop ₹${t.supertrend.supertrend.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${t.supertrend.cushion_pct != null ? ` (${t.supertrend.cushion_pct > 0 ? '+' : ''}${t.supertrend.cushion_pct.toFixed(1)}% cushion)` : ''} · Click to view chart`}
                         >
