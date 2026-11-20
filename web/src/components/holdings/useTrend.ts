@@ -3,11 +3,23 @@ import { fetchSignals } from '../../utils/api'
 import type { SignalsResponse } from '../../types'
 import type { Instrument } from './holdingsModel'
 
-/** The momentum verdict of a holding, from the signals the scheduled refresh saves (the Signals page reads the same). */
+/** The momentum and strategy verdict of a holding, from the signals the scheduled refresh saves (the Signals page reads the same). */
+export interface SupertrendInfo {
+  direction: number
+  supertrend: number
+  cushion_pct: number | null
+  last_signal: 'BUY' | 'SELL' | null
+  status: 'bullish' | 'near_support' | 'sell_call' | 'bearish'
+  label: string
+  badgeCls: 'ok' | 'warn' | 'bad' | 'off'
+  symbolCode: string
+}
+
 export interface Trend {
   verdict: string
   bucket: TrendBucket
   asOf?: string
+  supertrend?: SupertrendInfo | null
 }
 
 export type TrendBucket = 'up' | 'neutral' | 'down' | 'none'
@@ -45,9 +57,58 @@ export const useTrend = (count: number) => {
     })
     return (inst: Instrument): Trend | null => {
       const id = inst.lots.map((l) => map[l.holding.instrument_symbol]).find(Boolean)
-      const m = id ? signals[id]?.momentum : null
-      if (!m?.verdict || /insufficient/i.test(m.verdict)) return null
-      return { verdict: m.verdict, bucket: bucketOf(m.verdict), asOf: id ? signals[id]?.computed_at : undefined }
+      const sig = id ? signals[id] : null
+      const m = sig?.momentum
+      const st = sig?.supertrend
+      if ((!m?.verdict || /insufficient/i.test(m.verdict)) && !st) return null
+
+      let stInfo: SupertrendInfo | null = null
+      if (st && st.supertrend) {
+        const symbolCode = id ? id.split(':').pop()?.replace(/-(BE|BZ|BL|IL)$/, '') || '' : ''
+        let status: SupertrendInfo['status'] = 'bearish'
+        let label = 'ST Bearish'
+        let badgeCls: SupertrendInfo['badgeCls'] = 'bad'
+
+        if (st.direction < 0) {
+          if (st.cushion_pct != null && st.cushion_pct < 1.5) {
+            status = 'near_support'
+            label = `ST Near Stop (${st.cushion_pct > 0 ? '+' : ''}${st.cushion_pct.toFixed(1)}%)`
+            badgeCls = 'warn'
+          } else {
+            status = 'bullish'
+            label = `ST Bullish${st.cushion_pct != null ? ` (+${st.cushion_pct.toFixed(1)}%)` : ''}`
+            badgeCls = 'ok'
+          }
+        } else {
+          if (st.last_signal === 'SELL') {
+            status = 'sell_call'
+            label = 'ST SELL CALL'
+            badgeCls = 'bad'
+          } else {
+            status = 'bearish'
+            label = 'ST Bearish'
+            badgeCls = 'off'
+          }
+        }
+
+        stInfo = {
+          direction: st.direction,
+          supertrend: st.supertrend,
+          cushion_pct: st.cushion_pct,
+          last_signal: st.last_signal,
+          status,
+          label,
+          badgeCls,
+          symbolCode,
+        }
+      }
+
+      return {
+        verdict: m?.verdict && !/insufficient/i.test(m.verdict) ? m.verdict : '',
+        bucket: m?.verdict ? bucketOf(m.verdict) : 'none',
+        asOf: id ? signals[id]?.computed_at : undefined,
+        supertrend: stInfo,
+      }
     }
   }, [data])
 }

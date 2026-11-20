@@ -2,7 +2,7 @@ import { cleanSearchTerm, track } from './analytics'
 import { saveSessionForWorker } from './pushSession'
 import { webPushSignOut } from './webPush'
 import type { LiveSignalsResponse } from '../components/signals/useLiveSignals'
-import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult, SupertrendOptions, SupertrendResult, ScreenerRecommendationsResponse, WatchlistItem, WatchlistResponse, BoardroomOverview, DirectiveCard, InvestigationDossier, GroundSwarmOverview } from '../types'
+import type { SignalsJob, SignalsResponse, Stage2LiveResponse, Stage2Response, UsLiveResponse, CredentialSaveResponse, TargetAllocation, AuthResponse, BrokerCatalogItem, BrokerDeleteResponse, BrokerSessionInfo, CreateBrokerConnectionRequest, Holding, MarketQuotesResponse, MomentumAnalysis, PortfolioSummary, ReauthRequest, User, AthBreakoutOptions, AthBreakoutResult, SupertrendOptions, SupertrendResult, ScreenerRecommendationsResponse, NotificationsFeedResponse, WatchlistItem, WatchlistResponse, BoardroomOverview, DirectiveCard, InvestigationDossier, GroundSwarmOverview } from '../types'
 
 const TOKEN_KEY = 'wv_token'
 const USER_KEY = 'wv_user'
@@ -435,6 +435,10 @@ export async function triggerGroundSwarmScan(interStockDelay: number = 3.0): Pro
 
 export async function fetchGroundStatus(): Promise<GroundSwarmOverview['status']> {
   return fetchApi<GroundSwarmOverview['status']>('/api/v1/agents/ground/status')
+}
+
+export async function fetchNotificationsFeed(): Promise<NotificationsFeedResponse> {
+  return fetchApi<NotificationsFeedResponse>('/api/v1/notifications/feed')
 }
 
 

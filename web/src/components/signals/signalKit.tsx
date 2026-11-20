@@ -1,8 +1,9 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 import { pct, tone, weight } from '../../utils/format'
-import type { AthSignal, MomentumSignal, StockSignals } from '../../types'
+import type { AthSignal, MomentumSignal, StockSignals, SupertrendSignal } from '../../types'
 
-/** Shared reading of a stock's two signals, used by the Equity signals and Stage 2 pages. */
+/** Shared reading of a stock's signals, used by the Equity signals and Stage 2 pages. */
 
 export type Lean = 'bull' | 'bear' | 'neutral'
 export type Alignment = 'all-bull' | 'mixed' | 'all-bear' | 'none'
@@ -16,6 +17,8 @@ export const momentumLean = (m: MomentumSignal): Lean => (/uptrend/i.test(m.verd
 
 export const athLean = (a: AthSignal): Lean => (a.state === 'IN_POSITION' ? 'bull' : a.last_signal === 'SELL' ? 'bear' : 'neutral')
 
+export const supertrendLean = (st: SupertrendSignal): Lean => (st.direction < 0 ? 'bull' : 'bear')
+
 export const momentumBadge = (m: MomentumSignal) => {
   const lean = momentumLean(m)
   return { cls: lean === 'bull' ? 'ok' : lean === 'bear' ? 'bad' : 'off', text: m.verdict }
@@ -25,6 +28,19 @@ export const athBadge = (a: AthSignal) => {
   if (a.state === 'IN_POSITION') return { cls: 'ok', text: 'In position' }
   if (a.last_signal === 'SELL') return { cls: 'warn', text: 'Exited' }
   return a.in_window ? { cls: 'info', text: 'Setup active' } : { cls: 'off', text: 'No setup' }
+}
+
+export const supertrendBadge = (st: SupertrendSignal) => {
+  if (st.direction < 0) {
+    if (st.cushion_pct != null && st.cushion_pct < 1.5) {
+      return { cls: 'warn', text: 'Near Support' }
+    }
+    return { cls: 'ok', text: 'Bullish' }
+  }
+  if (st.last_signal === 'SELL') {
+    return { cls: 'bad', text: 'SELL CALL' }
+  }
+  return { cls: 'off', text: 'Bearish' }
 }
 
 export const since = (entry: number | null | undefined, ltp: number): { pct: number; abs: number } | null =>
@@ -43,6 +59,7 @@ export const readSignals = (sig: StockSignals | undefined, ltp: number): Reading
   const leans: Lean[] = []
   if (sig?.momentum) leans.push(momentumLean(sig.momentum))
   if (sig?.ath) leans.push(athLean(sig.ath))
+  if (sig?.supertrend) leans.push(supertrendLean(sig.supertrend))
   const bull = leans.filter((l) => l === 'bull').length
   const bear = leans.filter((l) => l === 'bear').length
   return {
@@ -63,7 +80,7 @@ export interface Fmt {
   perShare: (v: number) => string
 }
 
-const na = (sig: StockSignals | undefined, key: 'momentum' | 'ath') => (
+const na = (sig: StockSignals | undefined, key: 'momentum' | 'ath' | 'supertrend') => (
   <span className="sg-na">{sig?.errors?.[key] ?? sig?.errors?.all ?? DASH}</span>
 )
 
@@ -114,6 +131,39 @@ export const AthCell: React.FC<{ sig?: StockSignals; reading: Reading; fmt: Fmt 
         </span>
       ) : (
         <span className="sg-line dim">{a.headline}</span>
+      )}
+    </div>
+  )
+}
+
+export const SupertrendCell: React.FC<{ sig?: StockSignals; fmt: Fmt; symbol?: string }> = ({ sig, fmt, symbol }) => {
+  const st = sig?.supertrend
+  if (!st) return na(sig, 'supertrend')
+  const badge = supertrendBadge(st)
+  const sym = symbol || (sig?.instrument ? sig.instrument.split(':').pop()?.replace(/-(BE|BZ|BL|IL)$/, '') : '')
+  return (
+    <div className="sg-cell" title={st.detail || st.headline}>
+      <span className={`badge ${badge.cls}`}>{badge.text}</span>
+      {st.supertrend > 0 && (
+        <span className="sg-line num">
+          Stop {fmt.price(st.supertrend)}
+          {st.cushion_pct != null ? ` (${st.cushion_pct > 0 ? '+' : ''}${st.cushion_pct.toFixed(1)}%)` : ''}
+        </span>
+      )}
+      {st.adx != null && (
+        <span className="sg-line dim num">
+          ADX {st.adx.toFixed(1)}
+          {st.volume_ratio != null ? ` · Vol ${st.volume_ratio.toFixed(1)}x` : ''}
+        </span>
+      )}
+      {sym && (
+        <Link
+          to={`/strategy?tab=supertrend&symbol=${sym}`}
+          className="link text-[11px] mt-0.5"
+          style={{ textDecoration: 'none' }}
+        >
+          View chart →
+        </Link>
       )}
     </div>
   )

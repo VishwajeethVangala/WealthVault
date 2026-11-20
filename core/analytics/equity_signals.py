@@ -14,7 +14,8 @@ from typing import Any, Dict, List, Optional
 
 from core.analytics import analyze_momentum
 from core.analytics.ath_breakout_strategy import run_ath_breakout_strategy
-from core.analytics.strategy_calls import ath_buy_call, exit_calls
+from core.analytics.supertrend_strategy import run_supertrend_strategy
+from core.analytics.strategy_calls import ath_buy_call, exit_calls, supertrend_buy_call
 from core.market_data.candle_store import get_india_candles
 from core.market_data.groww_market import get_user_groww_client
 from core.market_data.indmoney_market import get_user_indmoney_client
@@ -28,7 +29,7 @@ from core.market_data.history import (
     get_history_service,
     normalize_symbol,
 )
-from core.models import AthBreakoutParams
+from core.models import AthBreakoutParams, SupertrendParams
 from storage.tables.repositories import SignalCacheRepository
 
 logger = logging.getLogger("wealthvault.analytics.equity_signals")
@@ -104,6 +105,37 @@ def _ath_section(instrument_id: str, instrument: Dict[str, Any], candles, drop_p
     }
 
 
+def _supertrend_section(instrument_id: str, instrument: Dict[str, Any], candles, drop_partial) -> Dict[str, Any]:
+    use, partial = drop_partial(candles)
+    params = SupertrendParams()
+    r = run_supertrend_strategy(
+        instrument=instrument_id,
+        candles=use,
+        params=params,
+        name=instrument.get("name"),
+        partial_bar_excluded=partial,
+    )
+    s = r.status
+    cushion_pct = round(((s.close / s.supertrend - 1.0) * 100.0), 2) if (s.supertrend and s.direction < 0) else None
+    return {
+        "state": s.state,
+        "headline": s.headline,
+        "detail": s.detail,
+        "last_signal": s.last_signal,
+        "direction": s.direction,
+        "supertrend": s.supertrend,
+        "cushion_pct": cushion_pct,
+        "adx": s.adx,
+        "volume_ratio": s.volume_ratio,
+        "entry_date": s.entry_date,
+        "entry_price": s.entry_price,
+        "bars_held": s.bars_held,
+        "as_of": r.as_of,
+        "call": supertrend_buy_call(r),
+        "exits": exit_calls(r),
+    }
+
+
 def build_signal_row(
     instrument_id: str,
     instrument: Dict[str, Any],
@@ -123,6 +155,7 @@ def build_signal_row(
         "last_sessions": [str(c["date"])[:10] for c in drop_partial(candles)[0][-SESSIONS_KEPT:]],
         "momentum": None,
         "ath": None,
+        "supertrend": None,
         "errors": {},
     }
     if extra:
@@ -130,6 +163,7 @@ def build_signal_row(
     for key, build in (
         ("momentum", lambda: _momentum_section(instrument_id, instrument, candles, benchmark, benchmark_name)),
         ("ath", lambda: _ath_section(instrument_id, instrument, candles, drop_partial)),
+        ("supertrend", lambda: _supertrend_section(instrument_id, instrument, candles, drop_partial)),
     ):
         try:
             row[key] = build()

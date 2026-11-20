@@ -3,7 +3,7 @@ import { DayCoverageNote } from '../components/DayCoverageNote'
 import { SummaryPin } from '../components/SummaryPin'
 import { dayCoverage } from '../utils/dayCoverage'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ChevronRight, Download, Search, X } from 'lucide-react'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useMoney } from '../utils/useMoney'
@@ -257,11 +257,26 @@ export const HoldingsTable: React.FC = () => {
                 </span>
                 {(() => {
                   const t = trendOf(i)
-                  return t ? (
-                    <span className={`badge trend ${trendBadge(t.bucket)}`} title={`Momentum verdict${t.asOf ? ` as of ${new Date(t.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`}>
-                      {t.verdict}
-                    </span>
-                  ) : null
+                  return (
+                    <>
+                      {t && t.verdict ? (
+                        <span className={`badge trend ${trendBadge(t.bucket)}`} title={`Momentum verdict${t.asOf ? ` as of ${new Date(t.asOf).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`}>
+                          {t.verdict}
+                        </span>
+                      ) : null}
+                      {t?.supertrend && (
+                        <Link
+                          to={`/strategy?tab=supertrend&symbol=${t.supertrend.symbolCode}`}
+                          className={`badge ${t.supertrend.badgeCls}`}
+                          style={{ textDecoration: 'none' }}
+                          title={`SuperTrend: ${t.supertrend.label} · Support/Stop ₹${t.supertrend.supertrend.toLocaleString('en-IN', { maximumFractionDigits: 2 })}${t.supertrend.cushion_pct != null ? ` (${t.supertrend.cushion_pct > 0 ? '+' : ''}${t.supertrend.cushion_pct.toFixed(1)}% cushion)` : ''} · Click to view chart`}
+                        >
+                          <i />
+                          {t.supertrend.label}
+                        </Link>
+                      )}
+                    </>
+                  )
                 })()}
               </div>
             </div>
@@ -332,6 +347,24 @@ export const HoldingsTable: React.FC = () => {
               <span>
                 Price <b>{i.freshness === 'live' ? 'Live' : i.freshness === 'cached' ? 'Stored (not live)' : 'Partly live'}</b>
               </span>
+              {(() => {
+                const st = trendOf(i)?.supertrend
+                if (!st) return null
+                return (
+                  <span>
+                    SuperTrend Stop <b className="num">{fmt.price(st.supertrend)}</b>
+                    {st.cushion_pct != null && (
+                      <span className={`num ${st.cushion_pct < 1.5 ? 'neg' : 'pos'}`} style={{ marginLeft: 6 }}>
+                        ({st.cushion_pct > 0 ? '+' : ''}{st.cushion_pct.toFixed(1)}% cushion)
+                      </span>
+                    )}
+                    {' · '}
+                    <Link to={`/strategy?tab=supertrend&symbol=${st.symbolCode}`} className="link" style={{ fontSize: 12 }}>
+                      Inspect chart →
+                    </Link>
+                  </span>
+                )
+              })()}
             </div>
           </div>
         )}

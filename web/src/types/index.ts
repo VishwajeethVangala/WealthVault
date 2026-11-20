@@ -487,6 +487,56 @@ export interface AthSignal {
   exits?: ExitCall[]
 }
 
+export interface SupertrendCall {
+  signal_date: string
+  entry_date: string
+  entry_price: number
+  close: number
+  supertrend: number
+  cushion_pct: number | null
+  direction: number
+  adx: number | null
+  volume: number
+  queued?: boolean
+}
+
+export interface SupertrendSignal {
+  state: 'IN_POSITION' | 'FLAT'
+  headline: string
+  detail: string
+  last_signal: 'BUY' | 'SELL' | null
+  direction: number
+  supertrend: number
+  cushion_pct: number | null
+  adx: number | null
+  volume_ratio: number | null
+  entry_date: string | null
+  entry_price: number | null
+  bars_held: number | null
+  as_of: string
+  call?: SupertrendCall | null
+  exits?: ExitCall[]
+}
+
+export interface NotificationCardItem {
+  id: string
+  type: 'sell_call' | 'buy_signal' | 'warning' | 'info'
+  strategy: 'SuperTrend' | 'ATH Breakout' | 'System'
+  symbol: string
+  instrument: string
+  severity: 'danger' | 'warning' | 'success' | 'info'
+  title: string
+  subtitle: string
+  detail: string
+  url: string
+  timestamp: string
+}
+
+export interface NotificationsFeedResponse {
+  items: NotificationCardItem[]
+  count: number
+}
+
 export interface StockSignals {
   instrument: string
   name?: string | null
@@ -499,6 +549,7 @@ export interface StockSignals {
   live_date?: string
   momentum: MomentumSignal | null
   ath: AthSignal | null
+  supertrend?: SupertrendSignal | null
   errors: Record<string, string>
   computed_at?: string
   currency?: string

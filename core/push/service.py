@@ -20,7 +20,7 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Set
 from zoneinfo import ZoneInfo
 
 from core.push import fcm
-from core.push.calls import ath_events, call_message, event_key, reversed_message
+from core.push.calls import ath_events, call_message, event_key, reversed_message, supertrend_events
 from storage.tables.repositories import (
     DeviceTokenRepository,
     NotificationPrefsRepository,
@@ -115,11 +115,11 @@ async def notify_calls(
     calls that no longer stand. Returns counts for the log."""
     counts = {"holdings": 0, "stage2": 0, "reversed": 0}
     stage2 = {k: rows[k] for k in stage2_keys if k in rows}
-    stage2_events = ath_events(stage2, today)
+    stage2_events = ath_events(stage2, today) + supertrend_events(stage2, today)
     for owner in await ports.devices.owners():
         prefs = await ports.prefs.get(owner)
         mine = held_keys.get(owner, set())
-        held_events = ath_events({k: rows[k] for k in mine if k in rows}, today)
+        held_events = ath_events({k: rows[k] for k in mine if k in rows}, today) + supertrend_events({k: rows[k] for k in mine if k in rows}, today)
         plans = []
         if prefs.get("holdings_ath", True):
             plans.append(("h", "holdings_ath", held_events))

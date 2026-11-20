@@ -55,6 +55,44 @@ def ath_events(rows: Dict[str, Dict[str, Any]], today: str) -> List[Dict[str, An
     return sorted(out, key=lambda e: (e["side"] != "buy", e["name"]))
 
 
+def supertrend_events(rows: Dict[str, Dict[str, Any]], today: str) -> List[Dict[str, Any]]:
+    """Entry and exit calls that fired today for Supertrend, from signal rows keyed by instrument id."""
+    out: List[Dict[str, Any]] = []
+    for sid, row in rows.items():
+        st = row.get("supertrend") or {}
+        name = display_name(sid, row)
+        call = st.get("call") or {}
+        if st.get("state") == "IN_POSITION" and call.get("entry_date") == today and st.get("entry_date") == today:
+            out.append(
+                {
+                    "sid": sid,
+                    "name": name,
+                    "strategy": "supertrend",
+                    "side": "buy",
+                    "date": today,
+                    "price": call.get("close"),
+                    "supertrend": call.get("supertrend"),
+                    "adx": call.get("adx"),
+                }
+            )
+        for e in st.get("exits") or []:
+            if e.get("exit_date") == today:
+                out.append(
+                    {
+                        "sid": sid,
+                        "name": name,
+                        "strategy": "supertrend",
+                        "side": "sell",
+                        "date": today,
+                        "price": e.get("exit_price"),
+                        "entry_price": e.get("entry_price"),
+                        "pnl_pct": e.get("pnl_pct"),
+                    }
+                )
+                break
+    return sorted(out, key=lambda e: (e["side"] != "buy", e["name"]))
+
+
 def event_key(kind: str, e: Dict[str, Any]) -> str:
     """The unique key of a call for one person: kind ('h' holdings, 's' Stage 2), day, side and stock."""
     return f"{kind}|{e['date']}|{e['side']}|{e['sid']}"
@@ -82,12 +120,24 @@ def _facts(e: Dict[str, Any]) -> str:
     """The numbers behind one call, from what the strategy row carries (empty when it carries none)."""
     if e.get("price") is None:
         return ""
+    is_st = e.get("strategy") == "supertrend"
     if e["side"] == "buy":
         text = f"price {_px(e['price'])}"
+        if is_st:
+            if e.get("supertrend") is not None:
+                text += f", green Supertrend support at {_px(e['supertrend'])}"
+            if e.get("adx") is not None:
+                text += f", ADX {float(e['adx']):.1f}"
+            return text
         if e.get("ath") is not None and e.get("above_ath_pct") is not None:
             text += f", {float(e['above_ath_pct']):.2f}% above its prior ATH {_px(e['ath'])}"
         if e.get("above_dma_pct") is not None:
             text += f", {float(e['above_dma_pct']):.1f}% above the 200-DMA"
+        return text
+    if is_st:
+        text = f"broke below Supertrend support at {_px(e['price'])}"
+        if e.get("entry_price") is not None and e.get("pnl_pct") is not None:
+            text += f"; the trade from {_px(e['entry_price'])} is {_signed(e['pnl_pct'])}"
         return text
     text = f"closed under the 200-DMA at {_px(e['price'])}"
     if e.get("entry_price") is not None and e.get("pnl_pct") is not None:

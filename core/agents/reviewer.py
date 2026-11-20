@@ -184,8 +184,8 @@ class FiduciaryReviewerAgent:
         if action_type == ProposalActionType.CUT_LOSS:
             if dossier.causality == MoveCausality.SYSTEMIC_MARKET_BETA and dossier.forensic_risk_score < 40:
                 # Stock fell with broader market, but fundamentals are healthy
-                roce_val = dossier.fundamental_vitals.roce_pct or 0.0
-                if roce_val > 15.0 and proposal.revision_round == 0:
+                roce_val = dossier.fundamental_vitals.roce_pct
+                if roce_val is not None and roce_val > 15.0 and proposal.revision_round == 0:
                     rule_checks.append(
                         PolicyCheckResult(
                             rule_id="RULE_MARKET_CAUSALITY",
@@ -226,6 +226,20 @@ class FiduciaryReviewerAgent:
                     observation=f"Profit protection trim justified: {display_name} exhibits distribution, bearish structure, or headline threat. Mandates partial profit realization."
                 )
             )
+
+        # Policy Rule 2B: Balance Sheet & ROCE Data Integrity
+        if not getattr(dossier, "is_etf", False):
+            if dossier.fundamental_vitals.roce_pct is None:
+                rule_checks.append(
+                    PolicyCheckResult(
+                        rule_id="RULE_FUNDAMENTAL_INTEGRITY",
+                        rule_name="Financial Vitals & ROCE Verification",
+                        status=PolicyCheckStatus.WARNING,
+                        threshold_checked="Verified ROCE & Balance Sheet Data",
+                        observation=f"Data Gap Alert: ROCE is unpopulated for {display_name}. Fiduciary review requires confirmed capital efficiency before definitive clearance.",
+                    )
+                )
+                revision_notes.append(f"Incomplete balance sheet metrics for {display_name}: verify ROCE on Screener.in before final clearance.")
 
         # Policy Rule 3: Exchange Circuit & Liquidity Sieve
         if is_circuit_stock:

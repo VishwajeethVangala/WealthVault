@@ -42,6 +42,29 @@ def ath_buy_call(result: Any, window_bars: int) -> Optional[Dict[str, Any]]:
     }
 
 
+def supertrend_buy_call(result: Any) -> Optional[Dict[str, Any]]:
+    """Latest Supertrend buy call: entered long when Supertrend is green and filters passed."""
+    series = result.series
+    idx = max((i for i, b in enumerate(series) if b.buy), default=None)
+    if idx is None or idx == 0:
+        return None
+    bar = series[idx]
+    trade = next((t for t in result.trades if t.entry_date == bar.date), None)
+    cushion = round(((bar.close / bar.supertrend - 1.0) * 100.0), 2) if bar.supertrend else None
+    return {
+        "signal_date": bar.date,
+        "entry_date": bar.date,
+        "entry_price": trade.entry_price if trade else bar.close,
+        "close": bar.close,
+        "supertrend": bar.supertrend,
+        "cushion_pct": cushion,
+        "direction": bar.direction,
+        "adx": bar.adx,
+        "volume": bar.volume,
+        "queued": False,
+    }
+
+
 def exit_calls(result: Any, keep: int = 4) -> List[Dict[str, Any]]:
     """The most recent closed trades, newest first: where the strategy said SELL and at what price.
 

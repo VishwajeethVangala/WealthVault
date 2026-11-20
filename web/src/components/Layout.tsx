@@ -12,6 +12,7 @@ import { usePortfolio } from '../context/PortfolioContext'
 import { useTheme } from '../context/ThemeContext'
 import { usePrivacy } from '../context/PrivacyContext'
 import { buildInstruments } from './holdings/holdingsModel'
+import { NotificationBell } from './notifications/NotificationBell'
 import type { BrokerSessionInfo } from '../types'
 
 interface LayoutProps {
@@ -191,6 +192,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
             <RefreshCw size={16} strokeWidth={1.75} className={isSyncing ? 'animate-spin' : ''} />
             {isSyncing ? syncProgress || 'Syncing…' : 'Sync all'}
           </button>
+
+          <NotificationBell />
 
           {user && (
             <>

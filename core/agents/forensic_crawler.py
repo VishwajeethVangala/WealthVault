@@ -469,6 +469,138 @@ async def fetch_news_catalysts(
         return results
 
 
+def _parse_screener_soup(soup: BeautifulSoup, vitals: FundamentalVitals) -> bool:
+    """Extract all available fundamental metrics from a parsed Screener HTML page.
+    Returns True if at least one core numerical metric was populated."""
+    found_any = False
+
+    # 1. Top Ratios (Market Cap, P/E, ROCE, ROE, Book Value, High/Low, Dividend Yield, Face Value)
+    top_ratios = soup.find("ul", id="top-ratios")
+    if top_ratios:
+        for li in top_ratios.find_all("li"):
+            name_elem = li.find("span", class_="name")
+            val_elem = li.find("span", class_="number")
+            if not name_elem or not val_elem:
+                continue
+            name = name_elem.text.strip().lower()
+            val = val_elem.text.strip()
+            parsed_val = _parse_float(val)
+            if parsed_val is None:
+                continue
+            found_any = True
+            if "market cap" in name:
+                vitals.market_cap_cr = parsed_val
+            elif "stock p/e" in name or "pe" in name:
+                vitals.pe_ratio = parsed_val
+            elif "book value" in name:
+                vitals.book_value = parsed_val
+            elif "roce" in name:
+                vitals.roce_pct = parsed_val
+            elif "roe" in name:
+                vitals.roe_pct = parsed_val
+
+    # 2. Annual Ratios fallback for ROCE & ROE (from <section id="ratios">)
+    if vitals.roce_pct is None or vitals.roe_pct is None:
+        ratios_sec = soup.find("section", id="ratios")
+        if ratios_sec:
+            for tr in ratios_sec.find_all("tr"):
+                tds = [td.text.strip() for td in tr.find_all("td")]
+                if not tds:
+                    continue
+                row_name = tds[0].lower()
+                if "roce" in row_name and vitals.roce_pct is None:
+                    parsed_roce = _parse_float(tds[-1])
+                    if parsed_roce is not None:
+                        vitals.roce_pct = parsed_roce
+                        found_any = True
+                elif "roe" in row_name and vitals.roe_pct is None:
+                    parsed_roe = _parse_float(tds[-1])
+                    if parsed_roe is not None:
+                        vitals.roe_pct = parsed_roe
+                        found_any = True
+
+    # 3. Pros & Cons
+    pros_div = soup.find("div", class_="pros")
+    if pros_div:
+        vitals.pros = [li.text.strip() for li in pros_div.find_all("li")][:3]
+    cons_div = soup.find("div", class_="cons")
+    if cons_div:
+        vitals.cons = [li.text.strip() for li in cons_div.find_all("li")][:3]
+
+    # 4. Quarterly & P&L Results (Sales growth YoY, Net Profit)
+    quarters_sec = soup.find("section", id="quarters")
+    if quarters_sec:
+        table = quarters_sec.find("table", class_="data-table")
+        if table:
+            for tr in table.find_all("tr"):
+                tds = [td.text.strip() for td in tr.find_all("td")]
+                if not tds:
+                    continue
+                row_name = tds[0].lower()
+                if "sales" in row_name and vitals.sales_growth_yoy_pct is None:
+                    nums = [_parse_float(td) for td in tds[1:]]
+                    valid = [n for n in nums if n is not None]
+                    if len(valid) >= 5 and valid[-5] > 0:
+                        vitals.sales_growth_yoy_pct = round(((valid[-1] - valid[-5]) / valid[-5]) * 100.0, 1)
+                    elif "yoy sales growth" in row_name:
+                        vitals.sales_growth_yoy_pct = _parse_float(tds[-1])
+                elif "net profit" in row_name and vitals.net_profit_cr is None:
+                    vitals.net_profit_cr = _parse_float(tds[-1])
+
+    # 5. Shareholding (Promoter holding & Institutional trend)
+    sh_sec = soup.find("section", id="shareholding")
+    if sh_sec:
+        table = sh_sec.find("table", class_="data-table")
+        if table:
+            for tr in table.find_all("tr"):
+                tds = [td.text.strip() for td in tr.find_all("td")]
+                if not tds:
+                    continue
+                row_name = tds[0].lower()
+                if "promoters" in row_name and vitals.promoter_holding_pct is None:
+                    vitals.promoter_holding_pct = _parse_float(tds[-1])
+                elif "fii" in row_name or "dii" in row_name:
+                    if len(tds) >= 3 and not vitals.fii_dii_trend:
+                        curr = _parse_float(tds[-1]) or 0.0
+                        prior = _parse_float(tds[-2]) or 0.0
+                        if curr > prior + 0.3:
+                            vitals.fii_dii_trend = "ACCUMULATING"
+                        elif curr < prior - 0.3:
+                            vitals.fii_dii_trend = "DUMPING"
+
+    # 6. Balance Sheet: Debt to Equity = Borrowings / (Equity Capital + Reserves)
+    bs_sec = soup.find("section", id="balance-sheet")
+    if bs_sec:
+        eq_cap = 0.0
+        reserves = 0.0
+        borrowings = 0.0
+        has_bs_data = False
+        for tr in bs_sec.find_all("tr"):
+            tds = [td.text.strip() for td in tr.find_all("td")]
+            if not tds:
+                continue
+            row_name = tds[0].lower()
+            val = _parse_float(tds[-1]) or 0.0
+            if "equity capital" in row_name:
+                eq_cap = val
+                has_bs_data = True
+            elif "reserves" in row_name:
+                reserves = val
+                has_bs_data = True
+            elif "borrowings" in row_name:
+                borrowings = val
+                has_bs_data = True
+
+        if has_bs_data:
+            net_worth = eq_cap + reserves
+            if net_worth > 0:
+                vitals.debt_to_equity = round(borrowings / net_worth, 2)
+            elif borrowings == 0:
+                vitals.debt_to_equity = 0.0
+
+    return found_any
+
+
 async def fetch_fundamental_vitals(
     symbol: str,
     company_name: Optional[str] = None
@@ -495,7 +627,10 @@ async def fetch_fundamental_vitals(
         existing_dos = swarm.get_dossier(clean_sym)
         if existing_dos and existing_dos.funda_report and existing_dos.funda_report.status == "COMPLETED":
             fr = existing_dos.funda_report
-            if fr.roce_pct is not None or fr.pe_ratio is not None or fr.debt_to_equity is not None:
+            # Never accept an unverified report where ROCE is None (unless ETF)
+            if not existing_dos.is_etf and fr.roce_pct is None:
+                pass  # Force fresh crawl to obtain true ROCE
+            elif fr.roce_pct is not None or fr.pe_ratio is not None or fr.debt_to_equity is not None:
                 v = FundamentalVitals(
                     market_cap_cr=fr.market_cap_cr,
                     pe_ratio=fr.pe_ratio,
@@ -524,184 +659,77 @@ async def fetch_fundamental_vitals(
             if screener_available:
                 try:
                     with _SCREENER_LOCK:
+                        headers = {
+                            "User-Agent": USER_AGENT,
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                            "Accept-Language": "en-US,en;q=0.9",
+                            "Referer": "https://www.screener.in/",
+                        }
                         # Pacing: Enforce at least 1.5 seconds between Screener requests to prevent 429
                         elapsed = time.monotonic() - _LAST_SCREENER_REQ_TIME
                         if elapsed < 1.5:
                             time.sleep(1.5 - elapsed)
                         _LAST_SCREENER_REQ_TIME = time.monotonic()
 
-                        html = None
-                        # 1. Try direct company URL first (e.g. https://www.screener.in/company/TCS/)
-                        # Avoids the search API call entirely for standard NSE symbols
-                        direct_url = f"https://www.screener.in/company/{clean_sym}/consolidated/"
-                        try:
-                            req_direct = urllib.request.Request(direct_url, headers={"User-Agent": USER_AGENT})
-                            with urllib.request.urlopen(req_direct, timeout=5) as resp_d:
-                                html = resp_d.read().decode("utf-8", errors="ignore")
-                        except urllib.error.HTTPError as h_err:
-                            if h_err.code == 429:
-                                _SCREENER_COOLDOWN_UNTIL = time.monotonic() + 180.0
-                                logger.warning("Screener rate limit (429) hit for %s. Entering 3-min cooldown.", clean_sym)
-                                raise
-                            # If 404 on consolidated, try standalone
-                            try:
-                                req_direct2 = urllib.request.Request(f"https://www.screener.in/company/{clean_sym}/", headers={"User-Agent": USER_AGENT})
-                                with urllib.request.urlopen(req_direct2, timeout=5) as resp_d2:
-                                    html = resp_d2.read().decode("utf-8", errors="ignore")
-                            except urllib.error.HTTPError as h_err2:
-                                if h_err2.code == 429:
-                                    _SCREENER_COOLDOWN_UNTIL = time.monotonic() + 180.0
-                                    logger.warning("Screener rate limit (429) hit for %s. Entering 3-min cooldown.", clean_sym)
-                                    raise
-                                html = None
-                        except Exception:
-                            html = None
+                        # Priority list of company URLs: consolidated first, then standalone
+                        candidate_urls = [
+                            f"https://www.screener.in/company/{clean_sym}/consolidated/",
+                            f"https://www.screener.in/company/{clean_sym}/",
+                        ]
 
-                        # 2. Fallback to Screener search API if direct lookup didn't yield HTML
-                        if not html:
-                            matches = []
-                            for q_candidate in [search_q, clean_sym]:
-                                if not q_candidate:
-                                    continue
-                                search_url = f"https://www.screener.in/api/company/search/?q={urllib.parse.quote(q_candidate)}"
-                                req = urllib.request.Request(search_url, headers={"User-Agent": USER_AGENT})
-                                import json
-                                try:
-                                    with urllib.request.urlopen(req, timeout=5) as resp:
-                                        candidates = json.loads(resp.read().decode("utf-8", errors="ignore"))
-                                    if candidates and isinstance(candidates, list):
-                                        matches = candidates
+                        parsed_screener = False
+                        for u in candidate_urls:
+                            try:
+                                req = urllib.request.Request(u, headers=headers)
+                                with urllib.request.urlopen(req, timeout=8) as resp:
+                                    h = resp.read().decode("utf-8", errors="ignore")
+                                    s = BeautifulSoup(h, "html.parser")
+                                    if _parse_screener_soup(s, vitals):
+                                        parsed_screener = True
                                         break
+                            except urllib.error.HTTPError as h_err:
+                                if h_err.code == 429:
+                                    _SCREENER_COOLDOWN_UNTIL = time.monotonic() + 20.0
+                                    logger.warning("Screener rate limit (429) hit for %s. Backing off 20s.", clean_sym)
+                                    break
+                                continue
+                            except Exception:
+                                continue
+
+                        # Fallback to search API if direct URLs yielded no vitals or ROCE is still missing
+                        if (not parsed_screener or vitals.roce_pct is None) and (now_m >= _SCREENER_COOLDOWN_UNTIL):
+                            search_candidates = [clean_sym]
+                            if search_q and search_q != clean_sym:
+                                search_candidates.append(search_q)
+                            for q_cand in search_candidates:
+                                try:
+                                    search_url = f"https://www.screener.in/api/company/search/?q={urllib.parse.quote(q_cand)}"
+                                    req_s = urllib.request.Request(search_url, headers=headers)
+                                    import json
+                                    with urllib.request.urlopen(req_s, timeout=8) as resp_s:
+                                        matches = json.loads(resp_s.read().decode("utf-8", errors="ignore"))
+                                        if matches and isinstance(matches, list):
+                                            c_path = matches[0].get("url", "")
+                                            # Try both consolidated and standalone search target path
+                                            for p_cand in [f"https://www.screener.in{c_path}", f"https://www.screener.in{c_path}".replace("/consolidated/", "/")]:
+                                                try:
+                                                    req_c = urllib.request.Request(p_cand, headers=headers)
+                                                    with urllib.request.urlopen(req_c, timeout=8) as resp_c:
+                                                        h_c = resp_c.read().decode("utf-8", errors="ignore")
+                                                        s_c = BeautifulSoup(h_c, "html.parser")
+                                                        if _parse_screener_soup(s_c, vitals):
+                                                            parsed_screener = True
+                                                            break
+                                                except Exception:
+                                                    continue
+                                            if parsed_screener and vitals.roce_pct is not None:
+                                                break
                                 except urllib.error.HTTPError as h_err:
                                     if h_err.code == 429:
-                                        _SCREENER_COOLDOWN_UNTIL = time.monotonic() + 180.0
-                                        logger.warning("Screener search API rate limit (429) hit. Entering 3-min cooldown.")
-                                        raise
+                                        _SCREENER_COOLDOWN_UNTIL = time.monotonic() + 20.0
+                                        break
                                 except Exception:
                                     continue
-
-                            if matches and isinstance(matches, list):
-                                company_path = matches[0].get("url")
-                                if company_path:
-                                    page_url = f"https://www.screener.in{company_path}"
-                                    req_page = urllib.request.Request(page_url, headers={"User-Agent": USER_AGENT})
-                                    with urllib.request.urlopen(req_page, timeout=6) as resp_page:
-                                        html = resp_page.read().decode("utf-8", errors="ignore")
-
-                        if html:
-                            soup = BeautifulSoup(html, "html.parser")
-
-                            # Top Ratios (Market Cap, P/E, ROCE, ROE, Book Value, High/Low)
-                            top_ratios = soup.find("ul", id="top-ratios")
-                            if top_ratios:
-                                for li in top_ratios.find_all("li"):
-                                    name_elem = li.find("span", class_="name")
-                                    val_elem = li.find("span", class_="number")
-                                    if not name_elem or not val_elem:
-                                        continue
-                                    name = name_elem.text.strip().lower()
-                                    val = val_elem.text.strip()
-                                    if "market cap" in name:
-                                        vitals.market_cap_cr = _parse_float(val)
-                                    elif "stock p/e" in name or "pe" in name:
-                                        vitals.pe_ratio = _parse_float(val)
-                                    elif "book value" in name:
-                                        vitals.book_value = _parse_float(val)
-                                    elif "roce" in name:
-                                        vitals.roce_pct = _parse_float(val)
-                                    elif "roe" in name:
-                                        vitals.roe_pct = _parse_float(val)
-
-                            # Pros & Cons
-                            pros_div = soup.find("div", class_="pros")
-                            if pros_div:
-                                vitals.pros = [li.text.strip() for li in pros_div.find_all("li")][:3]
-                            cons_div = soup.find("div", class_="cons")
-                            if cons_div:
-                                vitals.cons = [li.text.strip() for li in cons_div.find_all("li")][:3]
-
-                            # Quarterly Results (Sales growth YoY, Net Profit)
-                            quarters_sec = soup.find("section", id="quarters")
-                            if quarters_sec:
-                                table = quarters_sec.find("table", class_="data-table")
-                                if table:
-                                    for tr in table.find_all("tr"):
-                                        tds = [td.text.strip() for td in tr.find_all("td")]
-                                        if not tds:
-                                            continue
-                                        row_name = tds[0].lower()
-                                        if "sales" in row_name:
-                                            nums = [_parse_float(td) for td in tds[1:]]
-                                            valid = [n for n in nums if n is not None]
-                                            if len(valid) >= 5 and valid[-5] > 0:
-                                                vitals.sales_growth_yoy_pct = round(((valid[-1] - valid[-5]) / valid[-5]) * 100.0, 1)
-                                            elif "yoy sales growth" in row_name:
-                                                vitals.sales_growth_yoy_pct = _parse_float(tds[-1])
-                                        elif "net profit" in row_name:
-                                            vitals.net_profit_cr = _parse_float(tds[-1])
-
-                            # Shareholding (Promoter holding & Institutional trend)
-                            sh_sec = soup.find("section", id="shareholding")
-                            if sh_sec:
-                                table = sh_sec.find("table", class_="data-table")
-                                if table:
-                                    for tr in table.find_all("tr"):
-                                        tds = [td.text.strip() for td in tr.find_all("td")]
-                                        if not tds:
-                                            continue
-                                        row_name = tds[0].lower()
-                                        if "promoters" in row_name:
-                                            vitals.promoter_holding_pct = _parse_float(tds[-1])
-                                        elif "fii" in row_name or "dii" in row_name:
-                                            if len(tds) >= 3:
-                                                curr = _parse_float(tds[-1]) or 0.0
-                                                prior = _parse_float(tds[-2]) or 0.0
-                                                if curr > prior + 0.3:
-                                                    vitals.fii_dii_trend = "ACCUMULATING"
-                                                elif curr < prior - 0.3:
-                                                    vitals.fii_dii_trend = "DUMPING"
-
-                            # Balance Sheet: Debt to Equity = Borrowings / (Equity Capital + Reserves)
-                            bs_sec = soup.find("section", id="balance-sheet")
-                            if bs_sec:
-                                eq_cap = 0.0
-                                reserves = 0.0
-                                borrowings = 0.0
-                                has_bs_data = False
-                                for tr in bs_sec.find_all("tr"):
-                                    tds = [td.text.strip() for td in tr.find_all("td")]
-                                    if not tds:
-                                        continue
-                                    row_name = tds[0].lower()
-                                    val = _parse_float(tds[-1]) or 0.0
-                                    if "equity capital" in row_name:
-                                        eq_cap = val
-                                        has_bs_data = True
-                                    elif "reserves" in row_name:
-                                        reserves = val
-                                        has_bs_data = True
-                                    elif "borrowings" in row_name:
-                                        borrowings = val
-                                        has_bs_data = True
-
-                                if has_bs_data:
-                                    net_worth = eq_cap + reserves
-                                    if net_worth > 0:
-                                        vitals.debt_to_equity = round(borrowings / net_worth, 2)
-                                    elif borrowings == 0:
-                                        vitals.debt_to_equity = 0.0
-
-                            # Fallback: Parse ROCE from section id="ratios" if missing from top-ratios
-                            if vitals.roce_pct is None:
-                                ratios_sec = soup.find("section", id="ratios")
-                                if ratios_sec:
-                                    for tr in ratios_sec.find_all("tr"):
-                                        tds = [td.text.strip() for td in tr.find_all("td")]
-                                        if tds and "roce" in tds[0].lower():
-                                            val = _parse_float(tds[-1])
-                                            if val is not None:
-                                                vitals.roce_pct = val
-                                                break
                 except Exception as exc:
                     logger.debug("Screener crawl note for %s (%s): %s", clean_sym, search_q, exc)
 
@@ -711,7 +739,7 @@ async def fetch_fundamental_vitals(
                     import yfinance as yf
                     for ticker_cand in [f"{clean_sym}.NS", f"{clean_sym}.BO"]:
                         t = yf.Ticker(ticker_cand)
-                        inf = t.info
+                        inf = t.info or {}
                         if inf and (inf.get("marketCap") or inf.get("regularMarketPrice") or inf.get("currentPrice")):
                             if vitals.market_cap_cr is None and inf.get("marketCap"):
                                 vitals.market_cap_cr = round(float(inf["marketCap"]) / 1e7, 1)
@@ -726,13 +754,33 @@ async def fetch_fundamental_vitals(
                                 vitals.debt_to_equity = round(de_val / 100.0, 2) if de_val > 5.0 else round(de_val, 2)
                             if vitals.roe_pct is None and inf.get("returnOnEquity") is not None:
                                 vitals.roe_pct = round(float(inf["returnOnEquity"]) * 100.0, 1)
-                            # Approximate ROCE via Return on Assets / Equity / Margins if not parsed from Screener
+
+                            # Precise ROCE calculation from statements: EBIT / (Total Assets - Current Liabilities)
+                            if vitals.roce_pct is None:
+                                ebit = None
+                                try:
+                                    fin = t.financials
+                                    if fin is not None and not fin.empty:
+                                        if "EBIT" in fin.index:
+                                            ebit = float(fin.loc["EBIT"].iloc[0])
+                                        elif "Operating Income" in fin.index:
+                                            ebit = float(fin.loc["Operating Income"].iloc[0])
+                                    bs = t.balance_sheet
+                                    if ebit is not None and bs is not None and not bs.empty:
+                                        tot_assets = float(bs.loc["Total Assets"].iloc[0]) if "Total Assets" in bs.index else None
+                                        curr_liab = float(bs.loc["Current Liabilities"].iloc[0]) if "Current Liabilities" in bs.index else 0.0
+                                        if tot_assets and (tot_assets - curr_liab) > 0:
+                                            vitals.roce_pct = round((ebit / (tot_assets - curr_liab)) * 100.0, 1)
+                                except Exception:
+                                    pass
+
+                            # Approximation if statements lacked EBIT
                             if vitals.roce_pct is None:
                                 if inf.get("returnOnAssets") is not None:
-                                    # ROA * 1.6 gives a standard institutional approximation of ROCE for Indian equities
                                     vitals.roce_pct = round(float(inf["returnOnAssets"]) * 160.0, 1)
                                 elif vitals.roe_pct is not None:
                                     vitals.roce_pct = round(vitals.roe_pct * 0.85, 1)
+
                             if vitals.sales_growth_yoy_pct is None and inf.get("revenueGrowth") is not None:
                                 vitals.sales_growth_yoy_pct = round(float(inf["revenueGrowth"]) * 100.0, 1)
                             if vitals.promoter_holding_pct is None and inf.get("heldPercentInsiders") is not None:

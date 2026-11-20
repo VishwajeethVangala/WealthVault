@@ -21,6 +21,7 @@ import {
   MomentumCell,
   momentumLean,
   readSignals,
+  SupertrendCell,
   type Alignment,
   type Fmt,
   type Reading,
@@ -34,7 +35,7 @@ import {
 type Market = 'in' | 'us'
 type Source = 'all' | 'held' | 'watchlist' | 'stage2' | 'new'
 type AlignFilter = 'all' | Alignment | 'trade' | 'fresh'
-type SortKey = 'sym' | 'price' | 'day' | 'pos' | 'pnlPct' | 'vol' | 'momentum' | 'ath' | 'align' | `x:${string}`
+type SortKey = 'sym' | 'price' | 'day' | 'pos' | 'pnlPct' | 'vol' | 'momentum' | 'ath' | 'supertrend' | 'align' | `x:${string}`
 
 interface Row extends Reading {
   key: string
@@ -104,6 +105,8 @@ const sortValue = (r: Row, key: SortKey): string | number | null => {
       return r.sig?.momentum ? r.sig.momentum.score / (r.sig.momentum.max || 1) : null
     case 'ath':
       return r.athSince ? r.athSince.pct : null
+    case 'supertrend':
+      return r.sig?.supertrend ? (r.sig.supertrend.direction < 0 ? (r.sig.supertrend.cushion_pct ?? 0) : -999) : null
     case 'align':
       return r.sig ? ALIGN_ORDER[r.alignment] : null
     default:
@@ -485,8 +488,10 @@ export const Signals: React.FC = () => {
     const up = withM.filter((r) => momentumLean(r.sig!.momentum!) === 'bull').length
     const down = withM.filter((r) => momentumLean(r.sig!.momentum!) === 'bear').length
     const bull = scoped.filter((r) => r.alignment === 'all-bull')
+    const stBull = scoped.filter((r) => r.sig?.supertrend && r.sig.supertrend.direction < 0).length
+    const stSell = scoped.filter((r) => r.sig?.supertrend && (r.sig.supertrend.direction > 0 || r.sig.supertrend.last_signal === 'SELL')).length
     return {
-      covered: scoped.filter((r) => r.sig && (r.sig.momentum || r.sig.ath)).length,
+      covered: scoped.filter((r) => r.sig && (r.sig.momentum || r.sig.ath || r.sig.supertrend)).length,
       up,
       down,
       neutral: withM.length - up - down,
@@ -498,6 +503,8 @@ export const Signals: React.FC = () => {
       heldN: scoped.filter((r) => r.inst).length,
       s2N: scoped.filter((r) => r.s2).length,
       both: scoped.filter((r) => r.inst && r.s2).length,
+      stBull,
+      stSell,
     }
   }, [scoped])
 
@@ -556,7 +563,7 @@ export const Signals: React.FC = () => {
   const pctDone = job && job.total > 0 ? Math.round((job.done / job.total) * 100) : 0
   const extras = !isUs && source !== 'held' ? list?.extra_columns ?? [] : []
   const showVolume = !isUs && source !== 'held' && hasList
-  const colCount = 7 + (showVolume ? 1 : 0) + extras.length
+  const colCount = 8 + (showVolume ? 1 : 0) + extras.length
 
   if (portfolioLoading && holdings.length === 0) {
     return (
@@ -687,7 +694,17 @@ export const Signals: React.FC = () => {
           <div className="foot">{summary.fresh} opened in the last {FRESH_DAYS} days</div>
         </div>
         <div className="card">
-          <div className="lbl">Both bullish</div>
+          <div className="lbl">SuperTrend</div>
+          <div className="val num">
+            <span className="pos">{summary.stBull}</span>
+            {summary.stSell > 0 ? <> / <span className="neg">{summary.stSell}</span></> : null}
+          </div>
+          <div className="foot">
+            {summary.stBull} Bullish{summary.stSell > 0 ? ` · ${summary.stSell} Sell/Bearish` : ' · 0 Sell calls'}
+          </div>
+        </div>
+        <div className="card">
+          <div className="lbl">All bullish</div>
           <div className="val num pos">{summary.bull}</div>
           <div className="foot">
             {summary.bullHeld} held{summary.reviewHeld > 0 ? ` · ${summary.reviewHeld} held stock${summary.reviewHeld === 1 ? '' : 's'} all bearish` : ''}
@@ -784,6 +801,7 @@ export const Signals: React.FC = () => {
                   {head('pos', 'Your position', true)}
                   {head('momentum', 'Momentum')}
                   {head('ath', '200-DMA ATH breakout')}
+                  {head('supertrend', 'SuperTrend')}
                   {head('align', 'Signal alignment')}
                   {showVolume && head('vol', 'Volume', true)}
                   {extras.map((k) => head(`x:${k}`, columnLabel(k), k !== 'sector'))}
@@ -845,6 +863,9 @@ export const Signals: React.FC = () => {
                       </td>
                       <td>
                         <AthCell sig={sig} reading={r} fmt={fmt} />
+                      </td>
+                      <td>
+                        <SupertrendCell sig={sig} fmt={fmt} symbol={r.code} />
                       </td>
                       <td>
                         <AlignmentCell sig={sig} reading={r} />

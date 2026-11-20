@@ -127,7 +127,8 @@ def _call_gemini_for_boss(
             pattern_info = ground_dossier.pattern_report.summary
         if ground_dossier.funda_report:
             f = ground_dossier.funda_report
-            funda_info = f"M-Cap: ₹{f.market_cap_cr or 0:,.0f} Cr | P/E: {f.pe_ratio or 'N/A'} | ROCE: {f.roce_pct or 'N/A'}% | Debt/Eq: {f.debt_to_equity or 'N/A'} | 3Y Sales Growth: {f.sales_growth_3y or 'N/A'}% | Promoter: {f.promoter_holding_pct or 'N/A'}%"
+            roce_str = f"{f.roce_pct:.1f}%" if f.roce_pct is not None else ("N/A (ETF)" if getattr(ground_dossier, "is_etf", False) else "UNVERIFIED (Data Gap Flagged)")
+            funda_info = f"M-Cap: ₹{f.market_cap_cr or 0:,.0f} Cr | P/E: {f.pe_ratio or 'N/A'} | ROCE: {roce_str} | Debt/Eq: {f.debt_to_equity or 'N/A'} | 3Y Sales Growth: {f.sales_growth_3y or 'N/A'}% | Promoter: {f.promoter_holding_pct or 'N/A'}%"
         if ground_dossier.insider_report:
             insider_info = ground_dossier.insider_report.summary
 
@@ -402,7 +403,7 @@ class FinancialPlanningBossAgent:
                     p and p.pattern_detected and p.bias == "BULLISH" and not p.is_low_volume_trap
                     and (p.volume_surge_ratio or 0) >= 1.4
                     and t and ("Stage 2" in t.stage_verdict or t.momentum_score >= 3)
-                    and (f is None or f.roce_pct is None or f.roce_pct >= 10.0)
+                    and (f is None or getattr(d, 'is_etf', False) or (f.roce_pct is not None and f.roce_pct >= 10.0))
                 ):
                     candidates.append((d.symbol, p.pattern_name, p.volume_surge_ratio, t.stage_verdict.split(":")[0]))
 
